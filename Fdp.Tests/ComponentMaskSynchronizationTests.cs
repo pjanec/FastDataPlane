@@ -139,7 +139,7 @@ namespace Fdp.Tests
             // === BUG DEMONSTRATION: EntityQuery fails ===
             
             // Data exists but ComponentMask is wrong - this is the core issue
-            var restoredEntity = new Entity(0, 0);
+            var restoredEntity = new Entity(0, 1);
             var comp = replayRepo.GetManagedComponent<TestManagedComponent>(restoredEntity);
             Assert.NotNull(comp);
             Assert.Equal("QueryTest", comp.Name);
@@ -196,7 +196,7 @@ namespace Fdp.Tests
             }
             
             // === VERIFICATION ===
-            var restoredEntity = new Entity(0, 0);
+            var restoredEntity = new Entity(0, 1);
             Assert.True(replayRepo.IsAlive(restoredEntity));
             
             // Component data should be correct
@@ -249,7 +249,7 @@ namespace Fdp.Tests
             }
             
             // Verify everything works for unmanaged
-            var restoredEntity = new Entity(0, 0);
+            var restoredEntity = new Entity(0, 1);
             Assert.True(replayRepo.IsAlive(restoredEntity));
             
             var comp = replayRepo.GetUnmanagedComponent<TestUnmanagedComponent>(restoredEntity);
@@ -299,7 +299,7 @@ namespace Fdp.Tests
             }
             
             // Both component data should be restored
-            var restoredEntity = new Entity(0, 0);
+            var restoredEntity = new Entity(0, 1);
             var managedComp = replayRepo.GetManagedComponent<TestManagedComponent>(restoredEntity);
             var unmanagedComp = replayRepo.GetUnmanagedComponent<TestUnmanagedComponent>(restoredEntity);
             

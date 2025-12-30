@@ -1,8 +1,11 @@
 ﻿# Overview
 Fast Data Plane (FDP) engine is a high-performance, data-oriented hybrid (managed/unmanaged) Entity Component System
-targeting .NET 8, insired by Unity DOTS, built with a "Zero-Allocation" philosophy on the hot path,
+targeting .NET 8, built with a "Zero-Allocation" philosophy on the hot path,
 leveraging unmanaged memory and direct OS memory allocation, hardware intrinsics (AVX2), a strict phase-based execution
 model to ensure lock free data access and deterministic and cache-friendly simulation.
+
+It is inspired by Unity DOTS in terminology and API concepts, which helps the AI coding models
+to use it more "intuitively".
 
 ## **🚀 Key Features**
 

@@ -45,14 +45,14 @@ namespace Fdp.Kernel
         public ulong PackedValue => ((ulong)Generation << 32) | (uint)Index;
         
         /// <summary>
-        /// Returns true if this is a "null" entity (index < 0).
+        /// Returns true if this is a "null" entity OR an uninitialized default(Entity).
         /// </summary>
-        public bool IsNull => Index < 0;
+        public bool IsNull => Index < 0 || Generation == 0;
         
         /// <summary>
         /// Null entity constant.
         /// </summary>
-        public static readonly Entity Null = new Entity(-1, 0);
+        public static readonly Entity Null = new Entity(0, 0);
         
         public bool Equals(Entity other)
         {

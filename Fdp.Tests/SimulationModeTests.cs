@@ -414,7 +414,7 @@ namespace Fdp.Tests
             var entities = new Entity[entityCount];
             for (int i = 0; i < entityCount; i++)
             {
-                entities[i] = new Entity(i, 0); // Reconstruct entity IDs
+                entities[i] = new Entity(i, 1); // Reconstruct entity IDs
             }
             
             return ComputeStateHash(repo, entities);
@@ -437,7 +437,7 @@ namespace Fdp.Tests
             var entities = new Entity[entityCount];
             for (int i = 0; i < entityCount; i++)
             {
-                entities[i] = new Entity(i, 0);
+                entities[i] = new Entity(i, 1);
             }
             
             return ComputeStateHash(repo, entities);

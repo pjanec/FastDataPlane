@@ -22,7 +22,7 @@ namespace Fdp.Tests
             var entity = Entity.Null;
             
             Assert.True(entity.IsNull);
-            Assert.Equal(-1, entity.Index);
+            Assert.Equal(0, entity.Index);
         }
         
         [Fact]
@@ -126,7 +126,7 @@ namespace Fdp.Tests
             
             Assert.False(entity.IsNull);
             Assert.Equal(0, entity.Index); // First entity
-            Assert.Equal(0, entity.Generation); // First generation
+            Assert.Equal(1, entity.Generation); // First generation
         }
         
         [Fact]
@@ -209,14 +209,14 @@ namespace Fdp.Tests
             using var index = new EntityIndex();
             
             var e1 = index.CreateEntity();
-            Assert.Equal(0, e1.Generation);
+            Assert.Equal(1, e1.Generation);
             
             index.DestroyEntity(e1);
             
             // Recreate at same index
             var e2 = index.CreateEntity();
             Assert.Equal(0, e2.Index); // Same index
-            Assert.Equal(1, e2.Generation); // Incremented generation
+            Assert.Equal(2, e2.Generation); // Incremented generation
         }
         
         [Fact]
@@ -231,7 +231,7 @@ namespace Fdp.Tests
             
             var e3 = index.CreateEntity(); // Should reuse index 0
             Assert.Equal(0, e3.Index);
-            Assert.Equal(1, e3.Generation); // But with new generation
+            Assert.Equal(2, e3.Generation); // But with new generation
         }
         
         [Fact]
@@ -266,7 +266,7 @@ namespace Fdp.Tests
             ref var header = ref index.GetHeader(entity.Index);
             
             Assert.True(header.IsActive);
-            Assert.Equal(0, header.Generation);
+            Assert.Equal(1, header.Generation);
         }
         
         [Fact]

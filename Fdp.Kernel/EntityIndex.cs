@@ -76,6 +76,16 @@ namespace Fdp.Kernel
                 // Get header (will allocate chunk if needed)
                 ref var header = ref _headers[index];
                 
+                // CRITICAL SAFETY FIX:
+                // If generation is 0 (fresh/zeroed memory), bump to 1.
+                // This ensures default(Entity) {Index:0, Generation:0} never matches a valid entity.
+                // The microscopic performance cost is worth preventing dangerous collisions with
+                // uninitialized Entity arrays, fields, or default parameter values.
+                if (header.Generation == 0)
+                {
+                    header.Generation = 1;
+                }
+                
                 // Clear component masks but preserve generation
                 header.ComponentMask.Clear();
                 header.AuthorityMask.Clear();
@@ -156,14 +166,14 @@ namespace Fdp.Kernel
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsAlive(Entity entity)
         {
-            if (entity.IsNull)
-                return false;
-            
+            // Bounds check covers negative indices and those beyond allocated range
             if (entity.Index < 0 || entity.Index > _maxIssuedIndex)
                 return false;
             
             ref var header = ref _headers[entity.Index];
             
+            // Validate generation match and active state
+            // Note: Since header.Generation is never 0, default(Entity) {0,0} fails generation check here implicitly
             return header.IsActive && header.Generation == entity.Generation;
         }
         
