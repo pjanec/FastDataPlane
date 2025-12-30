@@ -250,16 +250,16 @@ namespace Fdp.Tests
         public void FixedString_InComponent_Works()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<NamedEntity>();
+            repo.RegisterComponent<NamedEntity>();
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new NamedEntity 
+            repo.AddComponent(entity, new NamedEntity 
             { 
                 Name = "Player1", 
                 ID = 42 
             });
             
-            ref var comp = ref repo.GetUnmanagedComponent<NamedEntity>(entity);
+            ref var comp = ref repo.GetComponentRW<NamedEntity>(entity);
             
             Assert.Equal("Player1", comp.Name.ToString());
             Assert.Equal(42, comp.ID);
@@ -269,20 +269,20 @@ namespace Fdp.Tests
         public void FixedString_ModifyInComponent()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<NamedEntity>();
+            repo.RegisterComponent<NamedEntity>();
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new NamedEntity 
+            repo.AddComponent(entity, new NamedEntity 
             { 
                 Name = "Original", 
                 ID = 1 
             });
             
-            ref var comp = ref repo.GetUnmanagedComponent<NamedEntity>(entity);
+            ref var comp = ref repo.GetComponentRW<NamedEntity>(entity);
             comp.Name = "Modified";
             
             // Verify change persisted
-            ref var comp2 = ref repo.GetUnmanagedComponent<NamedEntity>(entity);
+            ref var comp2 = ref repo.GetComponentRW<NamedEntity>(entity);
             Assert.Equal("Modified", comp2.Name.ToString());
         }
         
@@ -290,13 +290,13 @@ namespace Fdp.Tests
         public void FixedString_QueryWithNames()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<NamedEntity>();
+            repo.RegisterComponent<NamedEntity>();
             
             // Create entities with names
             for (int i = 0; i < 10; i++)
             {
                 var entity = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entity, new NamedEntity 
+                repo.AddComponent(entity, new NamedEntity 
                 { 
                     Name = $"Entity{i}", 
                     ID = i 
@@ -311,7 +311,7 @@ namespace Fdp.Tests
             int count = 0;
             query.ForEach(e =>
             {
-                ref var comp = ref repo.GetUnmanagedComponent<NamedEntity>(e);
+                ref var comp = ref repo.GetComponentRW<NamedEntity>(e);
                 Assert.StartsWith("Entity", comp.Name.ToString());
                 count++;
             });

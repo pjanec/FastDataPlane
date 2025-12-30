@@ -118,10 +118,10 @@ namespace Fdp.Tests
         public void Query_DisType_CombinedWithComponents()
         {
              // Verify that DIS filter works alongside component masks
-             _repo.RegisterUnmanagedComponent<Position>();
+             _repo.RegisterComponent<Position>();
              var e1 = _repo.CreateEntity();
              _repo.SetDisType(e1, new DISEntityType { Kind=1 });
-             _repo.AddUnmanagedComponent(e1, new Position());
+             _repo.AddComponent(e1, new Position());
              
              var e2 = _repo.CreateEntity();
              _repo.SetDisType(e2, new DISEntityType { Kind=1 });

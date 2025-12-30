@@ -69,10 +69,10 @@ namespace Fdp.Tests
         public void EntityLifecycle_CreationDeletionRecreation_VerifiesSchemaAndState()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<UnmanagedA>();
-            repo.RegisterUnmanagedComponent<UnmanagedB>();
-            repo.RegisterManagedComponent<CompA>();
-            repo.RegisterManagedComponent<CompB>();
+            repo.RegisterComponent<UnmanagedA>();
+            repo.RegisterComponent<UnmanagedB>();
+            repo.RegisterComponent<CompA>();
+            repo.RegisterComponent<CompB>();
 
             var expectedStates = new Dictionary<int, FrameData>();
             
@@ -90,7 +90,7 @@ namespace Fdp.Tests
                 // Frame 1: Create Entity with UA and MA
                 repo.Tick();
                 currentHandle = repo.CreateEntity();
-                repo.AddUnmanagedComponent(currentHandle, new UnmanagedA { X = 10 });
+                repo.AddComponent(currentHandle, new UnmanagedA { X = 10 });
                 repo.AddManagedComponent(currentHandle, new CompA { Value = 100 });
                 
                 CaptureExpectedState(1);
@@ -98,7 +98,7 @@ namespace Fdp.Tests
 
                 // Frame 2: Add UB, Remove MA
                 repo.Tick();
-                repo.AddUnmanagedComponent(currentHandle, new UnmanagedB { Y = 2.5f });
+                repo.AddComponent(currentHandle, new UnmanagedB { Y = 2.5f });
                 repo.RemoveManagedComponent<CompA>(currentHandle);
                 
                 CaptureExpectedState(2);
@@ -124,7 +124,7 @@ namespace Fdp.Tests
                 Assert.Equal(currentHandle.Index, e2.Index); 
                 currentHandle = e2;
 
-                repo.AddUnmanagedComponent(e2, new UnmanagedA { X = 99 });
+                repo.AddComponent(e2, new UnmanagedA { X = 99 });
                 repo.AddManagedComponent(e2, new CompA { Value = 999 });
                 repo.AddManagedComponent(e2, new CompB { Name = "Reborn" });
 
@@ -134,7 +134,7 @@ namespace Fdp.Tests
                 // Frame 6: Modify State
                 repo.Tick();
                 repo.SetUnmanagedComponent(e2, new UnmanagedA { X = 88 });
-                repo.GetManagedComponentRW<CompA>(e2).Value = 888;
+                repo.GetComponentRW<CompA>(e2).Value = 888;
                 
                 CaptureExpectedState(6);
                 recorder.CaptureFrame(repo, repo.GlobalVersion - 1, blocking: true);
@@ -167,20 +167,20 @@ namespace Fdp.Tests
                     data.HasMA = repo.HasManagedComponent<CompA>(currentHandle);
                     data.HasMB = repo.HasManagedComponent<CompB>(currentHandle);
 
-                    if (data.HasUA) data.ValUA = repo.GetUnmanagedComponentRO<UnmanagedA>(currentHandle);
-                    if (data.HasUB) data.ValUB = repo.GetUnmanagedComponentRO<UnmanagedB>(currentHandle);
-                    if (data.HasMA) data.ValMA_Value = repo.GetManagedComponentRO<CompA>(currentHandle).Value;
-                    if (data.HasMB) data.ValMB_Name = repo.GetManagedComponentRO<CompB>(currentHandle).Name;
+                    if (data.HasUA) data.ValUA = repo.GetComponentRO<UnmanagedA>(currentHandle);
+                    if (data.HasUB) data.ValUB = repo.GetComponentRO<UnmanagedB>(currentHandle);
+                    if (data.HasMA) data.ValMA_Value = repo.GetComponentRO<CompA>(currentHandle).Value;
+                    if (data.HasMB) data.ValMB_Name = repo.GetComponentRO<CompB>(currentHandle).Name;
                 }
                 expectedStates[frame] = data;
             }
 
             // Playback and Verify
             using var playbackRepo = new EntityRepository();
-            playbackRepo.RegisterUnmanagedComponent<UnmanagedA>();
-            playbackRepo.RegisterUnmanagedComponent<UnmanagedB>();
-            playbackRepo.RegisterManagedComponent<CompA>();
-            playbackRepo.RegisterManagedComponent<CompB>();
+            playbackRepo.RegisterComponent<UnmanagedA>();
+            playbackRepo.RegisterComponent<UnmanagedB>();
+            playbackRepo.RegisterComponent<CompA>();
+            playbackRepo.RegisterComponent<CompB>();
 
             using var controller = new PlaybackController(_testFilePath);
 
@@ -229,10 +229,10 @@ namespace Fdp.Tests
                 Assert.Equal(expected.HasMB, r.HasManagedComponent<CompB>(expected.EntityHandle));
 
                 // Verify State (Values)
-                if (expected.HasUA) Assert.Equal(expected.ValUA.X, r.GetUnmanagedComponentRO<UnmanagedA>(expected.EntityHandle).X);
-                if (expected.HasUB) Assert.Equal(expected.ValUB.Y, r.GetUnmanagedComponentRO<UnmanagedB>(expected.EntityHandle).Y);
-                if (expected.HasMA) Assert.Equal(expected.ValMA_Value, r.GetManagedComponentRO<CompA>(expected.EntityHandle).Value);
-                if (expected.HasMB) Assert.Equal(expected.ValMB_Name, r.GetManagedComponentRO<CompB>(expected.EntityHandle).Name);
+                if (expected.HasUA) Assert.Equal(expected.ValUA.X, r.GetComponentRO<UnmanagedA>(expected.EntityHandle).X);
+                if (expected.HasUB) Assert.Equal(expected.ValUB.Y, r.GetComponentRO<UnmanagedB>(expected.EntityHandle).Y);
+                if (expected.HasMA) Assert.Equal(expected.ValMA_Value, r.GetComponentRO<CompA>(expected.EntityHandle).Value);
+                if (expected.HasMB) Assert.Equal(expected.ValMB_Name, r.GetComponentRO<CompB>(expected.EntityHandle).Name);
             }
         }
     }

@@ -46,9 +46,9 @@ namespace Fdp.Tests
         public void CaptureFrame_SwapsBuffersAndWritesAsync()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, 42);
+            repo.AddComponent(e, 42);
             repo.Tick();
             
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -58,7 +58,7 @@ namespace Fdp.Tests
                 
                 // 2. Capture Frame 2 (Delta)
                 repo.Tick(); // V=2
-                ref int val = ref repo.GetUnmanagedComponentRW<int>(e);
+                ref int val = ref repo.GetComponentRW<int>(e);
                 val = 100;
                 
                 recorder.CaptureFrame(repo, repo.GlobalVersion - 1, blocking: true);
@@ -80,7 +80,7 @@ namespace Fdp.Tests
             // But we can verify it doesn't crash.
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {
@@ -89,7 +89,7 @@ namespace Fdp.Tests
                     repo.Tick();
                     // Create some garbage to write
                     var e = repo.CreateEntity();
-                    repo.AddUnmanagedComponent(e, i);
+                    repo.AddComponent(e, i);
                     
                     // Non-blocking capture
                     // Since we are running fast in memory, disk I/O should lag eventually or 
@@ -113,7 +113,7 @@ namespace Fdp.Tests
             // We use blocking=true to ensure correctness of logic first.
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             var e = repo.CreateEntity();
             
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -129,14 +129,14 @@ namespace Fdp.Tests
             // Read back
             using var reader = new RecordingReader(_testFilePath);
             using var playbackRepo = new EntityRepository();
-            playbackRepo.RegisterUnmanagedComponent<int>(); // Must register to read
+            playbackRepo.RegisterComponent<int>(); // Must register to read
             
             int framesRead = 0;
             while(reader.ReadNextFrame(playbackRepo))
             {
                 framesRead++;
                 // Check value
-                int val = playbackRepo.GetUnmanagedComponentRO<int>(e);
+                int val = playbackRepo.GetComponentRO<int>(e);
                 Assert.Equal(framesRead - 1, val);
             }
             Assert.Equal(10, framesRead);
@@ -147,7 +147,7 @@ namespace Fdp.Tests
         {
             // Test that dropped frames are correctly counted when I/O can't keep up
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             var e = repo.CreateEntity();
             
             AsyncRecorder recorder;
@@ -183,7 +183,7 @@ namespace Fdp.Tests
         {
             // Test that blocking mode waits for previous frame completion and never drops
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             var e = repo.CreateEntity();
             
             AsyncRecorder recorder;
@@ -210,7 +210,7 @@ namespace Fdp.Tests
         {
             // Test thread safety when multiple threads try to capture frames
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             var e = repo.CreateEntity();
             
             const int numThreads = 4;
@@ -275,7 +275,7 @@ namespace Fdp.Tests
         {
             // Test behavior when frame data exceeds buffer size
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             
             // Create many entities to generate large frame data
             const int entityCount = 10000; // This should create substantial data
@@ -283,7 +283,7 @@ namespace Fdp.Tests
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], i);
+                repo.AddComponent(entities[i], i);
             }
             
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -312,7 +312,7 @@ namespace Fdp.Tests
         {
             // Test that background thread errors are properly propagated
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             var e = repo.CreateEntity();
             
             string invalidPath = "Z:\\NonExistent\\Path\\file.fdp"; // Invalid path to force I/O error
@@ -349,7 +349,7 @@ namespace Fdp.Tests
         {
             // Test buffer swapping under high-frequency updates
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             var e = repo.CreateEntity();
             
             AsyncRecorder recorder;
@@ -375,7 +375,7 @@ namespace Fdp.Tests
             // Verify file integrity by reading back
             using var reader = new RecordingReader(_testFilePath);
             using var playbackRepo = new EntityRepository();
-            playbackRepo.RegisterUnmanagedComponent<int>();
+            playbackRepo.RegisterComponent<int>();
             
             int framesRead = 0;
             while (reader.ReadNextFrame(playbackRepo) && framesRead < 20) // Read first 20 frames
@@ -392,9 +392,9 @@ namespace Fdp.Tests
         {
             // Test that the hot path has minimal allocations
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, 42);
+            repo.AddComponent(e, 42);
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {

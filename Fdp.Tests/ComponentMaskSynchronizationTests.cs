@@ -54,8 +54,8 @@ namespace Fdp.Tests
             
             // === RECORD PHASE ===
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterManagedComponent<TestManagedComponent>();
-            recordRepo.RegisterUnmanagedComponent<TestUnmanagedComponent>();
+            recordRepo.RegisterComponent<TestManagedComponent>();
+            recordRepo.RegisterComponent<TestUnmanagedComponent>();
             
             var entity = recordRepo.CreateEntity();
             
@@ -65,7 +65,7 @@ namespace Fdp.Tests
                 Name = "TestEntity", 
                 Value = 42 
             });
-            recordRepo.AddUnmanagedComponent(entity, new TestUnmanagedComponent 
+            recordRepo.AddComponent(entity, new TestUnmanagedComponent 
             { 
                 X = 10, Y = 20, Z = 30 
             });
@@ -79,8 +79,8 @@ namespace Fdp.Tests
             
             // === REPLAY PHASE ===
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterManagedComponent<TestManagedComponent>();
-            replayRepo.RegisterUnmanagedComponent<TestUnmanagedComponent>();
+            replayRepo.RegisterComponent<TestManagedComponent>();
+            replayRepo.RegisterComponent<TestUnmanagedComponent>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -112,7 +112,7 @@ namespace Fdp.Tests
             
             // === RECORD PHASE ===
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterManagedComponent<TestManagedComponent>();
+            recordRepo.RegisterComponent<TestManagedComponent>();
             
             var entity = recordRepo.CreateEntity();
             recordRepo.AddManagedComponent(entity, new TestManagedComponent 
@@ -129,7 +129,7 @@ namespace Fdp.Tests
             
             // === REPLAY PHASE ===
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterManagedComponent<TestManagedComponent>();
+            replayRepo.RegisterComponent<TestManagedComponent>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -140,7 +140,7 @@ namespace Fdp.Tests
             
             // Data exists but ComponentMask is wrong - this is the core issue
             var restoredEntity = new Entity(0, 1);
-            var comp = replayRepo.GetManagedComponent<TestManagedComponent>(restoredEntity);
+            var comp = replayRepo.GetComponentRW<TestManagedComponent>(restoredEntity);
             Assert.NotNull(comp);
             Assert.Equal("QueryTest", comp.Name);
             Assert.Equal(123, comp.Value);
@@ -161,12 +161,12 @@ namespace Fdp.Tests
             
             // === INITIAL RECORD PHASE ===
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterManagedComponent<TestManagedComponent>();
-            recordRepo.RegisterUnmanagedComponent<TestUnmanagedComponent>();
+            recordRepo.RegisterComponent<TestManagedComponent>();
+            recordRepo.RegisterComponent<TestUnmanagedComponent>();
             
             var entity = recordRepo.CreateEntity();
             // Start with only unmanaged component
-            recordRepo.AddUnmanagedComponent(entity, new TestUnmanagedComponent { X = 1, Y = 2, Z = 3 });
+            recordRepo.AddComponent(entity, new TestUnmanagedComponent { X = 1, Y = 2, Z = 3 });
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {
@@ -186,8 +186,8 @@ namespace Fdp.Tests
             
             // === REPLAY PHASE ===
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterManagedComponent<TestManagedComponent>();
-            replayRepo.RegisterUnmanagedComponent<TestUnmanagedComponent>();
+            replayRepo.RegisterComponent<TestManagedComponent>();
+            replayRepo.RegisterComponent<TestUnmanagedComponent>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -200,7 +200,7 @@ namespace Fdp.Tests
             Assert.True(replayRepo.IsAlive(restoredEntity));
             
             // Component data should be correct
-            var managedComp = replayRepo.GetManagedComponent<TestManagedComponent>(restoredEntity);
+            var managedComp = replayRepo.GetComponentRW<TestManagedComponent>(restoredEntity);
             Assert.NotNull(managedComp);
             Assert.Equal("DeltaAdded", managedComp.Name);
             Assert.Equal(999, managedComp.Value);
@@ -229,10 +229,10 @@ namespace Fdp.Tests
             // Control test: verify unmanaged components work correctly (they should)
             
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<TestUnmanagedComponent>();
+            recordRepo.RegisterComponent<TestUnmanagedComponent>();
             
             var entity = recordRepo.CreateEntity();
-            recordRepo.AddUnmanagedComponent(entity, new TestUnmanagedComponent { X = 5, Y = 10, Z = 15 });
+            recordRepo.AddComponent(entity, new TestUnmanagedComponent { X = 5, Y = 10, Z = 15 });
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {
@@ -241,7 +241,7 @@ namespace Fdp.Tests
             }
             
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<TestUnmanagedComponent>();
+            replayRepo.RegisterComponent<TestUnmanagedComponent>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -252,7 +252,7 @@ namespace Fdp.Tests
             var restoredEntity = new Entity(0, 1);
             Assert.True(replayRepo.IsAlive(restoredEntity));
             
-            var comp = replayRepo.GetUnmanagedComponent<TestUnmanagedComponent>(restoredEntity);
+            var comp = replayRepo.GetComponentRW<TestUnmanagedComponent>(restoredEntity);
             Assert.Equal(5, comp.X);
             Assert.Equal(10, comp.Y);
             Assert.Equal(15, comp.Z);
@@ -276,12 +276,12 @@ namespace Fdp.Tests
             // Test that shows unmanaged masks work but managed masks fail
             
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterManagedComponent<TestManagedComponent>();
-            recordRepo.RegisterUnmanagedComponent<TestUnmanagedComponent>();
+            recordRepo.RegisterComponent<TestManagedComponent>();
+            recordRepo.RegisterComponent<TestUnmanagedComponent>();
             
             var entity = recordRepo.CreateEntity();
             recordRepo.AddManagedComponent(entity, new TestManagedComponent { Name = "Mixed", Value = 50 });
-            recordRepo.AddUnmanagedComponent(entity, new TestUnmanagedComponent { X = 1, Y = 2, Z = 3 });
+            recordRepo.AddComponent(entity, new TestUnmanagedComponent { X = 1, Y = 2, Z = 3 });
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {
@@ -290,8 +290,8 @@ namespace Fdp.Tests
             }
             
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterManagedComponent<TestManagedComponent>();
-            replayRepo.RegisterUnmanagedComponent<TestUnmanagedComponent>();
+            replayRepo.RegisterComponent<TestManagedComponent>();
+            replayRepo.RegisterComponent<TestUnmanagedComponent>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -300,8 +300,8 @@ namespace Fdp.Tests
             
             // Both component data should be restored
             var restoredEntity = new Entity(0, 1);
-            var managedComp = replayRepo.GetManagedComponent<TestManagedComponent>(restoredEntity);
-            var unmanagedComp = replayRepo.GetUnmanagedComponent<TestUnmanagedComponent>(restoredEntity);
+            var managedComp = replayRepo.GetComponentRW<TestManagedComponent>(restoredEntity);
+            var unmanagedComp = replayRepo.GetComponentRW<TestUnmanagedComponent>(restoredEntity);
             
             Assert.NotNull(managedComp);
             Assert.Equal("Mixed", managedComp.Name);

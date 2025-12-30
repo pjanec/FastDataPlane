@@ -44,7 +44,7 @@ namespace Fdp.Tests
         {
             // Simulate a wave-based game: spawn enemies, kill them, spawn more
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Health>();
+            repo.RegisterComponent<Health>();
             
             var spawnedEntities = new List<(int frame, Entity entity, int health)>();
             var destroyedEntities = new List<(int frame, Entity entity)>();
@@ -61,7 +61,7 @@ namespace Fdp.Tests
                 {
                     repo.Tick();
                     var enemy = repo.CreateEntity();
-                    repo.AddUnmanagedComponent(enemy, new Health { Value = frame * 10 });
+                    repo.AddComponent(enemy, new Health { Value = frame * 10 });
                     spawnedEntities.Add((frame, enemy, frame * 10));
                     
                     recorder.CaptureFrame(repo, prevTick, blocking: true);
@@ -83,7 +83,7 @@ namespace Fdp.Tests
                 {
                     repo.Tick();
                     var enemy = repo.CreateEntity();
-                    repo.AddUnmanagedComponent(enemy, new Health { Value = frame * 20 });
+                    repo.AddComponent(enemy, new Health { Value = frame * 20 });
                     spawnedEntities.Add((frame, enemy, frame * 20));
                     
                     recorder.CaptureFrame(repo, prevTick, blocking: true);
@@ -93,7 +93,7 @@ namespace Fdp.Tests
             
             // Playback: Verify entity lifecycle
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<Health>();
+            targetRepo.RegisterComponent<Health>();
             
             using var reader = new RecordingReader(_testFilePath);
             
@@ -129,7 +129,7 @@ namespace Fdp.Tests
         {
             // Test that entity generations are correctly tracked when slots are reused
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             
             Entity firstEntity, secondEntity;
             
@@ -142,7 +142,7 @@ namespace Fdp.Tests
                 // Frame 1: Create entity at slot 0
                 repo.Tick();
                 firstEntity = repo.CreateEntity();
-                repo.AddUnmanagedComponent(firstEntity, 100);
+                repo.AddComponent(firstEntity, 100);
                 recorder.CaptureFrame(repo, prevTick, blocking: true);
                 prevTick = repo.GlobalVersion;
                 
@@ -155,7 +155,7 @@ namespace Fdp.Tests
                 // Frame 3: Create new entity (should reuse slot 0 with higher generation)
                 repo.Tick();
                 secondEntity = repo.CreateEntity();
-                repo.AddUnmanagedComponent(secondEntity, 200);
+                repo.AddComponent(secondEntity, 200);
                 recorder.CaptureFrame(repo, prevTick, blocking: true);
             }
             
@@ -166,7 +166,7 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var reader = new RecordingReader(_testFilePath);
             
@@ -176,7 +176,7 @@ namespace Fdp.Tests
             // Frame 1: First entity exists
             reader.ReadNextFrame(targetRepo);
             Assert.True(targetRepo.IsAlive(firstEntity));
-            Assert.Equal(100, targetRepo.GetUnmanagedComponentRO<int>(firstEntity));
+            Assert.Equal(100, targetRepo.GetComponentRO<int>(firstEntity));
             
             // Frame 2: First entity destroyed
             reader.ReadNextFrame(targetRepo);
@@ -186,7 +186,7 @@ namespace Fdp.Tests
             reader.ReadNextFrame(targetRepo);
             Assert.False(targetRepo.IsAlive(firstEntity)); // Old gen should still be dead
             Assert.True(targetRepo.IsAlive(secondEntity)); // New gen should be alive
-            Assert.Equal(200, targetRepo.GetUnmanagedComponentRO<int>(secondEntity));
+            Assert.Equal(200, targetRepo.GetComponentRO<int>(secondEntity));
         }
 
         [Fact]
@@ -194,8 +194,8 @@ namespace Fdp.Tests
         {
             // Realistic scenario: Spawn 3 waves, destroy some, with keyframes
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Health>();
-            repo.RegisterManagedComponent<UnitData>();
+            repo.RegisterComponent<Health>();
+            repo.RegisterComponent<UnitData>();
             
             var wave1 = new List<Entity>();
             var wave2 = new List<Entity>();
@@ -213,7 +213,7 @@ namespace Fdp.Tests
                 {
                     repo.Tick();
                     var unit = repo.CreateEntity();
-                    repo.AddUnmanagedComponent(unit, new Health { Value = 100 });
+                    repo.AddComponent(unit, new Health { Value = 100 });
                     repo.AddManagedComponent(unit, new UnitData { UnitType = "Infantry", Level = 1 });
                     wave1.Add(unit);
                     
@@ -245,7 +245,7 @@ namespace Fdp.Tests
                 {
                     repo.Tick();
                     var unit = repo.CreateEntity();
-                    repo.AddUnmanagedComponent(unit, new Health { Value = 80 });
+                    repo.AddComponent(unit, new Health { Value = 80 });
                     repo.AddManagedComponent(unit, new UnitData { UnitType = "Cavalry", Level = 2 });
                     wave2.Add(unit);
                     
@@ -263,7 +263,7 @@ namespace Fdp.Tests
                     // Damage wave 2 units
                     if (i - 26 < wave2.Count)
                     {
-                        ref var health = ref repo.GetUnmanagedComponentRW<Health>(wave2[i - 26]);
+                        ref var health = ref repo.GetComponentRW<Health>(wave2[i - 26]);
                         health.Value = 50;
                     }
                     
@@ -278,8 +278,8 @@ namespace Fdp.Tests
             // Playback with seeking
             using var controller = new PlaybackController(_testFilePath);
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<Health>();
-            targetRepo.RegisterManagedComponent<UnitData>();
+            targetRepo.RegisterComponent<Health>();
+            targetRepo.RegisterComponent<UnitData>();
             
             // Seek to frame 10: Should have 10 wave 1 units
             controller.SeekToFrame(targetRepo, 10);
@@ -302,7 +302,7 @@ namespace Fdp.Tests
             {
                 if (targetRepo.IsAlive(wave2[i]))
                 {
-                    var health = targetRepo.GetUnmanagedComponentRO<Health>(wave2[i]);
+                    var health = targetRepo.GetComponentRO<Health>(wave2[i]);
                     Assert.Equal(50, health.Value);
                 }
             }
@@ -313,7 +313,7 @@ namespace Fdp.Tests
         {
             // Stress test: Create and destroy many entities rapidly
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             
             const int frames = 50;
             const int entitiesPerFrame = 10;
@@ -334,7 +334,7 @@ namespace Fdp.Tests
                     for (int i = 0; i < entitiesPerFrame; i++)
                     {
                         var e = repo.CreateEntity();
-                        repo.AddUnmanagedComponent(e, frame * 100 + i);
+                        repo.AddComponent(e, frame * 100 + i);
                         activeEntities.Add(e);
                     }
                     
@@ -358,7 +358,7 @@ namespace Fdp.Tests
             
             // Playback: Verify we can play through without errors
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -381,7 +381,7 @@ namespace Fdp.Tests
         {
             // Create, destroy, recreate the same slot multiple times
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             
             var generations = new List<Entity>();
             
@@ -397,7 +397,7 @@ namespace Fdp.Tests
                     // Create
                     repo.Tick();
                     var entity = repo.CreateEntity();
-                    repo.AddUnmanagedComponent(entity, cycle * 100);
+                    repo.AddComponent(entity, cycle * 100);
                     generations.Add(entity);
                     recorder.CaptureFrame(repo, prevTick, blocking: true);
                     prevTick = repo.GlobalVersion;
@@ -423,7 +423,7 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var reader = new RecordingReader(_testFilePath);
             reader.ReadNextFrame(targetRepo); // Frame 0: empty
@@ -434,7 +434,7 @@ namespace Fdp.Tests
                 reader.ReadNextFrame(targetRepo);
                 Assert.Equal(1, targetRepo.EntityCount);
                 Assert.True(targetRepo.IsAlive(generations[cycle]));
-                Assert.Equal(cycle * 100, targetRepo.GetUnmanagedComponentRO<int>(generations[cycle]));
+                Assert.Equal(cycle * 100, targetRepo.GetComponentRO<int>(generations[cycle]));
                 
                 // Destroy frame
                 reader.ReadNextFrame(targetRepo);
@@ -448,8 +448,8 @@ namespace Fdp.Tests
         {
             // Realistic scenario: Spawn entire armies, destroy entire armies
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Health>();
-            repo.RegisterManagedComponent<UnitData>();
+            repo.RegisterComponent<Health>();
+            repo.RegisterComponent<UnitData>();
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {
@@ -463,7 +463,7 @@ namespace Fdp.Tests
                 for (int i = 0; i < 100; i++)
                 {
                     var unit = repo.CreateEntity();
-                    repo.AddUnmanagedComponent(unit, new Health { Value = 100 });
+                    repo.AddComponent(unit, new Health { Value = 100 });
                     repo.AddManagedComponent(unit, new UnitData { UnitType = "Soldier", Level = i % 10 });
                     army.Add(unit);
                 }
@@ -484,7 +484,7 @@ namespace Fdp.Tests
                 for (int i = 0; i < 75; i++)
                 {
                     var unit = repo.CreateEntity();
-                    repo.AddUnmanagedComponent(unit, new Health { Value = 120 });
+                    repo.AddComponent(unit, new Health { Value = 120 });
                     repo.AddManagedComponent(unit, new UnitData { UnitType = "Elite", Level = 5 });
                 }
                 recorder.CaptureFrame(repo, prevTick, blocking: true);
@@ -492,8 +492,8 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<Health>();
-            targetRepo.RegisterManagedComponent<UnitData>();
+            targetRepo.RegisterComponent<Health>();
+            targetRepo.RegisterComponent<UnitData>();
             
             using var reader = new RecordingReader(_testFilePath);
             
@@ -521,10 +521,10 @@ namespace Fdp.Tests
             {
                 if (repo.IsAlive(entity))
                 {
-                    var unitData = repo.GetManagedComponentRO<UnitData>(entity);
+                    var unitData = repo.GetComponentRO<UnitData>(entity);
                     Assert.Equal(expectedType, unitData.UnitType);
                     
-                    var health = repo.GetUnmanagedComponentRO<Health>(entity);
+                    var health = repo.GetComponentRO<Health>(entity);
                     Assert.Equal(expectedHealth, health.Value);
                 }
             }

@@ -16,14 +16,14 @@ namespace Fdp.Tests
         public void AddChild_SetsParentAndChildren()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<HierarchyNode>();
+            repo.RegisterComponent<HierarchyNode>();
             var parent = repo.CreateEntity();
             var child = repo.CreateEntity();
             
             repo.AddChild(parent, child);
             
-            var parentNode = repo.GetUnmanagedComponent<HierarchyNode>(parent);
-            var childNode = repo.GetUnmanagedComponent<HierarchyNode>(child);
+            var parentNode = repo.GetComponentRW<HierarchyNode>(parent);
+            var childNode = repo.GetComponentRW<HierarchyNode>(child);
             
             Assert.Equal(child, parentNode.FirstChild);
             Assert.Equal(parent, childNode.Parent);
@@ -35,7 +35,7 @@ namespace Fdp.Tests
         public void AddChild_MultipleChildren_LinkedCorrectly()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<HierarchyNode>();
+            repo.RegisterComponent<HierarchyNode>();
             var parent = repo.CreateEntity();
             var child1 = repo.CreateEntity();
             var child2 = repo.CreateEntity();
@@ -48,20 +48,20 @@ namespace Fdp.Tests
             // Order is LIFO (prepend) in current implementation for O(1)
             // Parent -> Child3 -> Child2 -> Child1
             
-            var parentNode = repo.GetUnmanagedComponent<HierarchyNode>(parent);
+            var parentNode = repo.GetComponentRW<HierarchyNode>(parent);
             Assert.Equal(child3, parentNode.FirstChild);
             
-            var c3Node = repo.GetUnmanagedComponent<HierarchyNode>(child3);
+            var c3Node = repo.GetComponentRW<HierarchyNode>(child3);
             Assert.Equal(child2, c3Node.NextSibling);
             Assert.Equal(Entity.Null, c3Node.PreviousSibling);
             Assert.Equal(parent, c3Node.Parent);
             
-            var c2Node = repo.GetUnmanagedComponent<HierarchyNode>(child2);
+            var c2Node = repo.GetComponentRW<HierarchyNode>(child2);
             Assert.Equal(child1, c2Node.NextSibling);
             Assert.Equal(child3, c2Node.PreviousSibling);
             Assert.Equal(parent, c2Node.Parent);
             
-            var c1Node = repo.GetUnmanagedComponent<HierarchyNode>(child1);
+            var c1Node = repo.GetComponentRW<HierarchyNode>(child1);
             Assert.Equal(Entity.Null, c1Node.NextSibling);
             Assert.Equal(child2, c1Node.PreviousSibling);
             Assert.Equal(parent, c1Node.Parent);
@@ -71,7 +71,7 @@ namespace Fdp.Tests
         public void RemoveFromParent_UnlinksCorrectly()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<HierarchyNode>();
+            repo.RegisterComponent<HierarchyNode>();
             var parent = repo.CreateEntity();
             var child1 = repo.CreateEntity();
             var child2 = repo.CreateEntity();
@@ -83,14 +83,14 @@ namespace Fdp.Tests
             repo.RemoveFromParent(child2);
             
             // Should be: Parent -> Child1
-            var parentNode = repo.GetUnmanagedComponent<HierarchyNode>(parent);
+            var parentNode = repo.GetComponentRW<HierarchyNode>(parent);
             Assert.Equal(child1, parentNode.FirstChild);
             
-            var c1Node = repo.GetUnmanagedComponent<HierarchyNode>(child1);
+            var c1Node = repo.GetComponentRW<HierarchyNode>(child1);
             Assert.Equal(Entity.Null, c1Node.PreviousSibling);
             Assert.Equal(Entity.Null, c1Node.NextSibling);
             
-            var c2Node = repo.GetUnmanagedComponent<HierarchyNode>(child2);
+            var c2Node = repo.GetComponentRW<HierarchyNode>(child2);
             Assert.Equal(Entity.Null, c2Node.Parent);
         }
         
@@ -98,7 +98,7 @@ namespace Fdp.Tests
         public void Reparent_MovesEntity()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<HierarchyNode>();
+            repo.RegisterComponent<HierarchyNode>();
             var parent1 = repo.CreateEntity();
             var parent2 = repo.CreateEntity();
             var child = repo.CreateEntity();
@@ -106,9 +106,9 @@ namespace Fdp.Tests
             repo.AddChild(parent1, child);
             repo.AddChild(parent2, child);
             
-            var p1Node = repo.GetUnmanagedComponent<HierarchyNode>(parent1);
-            var p2Node = repo.GetUnmanagedComponent<HierarchyNode>(parent2);
-            var cNode = repo.GetUnmanagedComponent<HierarchyNode>(child);
+            var p1Node = repo.GetComponentRW<HierarchyNode>(parent1);
+            var p2Node = repo.GetComponentRW<HierarchyNode>(parent2);
+            var cNode = repo.GetComponentRW<HierarchyNode>(child);
             
             Assert.Equal(Entity.Null, p1Node.FirstChild);
             Assert.Equal(child, p2Node.FirstChild);
@@ -119,7 +119,7 @@ namespace Fdp.Tests
         public void GetChildren_IteratesAll()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<HierarchyNode>();
+            repo.RegisterComponent<HierarchyNode>();
             var parent = repo.CreateEntity();
             var children = new List<Entity>();
             
@@ -149,7 +149,7 @@ namespace Fdp.Tests
         public void AutoComponentAddition_Works()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<HierarchyNode>();
+            repo.RegisterComponent<HierarchyNode>();
             var parent = repo.CreateEntity();
             var child = repo.CreateEntity();
             
@@ -164,9 +164,9 @@ namespace Fdp.Tests
         public void RemoveFromParent_RootEntity_DoesNothing()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<HierarchyNode>();
+            repo.RegisterComponent<HierarchyNode>();
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new HierarchyNode 
+            repo.AddComponent(entity, new HierarchyNode 
             { 
                 Parent = Entity.Null,
                 FirstChild = Entity.Null,
@@ -176,7 +176,7 @@ namespace Fdp.Tests
             
             repo.RemoveFromParent(entity); // Should not crash
             
-            var node = repo.GetUnmanagedComponent<HierarchyNode>(entity);
+            var node = repo.GetComponentRW<HierarchyNode>(entity);
             Assert.Equal(Entity.Null, node.Parent);
         }
     }

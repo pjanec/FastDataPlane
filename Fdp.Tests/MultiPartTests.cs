@@ -369,12 +369,12 @@ namespace Fdp.Tests
         public void Integration_WithEntityRepository()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<SmallComponent>();
+            repo.RegisterComponent<SmallComponent>();
             
             var entity = repo.CreateEntity();
             
             var initial = new SmallComponent { X = 1, Y = 2, Z = 3 };
-            repo.AddUnmanagedComponent(entity, initial);
+            repo.AddComponent(entity, initial);
             
             // Simulate update
             var updated = new SmallComponent { X = 10, Y = 2, Z = 3 };
@@ -383,7 +383,7 @@ namespace Fdp.Tests
             var changedParts = MultiPartComponent.GetChangedParts(initial, updated);
             
             // Apply update
-            ref var current = ref repo.GetUnmanagedComponent<SmallComponent>(entity);
+            ref var current = ref repo.GetComponentRW<SmallComponent>(entity);
             MultiPartComponent.CopyParts(ref current, updated, changedParts);
             
             Assert.Equal(10, current.X);

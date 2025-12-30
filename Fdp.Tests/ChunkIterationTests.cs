@@ -22,18 +22,18 @@ namespace Fdp.Tests
         public void ForEachChunked_MatchesSameAsForEach()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             // Create entities across multiple chunks
             for (int i = 0; i < 1000; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
                 
                 if (i % 2 == 0)
                 {
-                    repo.AddUnmanagedComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
+                    repo.AddComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
                 }
             }
             
@@ -65,19 +65,19 @@ namespace Fdp.Tests
         public void ForEachChunked_SkipsEmptyChunks()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             // Create entities only in specific chunks
             // Chunk 0: entities 0-16383
             var e1 = repo.CreateEntity();  // Index 0
-            repo.AddUnmanagedComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
             
             // Skip many indices to go to a different chunk
             // Force allocation at high index to create gap
             for (int i = 0; i < 100000; i += 20000)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
             }
             
             var query = repo.Query().With<Position>().Build();
@@ -92,13 +92,13 @@ namespace Fdp.Tests
         public void ForEachParallel_ProcessesAllEntities()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             // Create 1000 entities
             for (int i = 0; i < 1000; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
             }
             
             var query = repo.Query().With<Position>().Build();
@@ -114,14 +114,14 @@ namespace Fdp.Tests
         public void ForEachParallel_MatchesSequentialResults()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             for (int i = 0; i < 500; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
-                repo.AddUnmanagedComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
             }
             
             var query = repo.Query().With<Position>().With<Velocity>().Build();
@@ -148,15 +148,15 @@ namespace Fdp.Tests
         public void ForEachParallel_CanModifyComponentsIndependently()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Health>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Health>();
             
             // Create entities
             for (int i = 0; i < 1000; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = 0, Y = 0, Z = 0 });
-                repo.AddUnmanagedComponent(e, new Health { Value = 100 });
+                repo.AddComponent(e, new Position { X = 0, Y = 0, Z = 0 });
+                repo.AddComponent(e, new Health { Value = 100 });
             }
             
             var query = repo.Query().With<Position>().With<Health>().Build();
@@ -164,8 +164,8 @@ namespace Fdp.Tests
             // Parallel update (each entity independent)
             query.ForEachParallel(e =>
             {
-                ref var pos = ref repo.GetUnmanagedComponent<Position>(e);
-                ref var hp = ref repo.GetUnmanagedComponent<Health>(e);
+                ref var pos = ref repo.GetComponentRW<Position>(e);
+                ref var hp = ref repo.GetComponentRW<Health>(e);
                 
                 pos.X = e.Index;
                 hp.Value = e.Index * 10;
@@ -174,8 +174,8 @@ namespace Fdp.Tests
             // Verify all updates
             query.ForEach(e =>
             {
-                ref var pos = ref repo.GetUnmanagedComponent<Position>(e);
-                ref var hp = ref repo.GetUnmanagedComponent<Health>(e);
+                ref var pos = ref repo.GetComponentRW<Position>(e);
+                ref var hp = ref repo.GetComponentRW<Health>(e);
                 
                 Assert.Equal(e.Index, pos.X);
                 Assert.Equal(e.Index * 10, hp.Value);
@@ -190,15 +190,15 @@ namespace Fdp.Tests
         public void Performance_ChunkedVsRegular_10KEntities()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             // Create 10K entities
             for (int i = 0; i < 10_000; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
-                repo.AddUnmanagedComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
             }
             
             var query = repo.Query().With<Position>().With<Velocity>().Build();
@@ -218,18 +218,18 @@ namespace Fdp.Tests
         public void ChunkedIteration_WithSparseData()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Health>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Health>();
             
             // Create sparse entities (only 10% match)
             for (int i = 0; i < 1000; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
                 
                 if (i % 10 == 0)
                 {
-                    repo.AddUnmanagedComponent(e, new Health { Value = 100 });
+                    repo.AddComponent(e, new Health { Value = 100 });
                 }
             }
             
@@ -249,14 +249,14 @@ namespace Fdp.Tests
         public void ChunkedIteration_EmptyQuery_NoErrors()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             // Create entities that don't match
             for (int i = 0; i < 100; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
             }
             
             // Query for component that doesn't exist
@@ -272,14 +272,14 @@ namespace Fdp.Tests
         public void ParallelIteration_ThreadSafety_NoDataRaces()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             // Create entities
             var entities = new Entity[1000];
             for (int i = 0; i < 1000; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Position { X = 0, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Position { X = 0, Y = 0, Z = 0 });
             }
             
             var query = repo.Query().With<Position>().Build();
@@ -287,7 +287,7 @@ namespace Fdp.Tests
             // Each entity gets unique value
             query.ForEachParallel(e =>
             {
-                ref var pos = ref repo.GetUnmanagedComponent<Position>(e);
+                ref var pos = ref repo.GetComponentRW<Position>(e);
                 pos.X = e.Index;
                 pos.Y = e.Index * 2;
                 pos.Z = e.Index * 3;
@@ -296,7 +296,7 @@ namespace Fdp.Tests
             // Verify no corruption
             for (int i = 0; i < 1000; i++)
             {
-                ref var pos = ref repo.GetUnmanagedComponent<Position>(entities[i]);
+                ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
                 Assert.Equal(i, pos.X);
                 Assert.Equal(i * 2, pos.Y);
                 Assert.Equal(i * 3, pos.Z);
@@ -307,13 +307,13 @@ namespace Fdp.Tests
         public void ChunkedIteration_WithDestroyedEntities()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var entities = new List<Entity>();
             for (int i = 0; i < 100; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
                 entities.Add(e);
             }
             

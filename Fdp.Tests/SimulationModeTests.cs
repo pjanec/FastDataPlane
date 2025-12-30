@@ -91,8 +91,8 @@ namespace Fdp.Tests
             _output.WriteLine($"Frames: {frameCount}");
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var entities = new Entity[entityCount];
             var random = new Random(42);
@@ -100,8 +100,8 @@ namespace Fdp.Tests
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Position { X = i * 10, Y = 0, Z = 0 });
-                repo.AddUnmanagedComponent(entities[i], new Velocity 
+                repo.AddComponent(entities[i], new Position { X = i * 10, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Velocity 
                 { 
                     VX = (float)(random.NextDouble() * 2 - 1),
                     VY = 0,
@@ -129,8 +129,8 @@ namespace Fdp.Tests
                     // Update with ACTUAL elapsed time (real-time)
                     for (int i = 0; i < entityCount; i++)
                     {
-                        ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
-                        var vel = repo.GetUnmanagedComponentRO<Velocity>(entities[i]);
+                        ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
+                        var vel = repo.GetComponentRO<Velocity>(entities[i]);
                         
                         pos.X += vel.VX * actualDeltaTime;
                         pos.Y += vel.VY * actualDeltaTime;
@@ -241,13 +241,13 @@ namespace Fdp.Tests
             // Record with artificial delays
             using (var repo = new EntityRepository())
             {
-                repo.RegisterUnmanagedComponent<Position>();
+                repo.RegisterComponent<Position>();
                 
                 var entities = new Entity[entityCount];
                 for (int i = 0; i < entityCount; i++)
                 {
                     entities[i] = repo.CreateEntity();
-                    repo.AddUnmanagedComponent(entities[i], new Position { X = i, Y = 0, Z = 0 });
+                    repo.AddComponent(entities[i], new Position { X = i, Y = 0, Z = 0 });
                 }
                 
                 using var recorder = new AsyncRecorder(_deterministicFile);
@@ -259,7 +259,7 @@ namespace Fdp.Tests
                     // Update entities
                     for (int i = 0; i < entityCount; i++)
                     {
-                        ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
+                        ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
                         pos.X += 1.0f;
                     }
                     
@@ -294,8 +294,8 @@ namespace Fdp.Tests
         private ulong RunDeterministicSimulation(int entityCount, int frameCount, float fixedDeltaTime, string filePath)
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var entities = new Entity[entityCount];
             var random = new Random(42);
@@ -303,8 +303,8 @@ namespace Fdp.Tests
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Position { X = i * 10, Y = 0, Z = 0 });
-                repo.AddUnmanagedComponent(entities[i], new Velocity 
+                repo.AddComponent(entities[i], new Position { X = i * 10, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Velocity 
                 { 
                     VX = (float)(random.NextDouble() * 2 - 1),
                     VY = 0,
@@ -321,8 +321,8 @@ namespace Fdp.Tests
                     // Update with FIXED delta time
                     for (int i = 0; i < entityCount; i++)
                     {
-                        ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
-                        var vel = repo.GetUnmanagedComponentRO<Velocity>(entities[i]);
+                        ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
+                        var vel = repo.GetComponentRO<Velocity>(entities[i]);
                         
                         pos.X += vel.VX * fixedDeltaTime;
                         pos.Y += vel.VY * fixedDeltaTime;
@@ -342,8 +342,8 @@ namespace Fdp.Tests
         private ulong RunRealTimeSimulation(int entityCount, int frameCount, float targetFPS, string filePath)
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var entities = new Entity[entityCount];
             var random = new Random(42);
@@ -351,8 +351,8 @@ namespace Fdp.Tests
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Position { X = i * 10, Y = 0, Z = 0 });
-                repo.AddUnmanagedComponent(entities[i], new Velocity 
+                repo.AddComponent(entities[i], new Position { X = i * 10, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Velocity 
                 { 
                     VX = (float)(random.NextDouble() * 2 - 1),
                     VY = 0,
@@ -375,8 +375,8 @@ namespace Fdp.Tests
                     
                     for (int i = 0; i < entityCount; i++)
                     {
-                        ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
-                        var vel = repo.GetUnmanagedComponentRO<Velocity>(entities[i]);
+                        ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
+                        var vel = repo.GetComponentRO<Velocity>(entities[i]);
                         
                         pos.X += vel.VX * deltaTime;
                         pos.Y += vel.VY * deltaTime;
@@ -400,8 +400,8 @@ namespace Fdp.Tests
         private ulong PlaybackAndHash(string filePath, int entityCount)
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             using var controller = new PlaybackController(filePath);
             
@@ -423,7 +423,7 @@ namespace Fdp.Tests
         private ulong PlaybackAtSpeed(string filePath, int entityCount, int delayMs)
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(filePath);
             
@@ -451,7 +451,7 @@ namespace Fdp.Tests
             {
                 if (repo.IsAlive(entity) && repo.HasUnmanagedComponent<Position>(entity))
                 {
-                    var pos = repo.GetUnmanagedComponentRO<Position>(entity);
+                    var pos = repo.GetComponentRO<Position>(entity);
                     
                     hash ^= BitConverter.ToUInt32(BitConverter.GetBytes(pos.X), 0);
                     hash *= 1099511628211UL; // FNV prime

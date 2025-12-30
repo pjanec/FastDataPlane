@@ -87,9 +87,9 @@ namespace Fdp.Tests
             _output.WriteLine($"Long simulation: {stepCount} steps");
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
-            repo.RegisterUnmanagedComponent<Acceleration>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
+            repo.RegisterComponent<Acceleration>();
             
             var entities = new Entity[entityCount];
             var random = new Random(42);
@@ -98,14 +98,14 @@ namespace Fdp.Tests
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Position { X = i * 10f, Y = 0, Z = 0 });
-                repo.AddUnmanagedComponent(entities[i], new Velocity 
+                repo.AddComponent(entities[i], new Position { X = i * 10f, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Velocity 
                 { 
                     VX = (float)(random.NextDouble() * 2 - 1),
                     VY = (float)(random.NextDouble() * 2 - 1),
                     VZ = (float)(random.NextDouble() * 2 - 1)
                 });
-                repo.AddUnmanagedComponent(entities[i], new Acceleration
+                repo.AddComponent(entities[i], new Acceleration
                 {
                     AX = 0,
                     AY = -9.81f, // Gravity
@@ -124,9 +124,9 @@ namespace Fdp.Tests
                 
                 for (int i = 0; i < entityCount; i++)
                 {
-                    ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
-                    ref var vel = ref repo.GetUnmanagedComponentRW<Velocity>(entities[i]);
-                    var acc = repo.GetUnmanagedComponentRO<Acceleration>(entities[i]);
+                    ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
+                    ref var vel = ref repo.GetComponentRW<Velocity>(entities[i]);
+                    var acc = repo.GetComponentRO<Acceleration>(entities[i]);
                     
                     // Euler integration (simple but prone to instability if not careful)
                     vel.VX += acc.AX * fixedDeltaTime;
@@ -180,8 +180,8 @@ namespace Fdp.Tests
             _output.WriteLine($"Delta time range: [{minDeltaTime * 1000:F2}ms, {maxDeltaTime * 1000:F2}ms]");
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var entities = new Entity[entityCount];
             var random = new Random(42);
@@ -189,8 +189,8 @@ namespace Fdp.Tests
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Position { X = i * 10f, Y = 0, Z = 0 });
-                repo.AddUnmanagedComponent(entities[i], new Velocity 
+                repo.AddComponent(entities[i], new Position { X = i * 10f, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Velocity 
                 { 
                     VX = (float)(random.NextDouble() * 10),
                     VY = 0,
@@ -218,8 +218,8 @@ namespace Fdp.Tests
                 // Update with variable delta time
                 for (int i = 0; i < entityCount; i++)
                 {
-                    ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
-                    var vel = repo.GetUnmanagedComponentRO<Velocity>(entities[i]);
+                    ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
+                    var vel = repo.GetComponentRO<Velocity>(entities[i]);
                     
                     pos.X += vel.VX * deltaTime;
                 }
@@ -312,8 +312,8 @@ namespace Fdp.Tests
             int entityCount, int stepCount, float fixedDeltaTime, int seed)
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var entities = new Entity[entityCount];
             var random = new Random(seed);
@@ -321,8 +321,8 @@ namespace Fdp.Tests
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Position { X = i * 10f, Y = 0, Z = 0 });
-                repo.AddUnmanagedComponent(entities[i], new Velocity 
+                repo.AddComponent(entities[i], new Position { X = i * 10f, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Velocity 
                 { 
                     VX = (float)(random.NextDouble() * 2 - 1),
                     VY = (float)(random.NextDouble() * 2 - 1),
@@ -336,8 +336,8 @@ namespace Fdp.Tests
                 
                 for (int i = 0; i < entityCount; i++)
                 {
-                    ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
-                    var vel = repo.GetUnmanagedComponentRO<Velocity>(entities[i]);
+                    ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
+                    var vel = repo.GetComponentRO<Velocity>(entities[i]);
                     
                     pos.X += vel.VX * fixedDeltaTime;
                     pos.Y += vel.VY * fixedDeltaTime;
@@ -352,8 +352,8 @@ namespace Fdp.Tests
             int entityCount, int stepCount, int seed)
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var entities = new Entity[entityCount];
             var random = new Random(seed);
@@ -361,8 +361,8 @@ namespace Fdp.Tests
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Position { X = i * 10f, Y = 0, Z = 0 });
-                repo.AddUnmanagedComponent(entities[i], new Velocity 
+                repo.AddComponent(entities[i], new Position { X = i * 10f, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Velocity 
                 { 
                     VX = (float)(random.NextDouble() * 2 - 1),
                     VY = (float)(random.NextDouble() * 2 - 1),
@@ -384,8 +384,8 @@ namespace Fdp.Tests
                 
                 for (int i = 0; i < entityCount; i++)
                 {
-                    ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
-                    var vel = repo.GetUnmanagedComponentRO<Velocity>(entities[i]);
+                    ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
+                    var vel = repo.GetComponentRO<Velocity>(entities[i]);
                     
                     pos.X += vel.VX * deltaTime;
                     pos.Y += vel.VY * deltaTime;
@@ -404,7 +404,7 @@ namespace Fdp.Tests
             {
                 if (repo.IsAlive(entity) && repo.HasUnmanagedComponent<Position>(entity))
                 {
-                    var pos = repo.GetUnmanagedComponentRO<Position>(entity);
+                    var pos = repo.GetComponentRO<Position>(entity);
                     
                     hash ^= BitConverter.ToUInt32(BitConverter.GetBytes(pos.X), 0);
                     hash *= 1099511628211UL;
@@ -426,7 +426,7 @@ namespace Fdp.Tests
             {
                 if (repo.IsAlive(entity) && repo.HasUnmanagedComponent<Position>(entity))
                 {
-                    var pos = repo.GetUnmanagedComponentRO<Position>(entity);
+                    var pos = repo.GetComponentRO<Position>(entity);
                     total += MathF.Sqrt(pos.X * pos.X + pos.Y * pos.Y + pos.Z * pos.Z);
                 }
             }

@@ -21,7 +21,7 @@ namespace Fdp.Tests
         public void QueryBuilder_With_SingleComponent()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var query = repo.Query().With<Position>().Build();
             
@@ -33,8 +33,8 @@ namespace Fdp.Tests
         public void QueryBuilder_With_MultipleComponents()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var query = repo.Query()
                 .With<Position>()
@@ -49,8 +49,8 @@ namespace Fdp.Tests
         public void QueryBuilder_Without_SingleComponent()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var query = repo.Query()
                 .With<Position>()
@@ -65,9 +65,9 @@ namespace Fdp.Tests
         public void QueryBuilder_FluentAPI_Chains()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
-            repo.RegisterUnmanagedComponent<Health>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
+            repo.RegisterComponent<Health>();
             
             var query = repo.Query()
                 .With<Position>()
@@ -86,21 +86,21 @@ namespace Fdp.Tests
         public void Query_ForEach_MatchesCorrectEntities()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             // Entity with Position only
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
             
             // Entity with Position + Velocity
             var e2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
-            repo.AddUnmanagedComponent(e2, new Velocity { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
+            repo.AddComponent(e2, new Velocity { X = 1, Y = 1, Z = 1 });
             
             // Entity with Velocity only
             var e3 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e3, new Velocity { X = 3, Y = 3, Z = 3 });
+            repo.AddComponent(e3, new Velocity { X = 3, Y = 3, Z = 3 });
             
             // Query for Position
             var query = repo.Query().With<Position>().Build();
@@ -117,21 +117,21 @@ namespace Fdp.Tests
         public void Query_ForEach_MultipleComponents_AND()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
-            repo.RegisterUnmanagedComponent<Health>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
+            repo.RegisterComponent<Health>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
             
             var e2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
-            repo.AddUnmanagedComponent(e2, new Velocity { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
+            repo.AddComponent(e2, new Velocity { X = 1, Y = 1, Z = 1 });
             
             var e3 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e3, new Position { X = 3, Y = 3, Z = 3 });
-            repo.AddUnmanagedComponent(e3, new Velocity { X = 1, Y = 1, Z = 1 });
-            repo.AddUnmanagedComponent(e3, new Health { Value = 100 });
+            repo.AddComponent(e3, new Position { X = 3, Y = 3, Z = 3 });
+            repo.AddComponent(e3, new Velocity { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e3, new Health { Value = 100 });
             
             // Query for Position AND Velocity
             var query = repo.Query()
@@ -149,15 +149,15 @@ namespace Fdp.Tests
         public void Query_Without_ExcludesComponent()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
             
             var e2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
-            repo.AddUnmanagedComponent(e2, new Velocity { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
+            repo.AddComponent(e2, new Velocity { X = 1, Y = 1, Z = 1 });
             
             // Query for Position WITHOUT Velocity
             var query = repo.Query()
@@ -176,17 +176,17 @@ namespace Fdp.Tests
         public void Query_Count_ReturnsCorrectCount()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             for (int i = 0; i < 100; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
                 
                 if (i % 2 == 0)
                 {
-                    repo.AddUnmanagedComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
+                    repo.AddComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
                 }
             }
             
@@ -204,10 +204,10 @@ namespace Fdp.Tests
         public void Query_Any_ReturnsTrue_WhenMatches()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e, new Position { X = 1, Y = 1, Z = 1 });
             
             var query = repo.Query().With<Position>().Build();
             
@@ -218,11 +218,11 @@ namespace Fdp.Tests
         public void Query_Any_ReturnsFalse_WhenNoMatches()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e, new Position { X = 1, Y = 1, Z = 1 });
             
             var query = repo.Query().With<Velocity>().Build();
             
@@ -233,13 +233,13 @@ namespace Fdp.Tests
         public void Query_FirstOrNull_ReturnsFirst()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
             
             var e2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
+            repo.AddComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
             
             var query = repo.Query().With<Position>().Build();
             var first = query.FirstOrNull();
@@ -266,14 +266,14 @@ namespace Fdp.Tests
         public void Query_ForEach_CanAccessComponents()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             for (int i = 0; i < 10; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
-                repo.AddUnmanagedComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
             }
             
             var query = repo.Query()
@@ -284,8 +284,8 @@ namespace Fdp.Tests
             // Update positions based on velocity
             query.ForEach(e =>
             {
-                ref var pos = ref repo.GetUnmanagedComponent<Position>(e);
-                ref var vel = ref repo.GetUnmanagedComponent<Velocity>(e);
+                ref var pos = ref repo.GetComponentRW<Position>(e);
+                ref var vel = ref repo.GetComponentRW<Velocity>(e);
                 
                 pos.X += vel.X;
                 pos.Y += vel.Y;
@@ -294,7 +294,7 @@ namespace Fdp.Tests
             
             // Verify updates
             var firstEntity = query.FirstOrNull();
-            var pos = repo.GetUnmanagedComponent<Position>(firstEntity);
+            var pos = repo.GetComponentRW<Position>(firstEntity);
             Assert.Equal(1, pos.X); // 0 + 1
         }
         
@@ -306,7 +306,7 @@ namespace Fdp.Tests
         public void Query_EmptyRepository_ReturnsNoMatches()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var query = repo.Query().With<Position>().Build();
             
@@ -319,13 +319,13 @@ namespace Fdp.Tests
         public void Query_DestroyedEntity_NotReturned()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
             
             var e2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
+            repo.AddComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
             
             var query = repo.Query().With<Position>().Build();
             Assert.Equal(2, query.Count());
@@ -339,12 +339,12 @@ namespace Fdp.Tests
         public void Query_ComponentRemoved_NotReturned()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position { X = 1, Y = 1, Z = 1 });
-            repo.AddUnmanagedComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
             
             var query = repo.Query().With<Velocity>().Build();
             Assert.Equal(1, query.Count());
@@ -378,18 +378,18 @@ namespace Fdp.Tests
         public void Query_Performance_10KEntities()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             // Create 10K entities
             for (int i = 0; i < 10_000; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
+                repo.AddComponent(e, new Position { X = i, Y = i, Z = i });
                 
                 if (i % 2 == 0)
                 {
-                    repo.AddUnmanagedComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
+                    repo.AddComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
                 }
             }
             
@@ -408,18 +408,18 @@ namespace Fdp.Tests
         public void Query_Multiple_Independent()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
             
             var e2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e2, new Velocity { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e2, new Velocity { X = 1, Y = 1, Z = 1 });
             
             var e3 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e3, new Position { X = 2, Y = 2, Z = 2 });
-            repo.AddUnmanagedComponent(e3, new Velocity { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e3, new Position { X = 2, Y = 2, Z = 2 });
+            repo.AddComponent(e3, new Velocity { X = 1, Y = 1, Z = 1 });
             
             var queryPos = repo.Query().With<Position>().Build();
             var queryVel = repo.Query().With<Velocity>().Build();

@@ -22,7 +22,7 @@ namespace Fdp.Kernel
             
             // Ensure components exist
             if (!repo.HasUnmanagedComponent<HierarchyNode>(parent))
-                repo.AddUnmanagedComponent(parent, new HierarchyNode 
+                repo.AddComponent(parent, new HierarchyNode 
                 { 
                     Parent = Entity.Null,
                     FirstChild = Entity.Null,
@@ -31,7 +31,7 @@ namespace Fdp.Kernel
                 });
                 
             if (!repo.HasUnmanagedComponent<HierarchyNode>(child))
-                repo.AddUnmanagedComponent(child, new HierarchyNode 
+                repo.AddComponent(child, new HierarchyNode 
                 { 
                     Parent = Entity.Null,
                     FirstChild = Entity.Null,
@@ -43,14 +43,14 @@ namespace Fdp.Kernel
             repo.RemoveFromParent(child);
             
             // Get references to modify
-            ref var parentNode = ref repo.GetUnmanagedComponent<HierarchyNode>(parent);
+            ref var parentNode = ref repo.GetComponentRW<HierarchyNode>(parent);
             
             // Link as first child (prepend)
             // Strategy: NewChild.Next = OldFirstChild; OldFirstChild.Prev = NewChild; Parent.First = NewChild;
             
             Entity oldFirstChild = parentNode.FirstChild;
             
-            ref var childNode = ref repo.GetUnmanagedComponent<HierarchyNode>(child);
+            ref var childNode = ref repo.GetComponentRW<HierarchyNode>(child);
             childNode.Parent = parent;
             childNode.NextSibling = oldFirstChild;
             childNode.PreviousSibling = Entity.Null;
@@ -58,13 +58,13 @@ namespace Fdp.Kernel
             // Update old first child if it exists
             if (oldFirstChild != Entity.Null)
             {
-                ref var oldFirstNode = ref repo.GetUnmanagedComponent<HierarchyNode>(oldFirstChild);
+                ref var oldFirstNode = ref repo.GetComponentRW<HierarchyNode>(oldFirstChild);
                 oldFirstNode.PreviousSibling = child;
             }
             
             // Update parent
             // Re-fetch parent ref just in case of stale ref (though unlikely in single thread)
-            ref var parentRef = ref repo.GetUnmanagedComponent<HierarchyNode>(parent);
+            ref var parentRef = ref repo.GetComponentRW<HierarchyNode>(parent);
             parentRef.FirstChild = child;
         }
         
@@ -76,7 +76,7 @@ namespace Fdp.Kernel
             if (!repo.HasUnmanagedComponent<HierarchyNode>(child))
                 return;
                 
-            ref var childNode = ref repo.GetUnmanagedComponent<HierarchyNode>(child);
+            ref var childNode = ref repo.GetComponentRW<HierarchyNode>(child);
             Entity parent = childNode.Parent;
             
             if (parent == Entity.Null)
@@ -89,20 +89,20 @@ namespace Fdp.Kernel
             // Update prev sibling
             if (prev != Entity.Null)
             {
-                ref var prevNode = ref repo.GetUnmanagedComponent<HierarchyNode>(prev);
+                ref var prevNode = ref repo.GetComponentRW<HierarchyNode>(prev);
                 prevNode.NextSibling = next;
             }
             else
             {
                 // Is first child, update parent
-                ref var parentNode = ref repo.GetUnmanagedComponent<HierarchyNode>(parent);
+                ref var parentNode = ref repo.GetComponentRW<HierarchyNode>(parent);
                 parentNode.FirstChild = next;
             }
             
             // Update next sibling
             if (next != Entity.Null)
             {
-                ref var nextNode = ref repo.GetUnmanagedComponent<HierarchyNode>(next);
+                ref var nextNode = ref repo.GetComponentRW<HierarchyNode>(next);
                 nextNode.PreviousSibling = prev;
             }
             
@@ -119,8 +119,8 @@ namespace Fdp.Kernel
         {
             if (!repo.HasUnmanagedComponent<HierarchyNode>(parent))
                 return new ChildEnumerator(repo, Entity.Null);
-                
-            var node = repo.GetUnmanagedComponent<HierarchyNode>(parent);
+
+            var node = repo.GetComponentRW<HierarchyNode>(parent);
             return new ChildEnumerator(repo, node.FirstChild);
         }
         
@@ -151,7 +151,7 @@ namespace Fdp.Kernel
                 // Advance
                 if (_repo.HasUnmanagedComponent<HierarchyNode>(_current))
                 {
-                    _next = _repo.GetUnmanagedComponent<HierarchyNode>(_current).NextSibling;
+                    _next = _repo.GetComponentRW<HierarchyNode>(_current).NextSibling;
                 }
                 else
                 {

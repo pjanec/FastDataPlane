@@ -47,11 +47,11 @@ namespace Fdp.Tests
             Assert.True(repo.HasComponent<Position>(entity));
             Assert.True(repo.HasComponent<Health>(entity));
 
-            ref var pos = ref repo.GetComponent<Position>(entity);
+            ref var pos = ref repo.GetComponentRW<Position>(entity);
             Assert.Equal(10, pos.X);
             Assert.Equal(20, pos.Y);
             
-            ref var hp = ref repo.GetComponent<Health>(entity);
+            ref var hp = ref repo.GetComponentRW<Health>(entity);
             Assert.Equal(100, hp.Current);
         }
 
@@ -59,7 +59,7 @@ namespace Fdp.Tests
         public void Spawn_ManagedComponents_UseFactory()
         {
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<Inventory>();
+            repo.RegisterComponent<Inventory>();
 
             // 1. Define Template
             var tkb = new TkbDatabase();
@@ -78,8 +78,8 @@ namespace Fdp.Tests
             var e2 = tkb.Spawn("Hero", repo);
 
             // 3. Verify Data
-            var inv1 = repo.GetManagedComponent<Inventory>(e1);
-            var inv2 = repo.GetManagedComponent<Inventory>(e2);
+            var inv1 = repo.GetComponentRW<Inventory>(e1);
+            var inv2 = repo.GetComponentRW<Inventory>(e2);
 
             Assert.Equal("Sword", inv1.Items[0]);
             Assert.Equal("Sword", inv2.Items[0]);

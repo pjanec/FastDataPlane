@@ -29,10 +29,10 @@ namespace Fdp.Tests
         {
             // This test validates the correct order: Tick() -> Modify -> Record
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, 0);
+            repo.AddComponent(e, 0);
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {
@@ -56,18 +56,18 @@ namespace Fdp.Tests
             
             // Verify: Playback all frames
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var reader = new RecordingReader(_testFilePath);
             
             Assert.True(reader.ReadNextFrame(targetRepo)); // Frame 0
-            Assert.Equal(100, targetRepo.GetUnmanagedComponentRO<int>(e));
+            Assert.Equal(100, targetRepo.GetComponentRO<int>(e));
             
             Assert.True(reader.ReadNextFrame(targetRepo)); // Frame 1
-            Assert.Equal(200, targetRepo.GetUnmanagedComponentRO<int>(e));
+            Assert.Equal(200, targetRepo.GetComponentRO<int>(e));
             
             Assert.True(reader.ReadNextFrame(targetRepo)); // Frame 2
-            Assert.Equal(300, targetRepo.GetUnmanagedComponentRO<int>(e));
+            Assert.Equal(300, targetRepo.GetComponentRO<int>(e));
         }
 
         [Fact]
@@ -76,10 +76,10 @@ namespace Fdp.Tests
             // This test documents the WRONG order and shows it fails
             // ORDER: Modify -> Tick() -> Record (WRONG!)
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, 0);
+            repo.AddComponent(e, 0);
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {
@@ -99,16 +99,16 @@ namespace Fdp.Tests
             
             // Verify: The delta frame will be empty (no data captured)
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var reader = new RecordingReader(_testFilePath);
             
             Assert.True(reader.ReadNextFrame(targetRepo)); // Frame 0
-            Assert.Equal(100, targetRepo.GetUnmanagedComponentRO<int>(e));
+            Assert.Equal(100, targetRepo.GetComponentRO<int>(e));
             
             Assert.True(reader.ReadNextFrame(targetRepo)); // Frame 1 (delta is empty!)
             // Value should still be 100 because delta didn't capture the change to 200
-            Assert.Equal(100, targetRepo.GetUnmanagedComponentRO<int>(e));
+            Assert.Equal(100, targetRepo.GetComponentRO<int>(e));
         }
 
         [Fact]
@@ -116,10 +116,10 @@ namespace Fdp.Tests
         {
             // Verify that delta frames actually contain component data
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position { X = 0, Y = 0, Z = 0 });
+            repo.AddComponent(e, new Position { X = 0, Y = 0, Z = 0 });
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {
@@ -150,13 +150,13 @@ namespace Fdp.Tests
                 
             // Verify the delta actually applied the change
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<Position>();
+            targetRepo.RegisterComponent<Position>();
             
             using var reader = new RecordingReader(_testFilePath);
             reader.ReadNextFrame(targetRepo); // Keyframe
             reader.ReadNextFrame(targetRepo); // Delta
             
-            ref readonly var pos = ref targetRepo.GetUnmanagedComponentRO<Position>(e);
+            ref readonly var pos = ref targetRepo.GetComponentRO<Position>(e);
             Assert.Equal(99f, pos.X);
             Assert.Equal(88f, pos.Y);
             Assert.Equal(77f, pos.Z);
@@ -167,10 +167,10 @@ namespace Fdp.Tests
         {
             // Verify that modifying a component updates its chunk version correctly
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, 42);
+            repo.AddComponent(e, 42);
             
             repo.Tick(); // V=2
             uint tickBeforeModification = repo.GlobalVersion;

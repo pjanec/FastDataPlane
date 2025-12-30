@@ -16,11 +16,11 @@ namespace Fdp.Tests
         public void CreateEntity_MarksChanged()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             repo.Tick(); // v=2.
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 1 });
+            repo.AddComponent(entity, new Position { X = 1 });
             
             // Check delta since v=1 (before tick)
             int count = 0;
@@ -37,9 +37,9 @@ namespace Fdp.Tests
         public void NoChange_Skips()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 1 });
+            repo.AddComponent(entity, new Position { X = 1 });
             
             repo.Tick(); // Bump version to 2
             
@@ -67,15 +67,15 @@ namespace Fdp.Tests
         public void GetComponentRW_MarksChanged()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 1 });
+            repo.AddComponent(entity, new Position { X = 1 });
             
             // Current v=1.
             repo.Tick(); // v=2.
             
             // Read-Write access
-            ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entity);
+            ref var pos = ref repo.GetComponentRW<Position>(entity);
             pos.X = 100;
             
             // Should match query since v=1
@@ -88,14 +88,14 @@ namespace Fdp.Tests
         public void GetComponentRO_DoesNotMarkChanged()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 1 });
+            repo.AddComponent(entity, new Position { X = 1 });
             
             repo.Tick(); // v=2.
             
             // Read-Only access
-            ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(entity);
+            ref readonly var pos = ref repo.GetComponentRO<Position>(entity);
             // pos.X = 100; // Compile error
             
             // Should NOT match query since v=1
@@ -108,15 +108,15 @@ namespace Fdp.Tests
         public void StructureChange_MarksChanged()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>(); // Used for structural change
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>(); // Used for structural change
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 1 });
+            repo.AddComponent(entity, new Position { X = 1 });
             
             repo.Tick(); // v=2
             
             // Add another component -> Structure change
-            repo.AddUnmanagedComponent(entity, new Velocity { X = 1 }); // Header.ChangeTick = 2
+            repo.AddComponent(entity, new Velocity { X = 1 }); // Header.ChangeTick = 2
             
             // Query for Position (even though we added Velocity, the entity changed)
             // Delta Iterator iterates "Entities changed".

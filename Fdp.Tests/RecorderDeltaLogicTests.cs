@@ -30,7 +30,7 @@ namespace Fdp.Tests
             // 4. Verify Delta only records Chunk 1 for that component.
 
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             var recorder = new RecorderSystem();
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
@@ -41,19 +41,19 @@ namespace Fdp.Tests
             for (int i = 0; i < capacity; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i });
+                repo.AddComponent(e, new Position { X = i });
             }
 
             // Start Chunk 1
             var eChunk1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(eChunk1, new Position { X = 999 });
+            repo.AddComponent(eChunk1, new Position { X = 999 });
 
             repo.Tick(); // Advance tick. All chunks are "dirty" relative to 0.
             uint baselineTick = (uint)repo.GlobalVersion; // Tick = 1
 
             // Modify Chunk 1 only
             repo.Tick(); // Tick = 2
-            ref var pos = ref repo.GetUnmanagedComponentRW<Position>(eChunk1);
+            ref var pos = ref repo.GetComponentRW<Position>(eChunk1);
             pos.X = 888; 
             // This updates Component Chunk 1 version to 2.
             // Component Chunk 0 version should stay at 1 (creation time).
@@ -144,15 +144,15 @@ namespace Fdp.Tests
             // Delta should record chunk for A, but NOT for B.
 
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             var recorder = new RecorderSystem();
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
 
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position { X = 1 });
-            repo.AddUnmanagedComponent(e, new Velocity { VX = 1 });
+            repo.AddComponent(e, new Position { X = 1 });
+            repo.AddComponent(e, new Velocity { VX = 1 });
 
             repo.Tick();
             uint baseline = (uint)repo.GlobalVersion;
@@ -160,7 +160,7 @@ namespace Fdp.Tests
             repo.Tick(); // Advance tick so modification is > baseline
 
             // Modify Position only
-            ref var pos = ref repo.GetUnmanagedComponentRW<Position>(e);
+            ref var pos = ref repo.GetComponentRW<Position>(e);
             pos.X = 2;
 
             // No need for another tick here strictly, but usually we record at end of frame
@@ -197,13 +197,13 @@ namespace Fdp.Tests
         public void Keyframe_RecordsAllChunks_RegardlessOfVersion()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             var recorder = new RecorderSystem();
             using var stream = new MemoryStream();
             using var writer = new BinaryWriter(stream);
 
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position { X = 1 });
+            repo.AddComponent(e, new Position { X = 1 });
 
             repo.Tick(); // Tick 1
             repo.Tick(); // Tick 2

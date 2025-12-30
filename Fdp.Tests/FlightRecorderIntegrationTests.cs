@@ -32,13 +32,13 @@ namespace Fdp.Tests
         {
             // Test the most basic record → playback cycle
             using var sourceRepo = new EntityRepository();
-            sourceRepo.RegisterUnmanagedComponent<int>();
+            sourceRepo.RegisterComponent<int>();
             
             // Create initial state
             var e1 = sourceRepo.CreateEntity();
-            sourceRepo.AddUnmanagedComponent(e1, 42);
+            sourceRepo.AddComponent(e1, 42);
             var e2 = sourceRepo.CreateEntity(); 
-            sourceRepo.AddUnmanagedComponent(e2, 100);
+            sourceRepo.AddComponent(e2, 100);
             sourceRepo.Tick(); // V=2
             
             // Record keyframe
@@ -49,7 +49,7 @@ namespace Fdp.Tests
             
             // Playback to fresh repo
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var reader = new RecordingReader(_testFilePath);
             bool frameLoaded = reader.ReadNextFrame(targetRepo);
@@ -57,8 +57,8 @@ namespace Fdp.Tests
             // Verify
             Assert.True(frameLoaded);
             Assert.Equal(2, targetRepo.GetEntityIndex().ActiveCount);
-            Assert.Equal(42, targetRepo.GetUnmanagedComponentRO<int>(e1));
-            Assert.Equal(100, targetRepo.GetUnmanagedComponentRO<int>(e2));
+            Assert.Equal(42, targetRepo.GetComponentRO<int>(e1));
+            Assert.Equal(100, targetRepo.GetComponentRO<int>(e2));
         }
         
         [Fact]
@@ -66,10 +66,10 @@ namespace Fdp.Tests
         {
             // Test keyframe + delta record → playback cycle
             using var sourceRepo = new EntityRepository();
-            sourceRepo.RegisterUnmanagedComponent<int>();
+            sourceRepo.RegisterComponent<int>();
             
             var e1 = sourceRepo.CreateEntity();
-            sourceRepo.AddUnmanagedComponent(e1, 42);
+            sourceRepo.AddComponent(e1, 42);
             sourceRepo.Tick();
             
             // Record keyframe + delta
@@ -86,17 +86,17 @@ namespace Fdp.Tests
             
             // Playback sequence
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var reader = new RecordingReader(_testFilePath);
             
             // Frame 1 (keyframe)
             Assert.True(reader.ReadNextFrame(targetRepo));
-            Assert.Equal(42, targetRepo.GetUnmanagedComponentRO<int>(e1));
+            Assert.Equal(42, targetRepo.GetComponentRO<int>(e1));
             
             // Frame 2 (delta)
             Assert.True(reader.ReadNextFrame(targetRepo));
-            Assert.Equal(200, targetRepo.GetUnmanagedComponentRO<int>(e1));
+            Assert.Equal(200, targetRepo.GetComponentRO<int>(e1));
         }
         
         [Fact]
@@ -104,12 +104,12 @@ namespace Fdp.Tests
         {
             // Test entity destruction recording and playback
             using var sourceRepo = new EntityRepository();
-            sourceRepo.RegisterUnmanagedComponent<int>();
+            sourceRepo.RegisterComponent<int>();
             
             var e1 = sourceRepo.CreateEntity();
             var e2 = sourceRepo.CreateEntity();
-            sourceRepo.AddUnmanagedComponent(e1, 10);
-            sourceRepo.AddUnmanagedComponent(e2, 20);
+            sourceRepo.AddComponent(e1, 10);
+            sourceRepo.AddComponent(e2, 20);
             sourceRepo.Tick();
             
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -127,7 +127,7 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var reader = new RecordingReader(_testFilePath);
             
@@ -153,8 +153,8 @@ namespace Fdp.Tests
         {
             // Test a longer sequence with create, modify, destroy operations
             using var sourceRepo = new EntityRepository();
-            sourceRepo.RegisterUnmanagedComponent<int>();
-            sourceRepo.RegisterUnmanagedComponent<float>();
+            sourceRepo.RegisterComponent<int>();
+            sourceRepo.RegisterComponent<float>();
             
             // Declare entities at method scope for use in both recording and playback
             Entity e1, e2, e3;
@@ -164,21 +164,21 @@ namespace Fdp.Tests
                 // Frame 1: Initial entities
                 e1 = sourceRepo.CreateEntity();
                 e2 = sourceRepo.CreateEntity();
-                sourceRepo.AddUnmanagedComponent(e1, 100);
-                sourceRepo.AddUnmanagedComponent(e2, 200);
+                sourceRepo.AddComponent(e1, 100);
+                sourceRepo.AddComponent(e2, 200);
                 sourceRepo.Tick();
                 recorder.CaptureKeyframe(sourceRepo, blocking: true);
                 
                 // Frame 2: Add component to e1
                 sourceRepo.Tick();
-                sourceRepo.AddUnmanagedComponent(e1, 1.5f);
+                sourceRepo.AddComponent(e1, 1.5f);
                 recorder.CaptureFrame(sourceRepo, sourceRepo.GlobalVersion - 1, blocking: true);
                 
                 // Frame 3: Create new entity
                 sourceRepo.Tick(); 
                 e3 = sourceRepo.CreateEntity();
-                sourceRepo.AddUnmanagedComponent(e3, 300);
-                sourceRepo.AddUnmanagedComponent(e3, 3.14f);
+                sourceRepo.AddComponent(e3, 300);
+                sourceRepo.AddComponent(e3, 3.14f);
                 recorder.CaptureFrame(sourceRepo, sourceRepo.GlobalVersion - 1, blocking: true);
                 
                 // Frame 4: Modify and destroy
@@ -190,35 +190,35 @@ namespace Fdp.Tests
             
             // Playback and verify each frame
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
-            targetRepo.RegisterUnmanagedComponent<float>();
+            targetRepo.RegisterComponent<int>();
+            targetRepo.RegisterComponent<float>();
             
             using var reader = new RecordingReader(_testFilePath);
             
             // Frame 1: Initial state
             Assert.True(reader.ReadNextFrame(targetRepo));
             Assert.Equal(2, targetRepo.GetEntityIndex().ActiveCount);
-            Assert.Equal(100, targetRepo.GetUnmanagedComponentRO<int>(e1));
-            Assert.Equal(200, targetRepo.GetUnmanagedComponentRO<int>(e2));
+            Assert.Equal(100, targetRepo.GetComponentRO<int>(e1));
+            Assert.Equal(200, targetRepo.GetComponentRO<int>(e2));
             Assert.False(targetRepo.HasUnmanagedComponent<float>(e1));
             
             // Frame 2: e1 gets float component
             Assert.True(reader.ReadNextFrame(targetRepo));
             Assert.Equal(2, targetRepo.GetEntityIndex().ActiveCount);
             Assert.True(targetRepo.HasUnmanagedComponent<float>(e1));
-            Assert.Equal(1.5f, targetRepo.GetUnmanagedComponentRO<float>(e1));
+            Assert.Equal(1.5f, targetRepo.GetComponentRO<float>(e1));
             
             // Frame 3: e3 created
             Assert.True(reader.ReadNextFrame(targetRepo));
             Assert.Equal(3, targetRepo.GetEntityIndex().ActiveCount);
             Assert.True(targetRepo.IsAlive(e3));
-            Assert.Equal(300, targetRepo.GetUnmanagedComponentRO<int>(e3));
-            Assert.Equal(3.14f, targetRepo.GetUnmanagedComponentRO<float>(e3));
+            Assert.Equal(300, targetRepo.GetComponentRO<int>(e3));
+            Assert.Equal(3.14f, targetRepo.GetComponentRO<float>(e3));
             
             // Frame 4: e1 modified, e2 destroyed
             Assert.True(reader.ReadNextFrame(targetRepo));
             Assert.Equal(2, targetRepo.GetEntityIndex().ActiveCount);
-            Assert.Equal(150, targetRepo.GetUnmanagedComponentRO<int>(e1));
+            Assert.Equal(150, targetRepo.GetComponentRO<int>(e1));
             Assert.False(targetRepo.IsAlive(e2));
             Assert.True(targetRepo.IsAlive(e1));
             Assert.True(targetRepo.IsAlive(e3));
@@ -230,14 +230,14 @@ namespace Fdp.Tests
             // Test that PlaybackSystem properly handles implicit entity creation
             // when component data is received without explicit entity headers
             using var sourceRepo = new EntityRepository();
-            sourceRepo.RegisterUnmanagedComponent<int>();
+            sourceRepo.RegisterComponent<int>();
             
             // Create entities with gaps (to test sparse scenarios)
             var entities = new Entity[10];
             for (int i = 0; i < 10; i += 2) // 0, 2, 4, 6, 8
             {
                 entities[i] = sourceRepo.CreateEntity();
-                sourceRepo.AddUnmanagedComponent(entities[i], i * 10);
+                sourceRepo.AddComponent(entities[i], i * 10);
             }
             sourceRepo.Tick();
             
@@ -249,7 +249,7 @@ namespace Fdp.Tests
             
             // Playback to empty repo
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var reader = new RecordingReader(_testFilePath);
             Assert.True(reader.ReadNextFrame(targetRepo));
@@ -259,7 +259,7 @@ namespace Fdp.Tests
             for (int i = 0; i < 10; i += 2)
             {
                 Assert.True(targetRepo.IsAlive(entities[i]));
-                Assert.Equal(i * 10, targetRepo.GetUnmanagedComponentRO<int>(entities[i]));
+                Assert.Equal(i * 10, targetRepo.GetComponentRO<int>(entities[i]));
             }
             
             // Verify free list works (odd indices should be available)
@@ -276,10 +276,10 @@ namespace Fdp.Tests
         {
             // Test what happens when playback tries to read corrupted/incomplete data
             using var sourceRepo = new EntityRepository();
-            sourceRepo.RegisterUnmanagedComponent<int>();
+            sourceRepo.RegisterComponent<int>();
             
             var e1 = sourceRepo.CreateEntity();
-            sourceRepo.AddUnmanagedComponent(e1, 42);
+            sourceRepo.AddComponent(e1, 42);
             sourceRepo.Tick();
             
             // Record partial frame then corrupt file
@@ -294,7 +294,7 @@ namespace Fdp.Tests
             
             // Attempt playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var reader = new RecordingReader(_testFilePath);
             
@@ -316,14 +316,14 @@ namespace Fdp.Tests
             const int frameCount = 10;
             
             using var sourceRepo = new EntityRepository();
-            sourceRepo.RegisterUnmanagedComponent<int>();
+            sourceRepo.RegisterComponent<int>();
             
             // Create many entities
             var entities = new Entity[entityCount];
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = sourceRepo.CreateEntity();
-                sourceRepo.AddUnmanagedComponent(entities[i], i);
+                sourceRepo.AddComponent(entities[i], i);
             }
             sourceRepo.Tick();
             
@@ -355,7 +355,7 @@ namespace Fdp.Tests
             startTime = DateTime.UtcNow;
             
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
+            targetRepo.RegisterComponent<int>();
             
             using var reader = new RecordingReader(_testFilePath);
             int framesRead = 0;
@@ -380,11 +380,11 @@ namespace Fdp.Tests
         {
             // Test with both unmanaged and managed components
             using var sourceRepo = new EntityRepository();
-            sourceRepo.RegisterUnmanagedComponent<int>();
-            sourceRepo.RegisterManagedComponent<TestManagedComponent>();
+            sourceRepo.RegisterComponent<int>();
+            sourceRepo.RegisterComponent<TestManagedComponent>();
             
             var e1 = sourceRepo.CreateEntity();
-            sourceRepo.AddUnmanagedComponent(e1, 42);
+            sourceRepo.AddComponent(e1, 42);
             sourceRepo.AddManagedComponent(e1, new TestManagedComponent { Value = "Hello", Count = 123 });
             sourceRepo.Tick();
             
@@ -395,7 +395,7 @@ namespace Fdp.Tests
                 
                 // Modify managed component
                 sourceRepo.Tick();
-                var managed = sourceRepo.GetManagedComponentRW<TestManagedComponent>(e1);
+                var managed = sourceRepo.GetComponentRW<TestManagedComponent>(e1);
                 managed.Value = "Modified";
                 managed.Count = 456;
                 
@@ -404,21 +404,21 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
-            targetRepo.RegisterManagedComponent<TestManagedComponent>();
+            targetRepo.RegisterComponent<int>();
+            targetRepo.RegisterComponent<TestManagedComponent>();
             
             using var reader = new RecordingReader(_testFilePath);
             
             // Frame 1: Initial values
             Assert.True(reader.ReadNextFrame(targetRepo));
-            Assert.Equal(42, targetRepo.GetUnmanagedComponentRO<int>(e1));
-            var managedComp1 = targetRepo.GetManagedComponentRO<TestManagedComponent>(e1);
+            Assert.Equal(42, targetRepo.GetComponentRO<int>(e1));
+            var managedComp1 = targetRepo.GetComponentRO<TestManagedComponent>(e1);
             Assert.Equal("Hello", managedComp1.Value);
             Assert.Equal(123, managedComp1.Count);
             
             // Frame 2: Modified values  
             Assert.True(reader.ReadNextFrame(targetRepo));
-            var managedComp2 = targetRepo.GetManagedComponentRO<TestManagedComponent>(e1);
+            var managedComp2 = targetRepo.GetComponentRO<TestManagedComponent>(e1);
             Assert.Equal("Modified", managedComp2.Value);
             Assert.Equal(456, managedComp2.Count);
         }

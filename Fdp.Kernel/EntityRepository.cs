@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Fdp.Kernel.Internal;
 
 namespace Fdp.Kernel
 {
@@ -208,7 +209,7 @@ namespace Fdp.Kernel
         /// <summary>
         /// Explicitly registers an unmanaged component type (Tier 1) and allocates its table.
         /// </summary>
-        public void RegisterUnmanagedComponent<T>() where T : unmanaged
+        internal void RegisterUnmanagedComponent<T>() where T : unmanaged
         {
             GetTable<T>(true);
         }
@@ -242,6 +243,141 @@ namespace Fdp.Kernel
             return _entityIndex.IsAlive(entity);
         }
         
+        // ========================================================================
+        // PUBLIC API (Clean, Unified, High-Performance)
+        // ========================================================================
+
+        /// <summary>
+        /// Registers a component type (auto-detects Managed vs Unmanaged).
+        /// </summary>
+        public void RegisterComponent<T>()
+        {
+            if (ComponentTypeHelper.IsUnmanaged<T>())
+            {
+                UnsafeShim.RegisterUnmanaged<T>(this);
+            }
+            else
+            {
+                UnsafeShim.RegisterManaged<T>(this);
+            }
+        }
+
+        /// <summary>
+        /// Sets a component value. Updates version/dirty flags.
+        /// Works for both struct (Unmanaged) and class (Managed) components.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void AddComponent<T>(Entity entity, T component)
+        {
+            // JIT will compile this down to a direct call, removing the if/else.
+            if (ComponentTypeHelper.IsUnmanaged<T>())
+            {
+                UnsafeShim.AddUnmanaged(this, entity, component);
+            }
+            else
+            {
+                UnsafeShim.AddManaged(this, entity, component);
+            }
+        }
+
+        /// <summary>
+        /// Gets a reference (Read/Write) to a component.
+        /// Updates version/dirty flags for change tracking.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T GetComponentRW<T>(Entity entity)
+        {
+            if (ComponentTypeHelper.IsUnmanaged<T>())
+            {
+                return ref UnsafeShim.GetUnmanagedRW<T>(this, entity);
+            }
+            else
+            {
+                return ref UnsafeShim.GetManagedRW<T>(this, entity);
+            }
+        }
+
+        /// <summary>
+        /// Gets a read-only reference to a component.
+        /// Does NOT update version/dirty flags (faster for queries).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref readonly T GetComponentRO<T>(Entity entity)
+        {
+            if (ComponentTypeHelper.IsUnmanaged<T>())
+            {
+                return ref UnsafeShim.GetUnmanagedRO<T>(this, entity);
+            }
+            else
+            {
+                return ref UnsafeShim.GetManagedRO<T>(this, entity);
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref readonly T GetComponent<T>(Entity entity)
+        {
+            if (ComponentTypeHelper.IsUnmanaged<T>())
+            {
+                return ref UnsafeShim.GetUnmanagedRO<T>(this, entity);
+            }
+            else
+            {
+                return ref UnsafeShim.GetManagedRO<T>(this, entity);
+            }
+        }
+
+        /// <summary>
+        /// Checks if an entity has a component.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool HasComponent<T>(Entity entity)
+        {
+            if (ComponentTypeHelper.IsUnmanaged<T>())
+            {
+                return UnsafeShim.HasUnmanaged<T>(this, entity);
+            }
+            else
+            {
+                return UnsafeShim.HasManaged<T>(this, entity);
+            }
+        }
+
+        /// <summary>
+        /// Tries to get component, returns false if not present.
+        /// Unified helper wrapper.
+        /// </summary>
+        public bool TryGetComponent<T>(Entity entity, out T component)
+        {
+            if (HasComponent<T>(entity))
+            {
+                component = GetComponentRW<T>(entity);
+                return true;
+            }
+            component = default;
+            return false;
+        }
+
+        /// <summary>
+        /// Removes a component.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void RemoveComponent<T>(Entity entity)
+        {
+            if (ComponentTypeHelper.IsUnmanaged<T>())
+            {
+                UnsafeShim.RemoveUnmanaged<T>(this, entity);
+            }
+            else
+            {
+                UnsafeShim.RemoveManaged<T>(this, entity);
+            }
+        }
+
+        // ================================================
+        // INTERNAL IMPLEMENTATION (Hide these from public API)
+        // ================================================
+        
         // ================================================
         // COMPONENT MANAGEMENT
         // ================================================
@@ -250,7 +386,7 @@ namespace Fdp.Kernel
         /// Adds an unmanaged component (Tier 1) to an entity.
         /// Updates ComponentMask automatically.
         /// </summary>
-        public void AddUnmanagedComponent<T>(Entity entity, in T component) where T : unmanaged
+        internal void AddUnmanagedComponent<T>(Entity entity, in T component) where T : unmanaged
         {
             ValidateWriteAccess<T>(entity);
             #if FDP_PARANOID_MODE
@@ -275,7 +411,7 @@ namespace Fdp.Kernel
         /// Updates ComponentMask automatically.
         /// Component data remains in table but is inaccessible.
         /// </summary>
-        public void RemoveUnmanagedComponent<T>(Entity entity) where T : unmanaged
+        internal void RemoveUnmanagedComponent<T>(Entity entity) where T : unmanaged
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
@@ -297,7 +433,7 @@ namespace Fdp.Kernel
         /// Checks if entity has a specific unmanaged component (Tier 1).
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool HasUnmanagedComponent<T>(Entity entity) where T : unmanaged
+        internal bool HasUnmanagedComponent<T>(Entity entity) where T : unmanaged
         {
             if (!IsAlive(entity))
                 return false;
@@ -312,7 +448,7 @@ namespace Fdp.Kernel
         /// Use HasUnmanagedComponent first or ensure component exists via query.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref T GetUnmanagedComponent<T>(Entity entity) where T : unmanaged
+        internal ref T GetUnmanagedComponent<T>(Entity entity) where T : unmanaged
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
@@ -330,7 +466,7 @@ namespace Fdp.Kernel
         /// Gets WRITE access to unmanaged component (Tier 1). Updates chunk version.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref T GetUnmanagedComponentRW<T>(Entity entity) where T : unmanaged
+        internal ref T GetUnmanagedComponentRW<T>(Entity entity) where T : unmanaged
         {
             ValidateWriteAccess<T>(entity);
             #if FDP_PARANOID_MODE
@@ -344,7 +480,7 @@ namespace Fdp.Kernel
         /// Gets READ-ONLY access to unmanaged component (Tier 1). Does NOT update chunk version.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref readonly T GetUnmanagedComponentRO<T>(Entity entity) where T : unmanaged
+        internal ref readonly T GetUnmanagedComponentRO<T>(Entity entity) where T : unmanaged
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity)) throw new InvalidOperationException($"Entity {entity} is not alive");
@@ -357,7 +493,7 @@ namespace Fdp.Kernel
         /// Sets unmanaged component (Tier 1) value.
         /// Adds component if it doesn't exist.
         /// </summary>
-        public void SetUnmanagedComponent<T>(Entity entity, in T component) where T : unmanaged
+        internal void SetUnmanagedComponent<T>(Entity entity, in T component) where T : unmanaged
         {
             ValidateWriteAccess<T>(entity);
             
@@ -372,30 +508,13 @@ namespace Fdp.Kernel
             }
         }
         
-        /// <summary>
-        /// Tries to get component, returns false if not present.
-        /// Safer alternative to GetComponent.
-        /// </summary>
-        public bool TryGetComponent<T>(Entity entity, out T component) where T : unmanaged
-        {
-            component = default;
-            
-            if (!IsAlive(entity))
-                return false;
-            
-            if (!HasUnmanagedComponent<T>(entity))
-                return false;
-            
-            var table = GetTable<T>(false);
-            component = table.Get(entity.Index);
-            return true;
-        }
+
 
         /// <summary>
         /// Sets whether this peer has authority over the specified component.
         /// Throws if component is missing.
         /// </summary>
-        public void SetAuthority<T>(Entity entity, bool hasAuthority) where T : unmanaged
+        internal void SetAuthority<T>(Entity entity, bool hasAuthority) where T : unmanaged
         {
             if (!IsAlive(entity)) throw new InvalidOperationException($"Entity {entity} is not alive");
             // Verify component type is registered
@@ -457,7 +576,7 @@ namespace Fdp.Kernel
         /// Registers a managed component type (classes, strings, etc.).
         /// Tier 2 storage uses GC-managed arrays.
         /// </summary>
-        public void RegisterManagedComponent<T>() where T : class
+        internal void RegisterManagedComponent<T>() where T : class
         {
             Type type = typeof(T);
             if (_componentTables.ContainsKey(type))
@@ -474,7 +593,7 @@ namespace Fdp.Kernel
         /// Checks if entity has a managed component.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool HasManagedComponent<T>(Entity entity) where T : class
+        internal bool HasManagedComponent<T>(Entity entity) where T : class
         {
             if (!IsAlive(entity))
                 return false;
@@ -488,7 +607,7 @@ namespace Fdp.Kernel
         /// Returns null if component not set.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public T? GetManagedComponent<T>(Entity entity) where T : class
+        internal T? GetManagedComponent<T>(Entity entity) where T : class
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
@@ -504,7 +623,7 @@ namespace Fdp.Kernel
         /// Allocates if component doesn't exist yet.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref T? GetManagedComponentRW<T>(Entity entity) where T : class
+        internal ref T? GetManagedComponentRW<T>(Entity entity) where T : class
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
@@ -520,7 +639,7 @@ namespace Fdp.Kernel
         /// Does not update version or allocate.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public T? GetManagedComponentRO<T>(Entity entity) where T : class
+        internal T? GetManagedComponentRO<T>(Entity entity) where T : class
         {
             var table = GetManagedTable<T>(false);
             return table.GetRO(entity.Index);
@@ -529,7 +648,7 @@ namespace Fdp.Kernel
         /// <summary>
         /// Sets (or adds) a managed component.
         /// </summary>
-        public void SetManagedComponent<T>(Entity entity, T? value) where T : class
+        internal void SetManagedComponent<T>(Entity entity, T? value) where T : class
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
@@ -554,47 +673,12 @@ namespace Fdp.Kernel
         // ALIASES (For API Convenience/TKB)
         // ================================================
 
-        /// <summary>
-        /// Alias for SetUnmanagedComponent. 
-        /// Adds or updates an unmanaged component.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetComponent<T>(Entity entity, in T component) where T : unmanaged
-        {
-            SetUnmanagedComponent(entity, in component);
-        }
 
-        /// <summary>
-        /// Alias for GetUnmanagedComponent.
-        /// Gets an unmanaged component reference.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref T GetComponent<T>(Entity entity) where T : unmanaged
-        {
-            return ref GetUnmanagedComponent<T>(entity);
-        }
-
-        /// <summary>
-        /// Alias for HasUnmanagedComponent.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool HasComponent<T>(Entity entity) where T : unmanaged
-        {
-            return HasUnmanagedComponent<T>(entity);
-        }
-
-        /// <summary>
-        /// Alias for RegisterUnmanagedComponent.
-        /// </summary>
-        public void RegisterComponent<T>() where T : unmanaged
-        {
-            RegisterUnmanagedComponent<T>();
-        }
         
         /// <summary>
         /// Adds a managed component to an entity.
         /// </summary>
-        public void AddManagedComponent<T>(Entity entity, T? value) where T : class
+        internal void AddManagedComponent<T>(Entity entity, T? value) where T : class
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
@@ -609,7 +693,7 @@ namespace Fdp.Kernel
         /// <summary>
         /// Removes a managed component from an entity.
         /// </summary>
-        public void RemoveManagedComponent<T>(Entity entity) where T : class
+        internal void RemoveManagedComponent<T>(Entity entity) where T : class
         {
             if (!IsAlive(entity) || !HasManagedComponent<T>(entity))
                 return;

@@ -90,15 +90,15 @@ namespace Fdp.Tests
             _output.WriteLine($"Components per entity: 2 (Position + Health)");
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Health>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Health>();
             
             var entities = new Entity[entityCount];
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Position { X = i, Y = 0, Z = 0 });
-                repo.AddUnmanagedComponent(entities[i], new Health { Value = 100 });
+                repo.AddComponent(entities[i], new Position { X = i, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Health { Value = 100 });
             }
             
             var sw = Stopwatch.StartNew();
@@ -112,7 +112,7 @@ namespace Fdp.Tests
                     // Update all entities
                     for (int i = 0; i < entityCount; i++)
                     {
-                        ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
+                        ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
                         pos.X += 1;
                     }
                     
@@ -151,21 +151,21 @@ namespace Fdp.Tests
             _output.WriteLine($"Components per entity: 3 (Transform + Position + AIBehavior)");
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Transform>();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterManagedComponent<AIBehavior>();
+            repo.RegisterComponent<Transform>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<AIBehavior>();
             
             var entities = new Entity[entityCount];
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Transform
+                repo.AddComponent(entities[i], new Transform
                 {
                     X = i, Y = 0, Z = 0,
                     RotX = 0, RotY = 0, RotZ = 0,
                     ScaleX = 1, ScaleY = 1, ScaleZ = 1
                 });
-                repo.AddUnmanagedComponent(entities[i], new Position { X = i, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Position { X = i, Y = 0, Z = 0 });
                 repo.AddManagedComponent(entities[i], new AIBehavior
                 {
                     State = i % 2 == 0 ? "Patrol" : "Idle",
@@ -185,7 +185,7 @@ namespace Fdp.Tests
                     // Update unmanaged frequently
                     for (int i = 0; i < entityCount; i++)
                     {
-                        ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
+                        ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
                         pos.X += 1;
                     }
                     
@@ -194,7 +194,7 @@ namespace Fdp.Tests
                     {
                         for (int i = 0; i < entityCount; i += 2)
                         {
-                            var ai = repo.GetManagedComponentRW<AIBehavior>(entities[i]);
+                            var ai = repo.GetComponentRW<AIBehavior>(entities[i]);
                             ai.State = frame % 20 == 0 ? "Attack" : "Patrol";
                         }
                     }
@@ -234,17 +234,17 @@ namespace Fdp.Tests
             _output.WriteLine($"Components per entity: 4 (Position + GameState + AIBehavior + Health)");
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Health>();
-            repo.RegisterManagedComponent<GameState>();
-            repo.RegisterManagedComponent<AIBehavior>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Health>();
+            repo.RegisterComponent<GameState>();
+            repo.RegisterComponent<AIBehavior>();
             
             var entities = new Entity[entityCount];
             for (int i = 0; i < entityCount; i++)
             {
                 entities[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(entities[i], new Position { X = i, Y = 0, Z = 0 });
-                repo.AddUnmanagedComponent(entities[i], new Health { Value = 100 });
+                repo.AddComponent(entities[i], new Position { X = i, Y = 0, Z = 0 });
+                repo.AddComponent(entities[i], new Health { Value = 100 });
                 
                 repo.AddManagedComponent(entities[i], new GameState
                 {
@@ -278,7 +278,7 @@ namespace Fdp.Tests
                     // Update unmanaged
                     for (int i = 0; i < entityCount; i++)
                     {
-                        ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
+                        ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
                         pos.X += 1;
                     }
                     
@@ -287,7 +287,7 @@ namespace Fdp.Tests
                     {
                         for (int i = 0; i < entityCount; i += 2)
                         {
-                            var gameState = repo.GetManagedComponentRW<GameState>(entities[i]);
+                            var gameState = repo.GetComponentRW<GameState>(entities[i]);
                             gameState.Stats["Health"] = Math.Max(0, 100 - frame);
                             
                             if (frame % 10 == 0)
@@ -329,17 +329,17 @@ namespace Fdp.Tests
             // Lightweight
             var lightResult = RunComplexityTest("Lightweight", entityCount, frameCount, 
                 repo => {
-                    repo.RegisterUnmanagedComponent<Position>();
-                    repo.RegisterUnmanagedComponent<Health>();
+                    repo.RegisterComponent<Position>();
+                    repo.RegisterComponent<Health>();
                 },
                 (repo, e) => {
-                    repo.AddUnmanagedComponent(e, new Position { X = e.Index, Y = 0, Z = 0 });
-                    repo.AddUnmanagedComponent(e, new Health { Value = 100 });
+                    repo.AddComponent(e, new Position { X = e.Index, Y = 0, Z = 0 });
+                    repo.AddComponent(e, new Health { Value = 100 });
                 },
                 (repo, entities, frame) => {
                     for (int i = 0; i < entities.Length; i++)
                     {
-                        ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
+                        ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
                         pos.X += 1;
                     }
                 });
@@ -347,26 +347,26 @@ namespace Fdp.Tests
             // Medium
             var mediumResult = RunComplexityTest("Medium", entityCount, frameCount,
                 repo => {
-                    repo.RegisterUnmanagedComponent<Position>();
-                    repo.RegisterUnmanagedComponent<Transform>();
-                    repo.RegisterManagedComponent<AIBehavior>();
+                    repo.RegisterComponent<Position>();
+                    repo.RegisterComponent<Transform>();
+                    repo.RegisterComponent<AIBehavior>();
                 },
                 (repo, e) => {
-                    repo.AddUnmanagedComponent(e, new Position { X = e.Index, Y = 0, Z = 0 });
-                    repo.AddUnmanagedComponent(e, new Transform { X = e.Index, Y = 0, Z = 0 });
+                    repo.AddComponent(e, new Position { X = e.Index, Y = 0, Z = 0 });
+                    repo.AddComponent(e, new Transform { X = e.Index, Y = 0, Z = 0 });
                     repo.AddManagedComponent(e, new AIBehavior { State = "Idle", Weights = new float[10] });
                 },
                 (repo, entities, frame) => {
                     for (int i = 0; i < entities.Length; i++)
                     {
-                        ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
+                        ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
                         pos.X += 1;
                     }
                     if (frame % 5 == 0)
                     {
                         for (int i = 0; i < entities.Length; i += 2)
                         {
-                            var ai = repo.GetManagedComponentRW<AIBehavior>(entities[i]);
+                            var ai = repo.GetComponentRW<AIBehavior>(entities[i]);
                             ai.State = "Changed";
                         }
                     }
@@ -375,12 +375,12 @@ namespace Fdp.Tests
             // Heavy
             var heavyResult = RunComplexityTest("Heavy", entityCount, frameCount,
                 repo => {
-                    repo.RegisterUnmanagedComponent<Position>();
-                    repo.RegisterManagedComponent<GameState>();
-                    repo.RegisterManagedComponent<AIBehavior>();
+                    repo.RegisterComponent<Position>();
+                    repo.RegisterComponent<GameState>();
+                    repo.RegisterComponent<AIBehavior>();
                 },
                 (repo, e) => {
-                    repo.AddUnmanagedComponent(e, new Position { X = e.Index, Y = 0, Z = 0 });
+                    repo.AddComponent(e, new Position { X = e.Index, Y = 0, Z = 0 });
                     repo.AddManagedComponent(e, new GameState
                     {
                         PlayerName = $"P{e.Index}",
@@ -393,14 +393,14 @@ namespace Fdp.Tests
                 (repo, entities, frame) => {
                     for (int i = 0; i < entities.Length; i++)
                     {
-                        ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entities[i]);
+                        ref var pos = ref repo.GetComponentRW<Position>(entities[i]);
                         pos.X += 1;
                     }
                     if (frame % 3 == 0)
                     {
                         for (int i = 0; i < entities.Length; i += 2)
                         {
-                            var gs = repo.GetManagedComponentRW<GameState>(entities[i]);
+                            var gs = repo.GetComponentRW<GameState>(entities[i]);
                             gs.Stats["HP"] -= 1;
                         }
                     }

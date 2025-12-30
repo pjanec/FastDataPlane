@@ -40,10 +40,10 @@ namespace Fdp.Tests.Serialization
             repo.RegisterComponent<SerialObj2>(); // ID 1
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new SerialObj1 { X = 10 });
+            repo.AddComponent(e1, new SerialObj1 { X = 10 });
             
             var e2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e2, new SerialObj2 { Y = 3.14f });
+            repo.AddComponent(e2, new SerialObj2 { Y = 3.14f });
             
             // 2. Save to MemoryStream
             using var ms = new MemoryStream();
@@ -63,13 +63,13 @@ namespace Fdp.Tests.Serialization
             var restoredE1 = new Entity(e1.Index, e1.Generation);
             Assert.True(repo2.IsAlive(restoredE1));
             Assert.True(repo2.HasComponent<SerialObj1>(restoredE1));
-            Assert.Equal(10, repo2.GetComponent<SerialObj1>(restoredE1).X);
+            Assert.Equal(10, repo2.GetComponentRW<SerialObj1>(restoredE1).X);
             
             // Check E2
             var restoredE2 = new Entity(e2.Index, e2.Generation);
             Assert.True(repo2.IsAlive(restoredE2));
             Assert.True(repo2.HasComponent<SerialObj2>(restoredE2));
-            Assert.Equal(3.14f, repo2.GetComponent<SerialObj2>(restoredE2).Y);
+            Assert.Equal(3.14f, repo2.GetComponentRW<SerialObj2>(restoredE2).Y);
         }
 
         [Fact]
@@ -82,7 +82,7 @@ namespace Fdp.Tests.Serialization
                 repo.RegisterComponent<SerialObj1>();
                 repo.RegisterComponent<SerialObj2>();
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new SerialObj1 { X = 42 });
+                repo.AddComponent(e, new SerialObj1 { X = 42 });
                 RepositorySerializer.SaveToStream(repo, ms);
             }
             
@@ -117,7 +117,7 @@ namespace Fdp.Tests.Serialization
                     if (repo2.HasComponent<SerialObj1>(new Entity(i, h.Generation)))
                     {
                         found = true;
-                        Assert.Equal(42, repo2.GetComponent<SerialObj1>(new Entity(i, h.Generation)).X);
+                        Assert.Equal(42, repo2.GetComponentRW<SerialObj1>(new Entity(i, h.Generation)).X);
                     }
                 }
             }

@@ -48,61 +48,61 @@ namespace Fdp.Tests
         public void WriteAccess_EnforcesRules()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             // Setup
             var owned = repo.CreateEntity();
-            repo.AddUnmanagedComponent(owned, new Position());
+            repo.AddComponent(owned, new Position());
             repo.SetAuthority<Position>(owned, true);
             
             var remote = repo.CreateEntity();
-            repo.AddUnmanagedComponent(remote, new Position());
+            repo.AddComponent(remote, new Position());
             repo.SetAuthority<Position>(remote, false);
             
             // 1. NetworkReceive
             repo.SetPhase(Phase.NetworkReceive);
             // Owned -> Fail
-            Assert.Throws<InvalidOperationException>(() => repo.GetUnmanagedComponentRW<Position>(owned));
+            Assert.Throws<InvalidOperationException>(() => repo.GetComponentRW<Position>(owned));
             Assert.Throws<InvalidOperationException>(() => repo.SetUnmanagedComponent(owned, new Position()));
             // Remote -> OK
-            repo.GetUnmanagedComponentRW<Position>(remote).X = 10;
+            repo.GetComponentRW<Position>(remote).X = 10;
             repo.SetUnmanagedComponent(remote, new Position { X = 20 });
             
             // 2. Simulation
             repo.SetPhase(Phase.Simulation);
             // Owned -> OK
-            repo.GetUnmanagedComponentRW<Position>(owned).X = 10;
+            repo.GetComponentRW<Position>(owned).X = 10;
             repo.SetUnmanagedComponent(owned, new Position { X = 20 });
             // Remote -> Fail
-            Assert.Throws<InvalidOperationException>(() => repo.GetUnmanagedComponentRW<Position>(remote));
+            Assert.Throws<InvalidOperationException>(() => repo.GetComponentRW<Position>(remote));
             Assert.Throws<InvalidOperationException>(() => repo.SetUnmanagedComponent(remote, new Position()));
             
             // 3. NetworkSend / Presentation -> All Fail
             repo.SetPhase(Phase.NetworkSend);
-            Assert.Throws<InvalidOperationException>(() => repo.GetUnmanagedComponentRW<Position>(owned));
+            Assert.Throws<InvalidOperationException>(() => repo.GetComponentRW<Position>(owned));
             
             repo.SetPhase(Phase.Presentation);
-            Assert.Throws<InvalidOperationException>(() => repo.GetUnmanagedComponentRW<Position>(owned));
+            Assert.Throws<InvalidOperationException>(() => repo.GetComponentRW<Position>(owned));
         }
         
         [Fact]
         public void RelaxedConfig_AllowsAll()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             // EXTERNALLY CONFIGURE: Use relaxed config
             repo.PhaseConfig = PhaseConfig.Relaxed;
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position());
+            repo.AddComponent(e, new Position());
             
             // Allow Transition Initialization -> Presentation (Normally invalid)
             repo.SetPhase(Phase.Presentation);
             Assert.Equal(Phase.Presentation, repo.CurrentPhase);
             
             // Allow Write in "Presentation" (Normally ReadOnly)
-            repo.GetUnmanagedComponentRW<Position>(e).X = 99;
-            Assert.Equal(99, repo.GetUnmanagedComponentRO<Position>(e).X);
+            repo.GetComponentRW<Position>(e).X = 99;
+            Assert.Equal(99, repo.GetComponentRO<Position>(e).X);
         }
         
         [Fact]
@@ -128,7 +128,7 @@ namespace Fdp.Tests
         public void CustomConfig_AllowsSelfLoop()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             // EXTERNALLY CONFIGURE: Custom config for turn-based game
             var customConfig = new PhaseConfig();
@@ -148,30 +148,30 @@ namespace Fdp.Tests
             repo.PhaseConfig = customConfig;
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position());
+            repo.AddComponent(e, new Position());
             
             // Can transition to Simulation
             repo.SetPhase(Phase.Simulation);
-            repo.GetUnmanagedComponentRW<Position>(e).X = 10;
+            repo.GetComponentRW<Position>(e).X = 10;
             
             // Can stay in Simulation (self-loop)
             repo.SetPhase(Phase.Simulation);
-            repo.GetUnmanagedComponentRW<Position>(e).X = 20;
+            repo.GetComponentRW<Position>(e).X = 20;
             
             // Can go to Presentation
             repo.SetPhase(Phase.Presentation);
-            Assert.Equal(20, repo.GetUnmanagedComponentRO<Position>(e).X);
+            Assert.Equal(20, repo.GetComponentRO<Position>(e).X);
             
             // Cannot write in Presentation
             Assert.Throws<InvalidOperationException>(() => 
-                repo.GetUnmanagedComponentRW<Position>(e));
+                repo.GetComponentRW<Position>(e));
         }
         
         [Fact]
         public void CustomConfig_ReadWriteAllBypassesAuthority()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             // EXTERNALLY CONFIGURE: Custom config without authority checks
             var customConfig = new PhaseConfig();
@@ -189,51 +189,51 @@ namespace Fdp.Tests
             repo.PhaseConfig = customConfig;
             
             var owned = repo.CreateEntity();
-            repo.AddUnmanagedComponent(owned, new Position());
+            repo.AddComponent(owned, new Position());
             repo.SetAuthority<Position>(owned, true);
             
             var remote = repo.CreateEntity();
-            repo.AddUnmanagedComponent(remote, new Position());
+            repo.AddComponent(remote, new Position());
             repo.SetAuthority<Position>(remote, false);
             
             repo.SetPhase(Phase.Simulation);
             
             // Can modify BOTH owned and remote (ReadWriteAll ignores authority)
-            repo.GetUnmanagedComponentRW<Position>(owned).X = 100;   // ✅ OK
-            repo.GetUnmanagedComponentRW<Position>(remote).X = 200;  // ✅ OK (would fail with Default config)
+            repo.GetComponentRW<Position>(owned).X = 100;   // ✅ OK
+            repo.GetComponentRW<Position>(remote).X = 200;  // ✅ OK (would fail with Default config)
             
-            Assert.Equal(100, repo.GetUnmanagedComponentRO<Position>(owned).X);
-            Assert.Equal(200, repo.GetUnmanagedComponentRO<Position>(remote).X);
+            Assert.Equal(100, repo.GetComponentRO<Position>(owned).X);
+            Assert.Equal(200, repo.GetComponentRO<Position>(remote).X);
         }
         
         [Fact]
         public void PhaseConfigChange_UpdatesPermissions()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position());
+            repo.AddComponent(e, new Position());
             
             // Start with relaxed config
             repo.PhaseConfig = PhaseConfig.Relaxed;
             repo.SetPhase(Phase.Presentation);
-            repo.GetUnmanagedComponentRW<Position>(e).X = 10;  // ✅ OK with relaxed
+            repo.GetComponentRW<Position>(e).X = 10;  // ✅ OK with relaxed
             
             // Switch to strict config
             repo.PhaseConfig = PhaseConfig.Default;
             
             // Now same operation fails
             Assert.Throws<InvalidOperationException>(() => 
-                repo.GetUnmanagedComponentRW<Position>(e));  // ❌ ReadOnly in default config
+                repo.GetComponentRW<Position>(e));  // ❌ ReadOnly in default config
         }
         
         [Fact]
         public void CustomPhases_MultipleSimulationPhases()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             // EXTERNALLY CONFIGURE: Multiple simulation-like phases
             var customConfig = new PhaseConfig();
@@ -261,7 +261,7 @@ namespace Fdp.Tests
             repo.PhaseConfig = customConfig;
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position());
+            repo.AddComponent(e, new Position());
             
             // Custom phase flow with multiple simulation phases
             var physicsPhase = new Phase("PhysicsSim");
@@ -271,22 +271,22 @@ namespace Fdp.Tests
             var renderUIPhase = new Phase("RenderUI");
             
             repo.SetPhase(physicsPhase);
-            repo.GetUnmanagedComponentRW<Position>(e).X = 10;  // ✅ Can write during physics sim
+            repo.GetComponentRW<Position>(e).X = 10;  // ✅ Can write during physics sim
             
             repo.SetPhase(aiPhase);
-            repo.GetUnmanagedComponentRW<Position>(e).X = 20;  // ✅ Can write during AI sim
+            repo.GetComponentRW<Position>(e).X = 20;  // ✅ Can write during AI sim
             
             repo.SetPhase(combatPhase);
-            repo.GetUnmanagedComponentRW<Position>(e).X = 30;  // ✅ Can write during combat sim
+            repo.GetComponentRW<Position>(e).X = 30;  // ✅ Can write during combat sim
             
             repo.SetPhase(renderWorldPhase);
-            Assert.Equal(30, repo.GetUnmanagedComponentRO<Position>(e).X);
+            Assert.Equal(30, repo.GetComponentRO<Position>(e).X);
             Assert.Throws<InvalidOperationException>(() => 
-                repo.GetUnmanagedComponentRW<Position>(e));  // ❌ ReadOnly during render
+                repo.GetComponentRW<Position>(e));  // ❌ ReadOnly during render
             
             repo.SetPhase(renderUIPhase);
             Assert.Throws<InvalidOperationException>(() => 
-                repo.GetUnmanagedComponentRW<Position>(e));  // ❌ ReadOnly during UI render
+                repo.GetComponentRW<Position>(e));  // ❌ ReadOnly during UI render
         }
     }
 }

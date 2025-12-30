@@ -36,10 +36,10 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             var entity = recordRepo.CreateEntity();
-            recordRepo.AddUnmanagedComponent(entity, new Position { X = 10, Y = 20, Z = 30 });
+            recordRepo.AddComponent(entity, new Position { X = 10, Y = 20, Z = 30 });
             
             // Act - Record
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -50,7 +50,7 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -65,7 +65,7 @@ namespace Fdp.Tests
             bool found = false;
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref replayRepo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref replayRepo.GetComponentRO<Position>(e);
                 Assert.Equal(10f, pos.X);
                 Assert.Equal(20f, pos.Y);
                 Assert.Equal(30f, pos.Z);
@@ -79,13 +79,13 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             const int entityCount = 100;
             for (int i = 0; i < entityCount; i++)
             {
                 var e = recordRepo.CreateEntity();
-                recordRepo.AddUnmanagedComponent(e, new Position { X = i, Y = i * 2, Z = i * 3 });
+                recordRepo.AddComponent(e, new Position { X = i, Y = i * 2, Z = i * 3 });
             }
             
             // Act - Record
@@ -97,7 +97,7 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -113,12 +113,12 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             var e1 = recordRepo.CreateEntity();
             var e2 = recordRepo.CreateEntity();
-            recordRepo.AddUnmanagedComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
-            recordRepo.AddUnmanagedComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
+            recordRepo.AddComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
+            recordRepo.AddComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
             
             // Act - Record keyframe, then modify only e1, then record delta
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -127,7 +127,7 @@ namespace Fdp.Tests
                 recorder.CaptureKeyframe(recordRepo);
                 
                 recordRepo.Tick();
-                ref var pos = ref recordRepo.GetUnmanagedComponentRW<Position>(e1);
+                ref var pos = ref recordRepo.GetComponentRW<Position>(e1);
                 pos.X = 100;
                 
                 recorder.CaptureFrame(recordRepo, recordRepo.GlobalVersion - 1, blocking: true);
@@ -135,7 +135,7 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -148,7 +148,7 @@ namespace Fdp.Tests
             int count = 0;
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref replayRepo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref replayRepo.GetComponentRO<Position>(e);
                 if (e.Index == e1.Index)
                 {
                     Assert.Equal(100f, pos.X);
@@ -167,12 +167,12 @@ namespace Fdp.Tests
         {
             // Arrange
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e1 = repo.CreateEntity();
             var e2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
-            repo.AddUnmanagedComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
+            repo.AddComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
+            repo.AddComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
             
             // Act
             repo.DestroyEntity(e1);
@@ -193,12 +193,12 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             var e1 = recordRepo.CreateEntity();
             var e2 = recordRepo.CreateEntity();
-            recordRepo.AddUnmanagedComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
-            recordRepo.AddUnmanagedComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
+            recordRepo.AddComponent(e1, new Position { X = 1, Y = 1, Z = 1 });
+            recordRepo.AddComponent(e2, new Position { X = 2, Y = 2, Z = 2 });
             
             // Act - Record keyframe, destroy e1, record delta
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -214,7 +214,7 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -233,13 +233,13 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             var entities = new Entity[10];
             for (int i = 0; i < 10; i++)
             {
                 entities[i] = recordRepo.CreateEntity();
-                recordRepo.AddUnmanagedComponent(entities[i], new Position { X = i, Y = i, Z = i });
+                recordRepo.AddComponent(entities[i], new Position { X = i, Y = i, Z = i });
             }
             
             // Act - Record keyframe, destroy half, record delta
@@ -259,7 +259,7 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -280,10 +280,10 @@ namespace Fdp.Tests
         {
             // Arrange
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 123, Y = 456, Z = 789 });
+            repo.AddComponent(e1, new Position { X = 123, Y = 456, Z = 789 });
             
             var table = repo.GetComponentTable<Position>();
             var chunkTable = table.GetChunkTable();
@@ -345,7 +345,7 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             // Act - Record empty state
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -356,7 +356,7 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -373,7 +373,7 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             // Act - Record keyframe, then create and destroy in same frame
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -383,7 +383,7 @@ namespace Fdp.Tests
                 
                 recordRepo.Tick();
                 var temp = recordRepo.CreateEntity();
-                recordRepo.AddUnmanagedComponent(temp, new Position { X = 999, Y = 999, Z = 999 });
+                recordRepo.AddComponent(temp, new Position { X = 999, Y = 999, Z = 999 });
                 recordRepo.DestroyEntity(temp);
                 
                 recorder.CaptureFrame(recordRepo, recordRepo.GlobalVersion - 1, blocking: true);
@@ -391,7 +391,7 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -408,13 +408,13 @@ namespace Fdp.Tests
         {
             // Arrange - Create entities, destroy some to create gaps
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             var entities = new Entity[10];
             for (int i = 0; i < 10; i++)
             {
                 entities[i] = recordRepo.CreateEntity();
-                recordRepo.AddUnmanagedComponent(entities[i], new Position { X = i, Y = i, Z = i });
+                recordRepo.AddComponent(entities[i], new Position { X = i, Y = i, Z = i });
             }
             
             // Destroy every other entity to create sparse IDs
@@ -432,7 +432,7 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -454,14 +454,14 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
-            recordRepo.RegisterUnmanagedComponent<Velocity>();
-            recordRepo.RegisterUnmanagedComponent<Health>();
+            recordRepo.RegisterComponent<Position>();
+            recordRepo.RegisterComponent<Velocity>();
+            recordRepo.RegisterComponent<Health>();
             
             var entity = recordRepo.CreateEntity();
-            recordRepo.AddUnmanagedComponent(entity, new Position { X = 10, Y = 20, Z = 30 });
-            recordRepo.AddUnmanagedComponent(entity, new Velocity { X = 1, Y = 2, Z = 3 });
-            recordRepo.AddUnmanagedComponent(entity, new Health { Value = 100 });
+            recordRepo.AddComponent(entity, new Position { X = 10, Y = 20, Z = 30 });
+            recordRepo.AddComponent(entity, new Velocity { X = 1, Y = 2, Z = 3 });
+            recordRepo.AddComponent(entity, new Health { Value = 100 });
             
             // Act - Record
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -472,9 +472,9 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
-            replayRepo.RegisterUnmanagedComponent<Velocity>();
-            replayRepo.RegisterUnmanagedComponent<Health>();
+            replayRepo.RegisterComponent<Position>();
+            replayRepo.RegisterComponent<Velocity>();
+            replayRepo.RegisterComponent<Health>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -486,9 +486,9 @@ namespace Fdp.Tests
             Assert.True(replayRepo.HasUnmanagedComponent<Velocity>(entity));
             Assert.True(replayRepo.HasUnmanagedComponent<Health>(entity));
             
-            ref readonly var pos = ref replayRepo.GetUnmanagedComponentRO<Position>(entity);
-            ref readonly var vel = ref replayRepo.GetUnmanagedComponentRO<Velocity>(entity);
-            ref readonly var hp = ref replayRepo.GetUnmanagedComponentRO<Health>(entity);
+            ref readonly var pos = ref replayRepo.GetComponentRO<Position>(entity);
+            ref readonly var vel = ref replayRepo.GetComponentRO<Velocity>(entity);
+            ref readonly var hp = ref replayRepo.GetComponentRO<Health>(entity);
             
             Assert.Equal(10f, pos.X);
             Assert.Equal(1f, vel.X);
@@ -500,11 +500,11 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
-            recordRepo.RegisterUnmanagedComponent<Velocity>();
+            recordRepo.RegisterComponent<Position>();
+            recordRepo.RegisterComponent<Velocity>();
             
             var entity = recordRepo.CreateEntity();
-            recordRepo.AddUnmanagedComponent(entity, new Position { X = 10, Y = 20, Z = 30 });
+            recordRepo.AddComponent(entity, new Position { X = 10, Y = 20, Z = 30 });
             
             // Act - Record keyframe, add velocity, record delta, remove velocity, record delta
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -513,7 +513,7 @@ namespace Fdp.Tests
                 recorder.CaptureKeyframe(recordRepo);
                 
                 recordRepo.Tick();
-                recordRepo.AddUnmanagedComponent(entity, new Velocity { X = 1, Y = 2, Z = 3 });
+                recordRepo.AddComponent(entity, new Velocity { X = 1, Y = 2, Z = 3 });
                 recorder.CaptureFrame(recordRepo, recordRepo.GlobalVersion - 1, blocking: true);
                 
                 recordRepo.Tick();
@@ -523,8 +523,8 @@ namespace Fdp.Tests
             
             // Act - Replay all frames
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
-            replayRepo.RegisterUnmanagedComponent<Velocity>();
+            replayRepo.RegisterComponent<Position>();
+            replayRepo.RegisterComponent<Velocity>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -551,7 +551,7 @@ namespace Fdp.Tests
         {
             // Arrange - Create enough entities to span multiple chunks
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             var entityIndex = recordRepo.GetEntityIndex();
             int chunkCapacity = entityIndex.GetChunkCapacity();
@@ -560,7 +560,7 @@ namespace Fdp.Tests
             for (int i = 0; i < entityCount; i++)
             {
                 var e = recordRepo.CreateEntity();
-                recordRepo.AddUnmanagedComponent(e, new Position { X = i, Y = i * 2, Z = i * 3 });
+                recordRepo.AddComponent(e, new Position { X = i, Y = i * 2, Z = i * 3 });
             }
             
             // Act - Record
@@ -572,7 +572,7 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -588,7 +588,7 @@ namespace Fdp.Tests
         {
             // Arrange - Create entities only in a high chunk index
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             var entityIndex = recordRepo.GetEntityIndex();
             int chunkCapacity = entityIndex.GetChunkCapacity();
@@ -603,8 +603,8 @@ namespace Fdp.Tests
             // Now create actual entities
             var e1 = recordRepo.CreateEntity();
             var e2 = recordRepo.CreateEntity();
-            recordRepo.AddUnmanagedComponent(e1, new Position { X = 100, Y = 200, Z = 300 });
-            recordRepo.AddUnmanagedComponent(e2, new Position { X = 400, Y = 500, Z = 600 });
+            recordRepo.AddComponent(e1, new Position { X = 100, Y = 200, Z = 300 });
+            recordRepo.AddComponent(e2, new Position { X = 400, Y = 500, Z = 600 });
             
             // Act - Record
             using (var recorder = new AsyncRecorder(_testFilePath))
@@ -615,7 +615,7 @@ namespace Fdp.Tests
             
             // Act - Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -635,7 +635,7 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {
@@ -688,7 +688,7 @@ namespace Fdp.Tests
         {
             // Arrange
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
+            recordRepo.RegisterComponent<Position>();
             
             using (var recorder = new AsyncRecorder(_testFilePath))
             {
@@ -698,7 +698,7 @@ namespace Fdp.Tests
             
             // Act
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
+            replayRepo.RegisterComponent<Position>();
             
             using var reader = new RecordingReader(_testFilePath);
             
@@ -729,15 +729,15 @@ namespace Fdp.Tests
         {
             // Arrange - Create many entities
             using var recordRepo = new EntityRepository();
-            recordRepo.RegisterUnmanagedComponent<Position>();
-            recordRepo.RegisterUnmanagedComponent<Velocity>();
+            recordRepo.RegisterComponent<Position>();
+            recordRepo.RegisterComponent<Velocity>();
             
             const int entityCount = 1000;
             for (int i = 0; i < entityCount; i++)
             {
                 var e = recordRepo.CreateEntity();
-                recordRepo.AddUnmanagedComponent(e, new Position { X = i, Y = i, Z = i });
-                recordRepo.AddUnmanagedComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
+                recordRepo.AddComponent(e, new Position { X = i, Y = i, Z = i });
+                recordRepo.AddComponent(e, new Velocity { X = 1, Y = 1, Z = 1 });
             }
             
             // Act
@@ -749,8 +749,8 @@ namespace Fdp.Tests
             
             // Assert - Replay and verify
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterUnmanagedComponent<Position>();
-            replayRepo.RegisterUnmanagedComponent<Velocity>();
+            replayRepo.RegisterComponent<Position>();
+            replayRepo.RegisterComponent<Velocity>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {

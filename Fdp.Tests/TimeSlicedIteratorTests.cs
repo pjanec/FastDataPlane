@@ -16,13 +16,13 @@ namespace Fdp.Tests
         public void CompletesInOneGo_IfBudgetHigh()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             // Create 100 entities
             for (int i = 0; i < 100; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i });
+                repo.AddComponent(e, new Position { X = i });
             }
             
             var state = new IteratorState();
@@ -42,7 +42,7 @@ namespace Fdp.Tests
         public void PausesAndResumes_IfBudgetExceeded()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             // Create 200 entities. CheckInterval is 64.
             // If budget is -1 (immediate stop), it should stop after 64 (0..63 check).
@@ -54,7 +54,7 @@ namespace Fdp.Tests
             for (int i = 0; i < 200; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i });
+                repo.AddComponent(e, new Position { X = i });
             }
             
             var state = new IteratorState();
@@ -85,9 +85,9 @@ namespace Fdp.Tests
         public void Resets_WhenCalledAfterComplete()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position());
+            repo.AddComponent(e, new Position());
             
             var state = new IteratorState();
             
@@ -106,13 +106,13 @@ namespace Fdp.Tests
         public void Deterministic_Slicing_Works()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             // Create 100 entities
             for (int i = 0; i < 100; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i });
+                repo.AddComponent(e, new Position { X = i });
             }
             
             var state = new IteratorState();
@@ -141,14 +141,14 @@ namespace Fdp.Tests
         public void DefaultMetric_Works()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             repo.DefaultTimeSliceMetric = TimeSliceMetric.EntityCount;
 
             // Create 50 entities
             for (int i = 0; i < 50; i++)
             {
                 var e = repo.CreateEntity();
-                repo.AddUnmanagedComponent(e, new Position { X = i });
+                repo.AddComponent(e, new Position { X = i });
             }
 
             var state = new IteratorState();

@@ -476,14 +476,14 @@ namespace Fdp.Tests
             protected override void OnCreate()
             {
                 // Register component during system creation
-                World.RegisterUnmanagedComponent<Fdp.Tests.Position>();
+                World.RegisterComponent<Fdp.Tests.Position>();
             }
             
             protected override void OnUpdate()
             {
                 // Access the World to create entity
                 var entity = World.CreateEntity();
-                World.AddUnmanagedComponent(entity, new Fdp.Tests.Position { X = 1, Y = 2, Z = 3 });
+                World.AddComponent(entity, new Fdp.Tests.Position { X = 1, Y = 2, Z = 3 });
                 
                 DidAccessWorld = World.IsAlive(entity);
             }

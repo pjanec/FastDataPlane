@@ -55,7 +55,7 @@ namespace Fdp.Tests
         {
             // Arrange
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<PlayerInfo>();
+            repo.RegisterComponent<PlayerInfo>();
             
             var e = repo.CreateEntity();
             repo.AddManagedComponent(e, new PlayerInfo 
@@ -74,14 +74,14 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterManagedComponent<PlayerInfo>();
+            targetRepo.RegisterComponent<PlayerInfo>();
             
             using var reader = new RecordingReader(_testFilePath);
             Assert.True(reader.ReadNextFrame(targetRepo));
             
             // Assert
             Assert.True(targetRepo.HasManagedComponent<PlayerInfo>(e));
-            var player = targetRepo.GetManagedComponentRO<PlayerInfo>(e);
+            var player = targetRepo.GetComponentRO<PlayerInfo>(e);
             Assert.Equal("TestPlayer", player.Name);
             Assert.Equal(1000, player.Score);
             Assert.True(player.IsActive);
@@ -92,7 +92,7 @@ namespace Fdp.Tests
         {
             // Test that managed component changes are captured in delta frames
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<PlayerInfo>();
+            repo.RegisterComponent<PlayerInfo>();
             
             var e = repo.CreateEntity();
             repo.AddManagedComponent(e, new PlayerInfo 
@@ -111,7 +111,7 @@ namespace Fdp.Tests
                 
                 // Modify managed component
                 repo.Tick();
-                var player = repo.GetManagedComponentRW<PlayerInfo>(e);
+                var player = repo.GetComponentRW<PlayerInfo>(e);
                 player.Name = "Player1_Modified";
                 player.Score = 500;
                 player.IsActive = false;
@@ -122,19 +122,19 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterManagedComponent<PlayerInfo>();
+            targetRepo.RegisterComponent<PlayerInfo>();
             
             using var reader = new RecordingReader(_testFilePath);
             
             // Frame 0: Initial state
             Assert.True(reader.ReadNextFrame(targetRepo));
-            var player1 = targetRepo.GetManagedComponentRO<PlayerInfo>(e);
+            var player1 = targetRepo.GetComponentRO<PlayerInfo>(e);
             Assert.Equal("Player1", player1.Name);
             Assert.Equal(100, player1.Score);
             
             // Frame 1: Modified state (delta)
             Assert.True(reader.ReadNextFrame(targetRepo));
-            var player2 = targetRepo.GetManagedComponentRO<PlayerInfo>(e);
+            var player2 = targetRepo.GetComponentRO<PlayerInfo>(e);
             Assert.Equal("Player1_Modified", player2.Name);
             Assert.Equal(500, player2.Score);
             Assert.False(player2.IsActive);
@@ -145,7 +145,7 @@ namespace Fdp.Tests
         {
             // Test managed components with complex data (arrays)
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<InventoryData>();
+            repo.RegisterComponent<InventoryData>();
             
             var e = repo.CreateEntity();
             repo.AddManagedComponent(e, new InventoryData
@@ -162,13 +162,13 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterManagedComponent<InventoryData>();
+            targetRepo.RegisterComponent<InventoryData>();
             
             using var reader = new RecordingReader(_testFilePath);
             reader.ReadNextFrame(targetRepo);
             
             // Assert
-            var inventory = targetRepo.GetManagedComponentRO<InventoryData>(e);
+            var inventory = targetRepo.GetComponentRO<InventoryData>(e);
             Assert.NotNull(inventory.Items);
             Assert.Equal(3, inventory.Items.Length);
             Assert.Equal("Sword", inventory.Items[0]);
@@ -182,11 +182,11 @@ namespace Fdp.Tests
         {
             // Test that both unmanaged and managed components restore correctly
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
-            repo.RegisterManagedComponent<PlayerInfo>();
+            repo.RegisterComponent<int>();
+            repo.RegisterComponent<PlayerInfo>();
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, 42);
+            repo.AddComponent(e, 42);
             repo.AddManagedComponent(e, new PlayerInfo 
             { 
                 Name = "MixedTest", 
@@ -201,18 +201,18 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<int>();
-            targetRepo.RegisterManagedComponent<PlayerInfo>();
+            targetRepo.RegisterComponent<int>();
+            targetRepo.RegisterComponent<PlayerInfo>();
             
             using var reader = new RecordingReader(_testFilePath);
             reader.ReadNextFrame(targetRepo);
             
             // Assert both components
             Assert.True(targetRepo.HasUnmanagedComponent<int>(e));
-            Assert.Equal(42, targetRepo.GetUnmanagedComponentRO<int>(e));
+            Assert.Equal(42, targetRepo.GetComponentRO<int>(e));
             
             Assert.True(targetRepo.HasManagedComponent<PlayerInfo>(e));
-            var player = targetRepo.GetManagedComponentRO<PlayerInfo>(e);
+            var player = targetRepo.GetComponentRO<PlayerInfo>(e);
             Assert.Equal("MixedTest", player.Name);
             Assert.Equal(999, player.Score);
         }
@@ -222,7 +222,7 @@ namespace Fdp.Tests
         {
             // Test seeking with managed components
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<PlayerInfo>();
+            repo.RegisterComponent<PlayerInfo>();
             
             var e = repo.CreateEntity();
             repo.AddManagedComponent(e, new PlayerInfo { Name = "Start", Score = 0 });
@@ -232,7 +232,7 @@ namespace Fdp.Tests
                 for (int frame = 0; frame < 10; frame++)
                 {
                     repo.Tick();
-                    var player = repo.GetManagedComponentRW<PlayerInfo>(e);
+                    var player = repo.GetComponentRW<PlayerInfo>(e);
                     player.Name = $"Frame{frame}";
                     player.Score = frame * 10;
                     
@@ -246,23 +246,23 @@ namespace Fdp.Tests
             // Playback with seeking
             using var controller = new PlaybackController(_testFilePath);
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterManagedComponent<PlayerInfo>();
+            targetRepo.RegisterComponent<PlayerInfo>();
             
             // Seek to frame 3
             controller.SeekToFrame(targetRepo, 3);
-            var player3 = targetRepo.GetManagedComponentRO<PlayerInfo>(e);
+            var player3 = targetRepo.GetComponentRO<PlayerInfo>(e);
             Assert.Equal("Frame3", player3.Name);
             Assert.Equal(30, player3.Score);
             
             // Seek to frame 7
             controller.SeekToFrame(targetRepo, 7);
-            var player7 = targetRepo.GetManagedComponentRO<PlayerInfo>(e);
+            var player7 = targetRepo.GetComponentRO<PlayerInfo>(e);
             Assert.Equal("Frame7", player7.Name);
             Assert.Equal(70, player7.Score);
             
             // Seek back to frame 1
             controller.SeekToFrame(targetRepo, 1);
-            var player1 = targetRepo.GetManagedComponentRO<PlayerInfo>(e);
+            var player1 = targetRepo.GetComponentRO<PlayerInfo>(e);
             Assert.Equal("Frame1", player1.Name);
             Assert.Equal(10, player1.Score);
         }
@@ -272,7 +272,7 @@ namespace Fdp.Tests
         {
             // Test multiple entities with managed components
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<PlayerInfo>();
+            repo.RegisterComponent<PlayerInfo>();
             
             var e1 = repo.CreateEntity();
             var e2 = repo.CreateEntity();
@@ -290,15 +290,15 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterManagedComponent<PlayerInfo>();
+            targetRepo.RegisterComponent<PlayerInfo>();
             
             using var reader = new RecordingReader(_testFilePath);
             reader.ReadNextFrame(targetRepo);
             
             // Assert all three entities
-            var p1 = targetRepo.GetManagedComponentRO<PlayerInfo>(e1);
-            var p2 = targetRepo.GetManagedComponentRO<PlayerInfo>(e2);
-            var p3 = targetRepo.GetManagedComponentRO<PlayerInfo>(e3);
+            var p1 = targetRepo.GetComponentRO<PlayerInfo>(e1);
+            var p2 = targetRepo.GetComponentRO<PlayerInfo>(e2);
+            var p3 = targetRepo.GetComponentRO<PlayerInfo>(e3);
             
             Assert.Equal("Player1", p1.Name);
             Assert.Equal(100, p1.Score);
@@ -313,7 +313,7 @@ namespace Fdp.Tests
         {
             // Test adding and removing managed components across frames
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<PlayerInfo>();
+            repo.RegisterComponent<PlayerInfo>();
             
             var e = repo.CreateEntity();
             
@@ -332,7 +332,7 @@ namespace Fdp.Tests
                 
                 // Frame 2: Modify component
                 repo.Tick();
-                var player = repo.GetManagedComponentRW<PlayerInfo>(e);
+                var player = repo.GetComponentRW<PlayerInfo>(e);
                 player.Score = 100;
                 recorder.CaptureFrame(repo, prevTick, blocking: true);
                 prevTick = repo.GlobalVersion;
@@ -345,7 +345,7 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterManagedComponent<PlayerInfo>();
+            targetRepo.RegisterComponent<PlayerInfo>();
             
             using var reader = new RecordingReader(_testFilePath);
             
@@ -356,13 +356,13 @@ namespace Fdp.Tests
             // Frame 1: Component added
             reader.ReadNextFrame(targetRepo);
             Assert.True(targetRepo.HasManagedComponent<PlayerInfo>(e));
-            Assert.Equal("Added", targetRepo.GetManagedComponentRO<PlayerInfo>(e).Name);
-            Assert.Equal(50, targetRepo.GetManagedComponentRO<PlayerInfo>(e).Score);
+            Assert.Equal("Added", targetRepo.GetComponentRO<PlayerInfo>(e).Name);
+            Assert.Equal(50, targetRepo.GetComponentRO<PlayerInfo>(e).Score);
             
             // Frame 2: Component modified
             reader.ReadNextFrame(targetRepo);
             Assert.True(targetRepo.HasManagedComponent<PlayerInfo>(e));
-            Assert.Equal(100, targetRepo.GetManagedComponentRO<PlayerInfo>(e).Score);
+            Assert.Equal(100, targetRepo.GetComponentRO<PlayerInfo>(e).Score);
             
             // Frame 3: Component removed
             reader.ReadNextFrame(targetRepo);
@@ -374,7 +374,7 @@ namespace Fdp.Tests
         {
             // Test that null/empty values are handled correctly
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<PlayerInfo>();
+            repo.RegisterComponent<PlayerInfo>();
             
             var e = repo.CreateEntity();
             repo.AddManagedComponent(e, new PlayerInfo 
@@ -392,13 +392,13 @@ namespace Fdp.Tests
             
             // Playback
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterManagedComponent<PlayerInfo>();
+            targetRepo.RegisterComponent<PlayerInfo>();
             
             using var reader = new RecordingReader(_testFilePath);
             reader.ReadNextFrame(targetRepo);
             
             // Assert
-            var player = targetRepo.GetManagedComponentRO<PlayerInfo>(e);
+            var player = targetRepo.GetComponentRO<PlayerInfo>(e);
             Assert.NotNull(player.Name);
             Assert.Equal("", player.Name);
             Assert.Equal(0, player.Score);

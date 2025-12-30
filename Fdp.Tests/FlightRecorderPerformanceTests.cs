@@ -64,9 +64,9 @@ namespace Fdp.Tests
             const int keyframeInterval = 30;
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Transform>();
-            repo.RegisterUnmanagedComponent<Velocity>();
-            repo.RegisterManagedComponent<UnitStats>(); // Mixed: managed component too!
+            repo.RegisterComponent<Transform>();
+            repo.RegisterComponent<Velocity>();
+            repo.RegisterComponent<UnitStats>(); // Mixed: managed component too!
             
             _output.WriteLine($"=== Recording Performance Test (Mixed Components) ===");
             _output.WriteLine($"Entities: {entityCount}, Frames: {frameCount}");
@@ -78,13 +78,13 @@ namespace Fdp.Tests
                 entities[i] = repo.CreateEntity();
                 
                 // Unmanaged: Transform + Velocity
-                repo.AddUnmanagedComponent(entities[i], new Transform
+                repo.AddComponent(entities[i], new Transform
                 {
                     X = i, Y = i, Z = i,
                     RotX = 0, RotY = 0, RotZ = 0,
                     ScaleX = 1, ScaleY = 1, ScaleZ = 1
                 });
-                repo.AddUnmanagedComponent(entities[i], new Velocity
+                repo.AddComponent(entities[i], new Velocity
                 {
                     VX = 1, VY = 0, VZ = 0
                 });
@@ -111,8 +111,8 @@ namespace Fdp.Tests
                     for (int i = 0; i < entityCount; i += 2)
                     {
                         // Update unmanaged
-                        ref var transform = ref repo.GetUnmanagedComponentRW<Transform>(entities[i]);
-                        var velocity = repo.GetUnmanagedComponentRO<Velocity>(entities[i]);
+                        ref var transform = ref repo.GetComponentRW<Transform>(entities[i]);
+                        var velocity = repo.GetComponentRO<Velocity>(entities[i]);
                         transform.X += velocity.VX;
                         transform.Y += velocity.VY;
                         transform.Z += velocity.VZ;
@@ -120,7 +120,7 @@ namespace Fdp.Tests
                         // Update managed occasionally (more expensive)
                         if (frame % 10 == 0)
                         {
-                            var stats = repo.GetManagedComponentRW<UnitStats>(entities[i]);
+                            var stats = repo.GetComponentRW<UnitStats>(entities[i]);
                             stats.Health = Math.Max(0, stats.Health - 1);
                         }
                     }
@@ -161,9 +161,9 @@ namespace Fdp.Tests
             _output.WriteLine($"Entities: {entityCount}, Frames: {frameCount}");
             
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<Transform>();
-            targetRepo.RegisterUnmanagedComponent<Velocity>();
-            targetRepo.RegisterManagedComponent<UnitStats>();
+            targetRepo.RegisterComponent<Transform>();
+            targetRepo.RegisterComponent<Velocity>();
+            targetRepo.RegisterComponent<UnitStats>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -201,9 +201,9 @@ namespace Fdp.Tests
             _output.WriteLine($"Entities: {entityCount}, Frames: {frameCount}, Keyframe Interval: {keyframeInterval}");
             
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<Transform>();
-            targetRepo.RegisterUnmanagedComponent<Velocity>();
-            targetRepo.RegisterManagedComponent<UnitStats>();
+            targetRepo.RegisterComponent<Transform>();
+            targetRepo.RegisterComponent<Velocity>();
+            targetRepo.RegisterComponent<UnitStats>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -254,9 +254,9 @@ namespace Fdp.Tests
             _output.WriteLine($"Entities: {entityCount}, Frames: {frameCount}");
             
             using var targetRepo = new EntityRepository();
-            targetRepo.RegisterUnmanagedComponent<Transform>();
-            targetRepo.RegisterUnmanagedComponent<Velocity>();
-    targetRepo.RegisterManagedComponent<UnitStats>();
+            targetRepo.RegisterComponent<Transform>();
+            targetRepo.RegisterComponent<Velocity>();
+    targetRepo.RegisterComponent<UnitStats>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -294,7 +294,7 @@ namespace Fdp.Tests
             const int frameCount = 100;
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<int>();
+            repo.RegisterComponent<int>();
             
             _output.WriteLine($"=== Entity Lifecycle Throughput Test ===");
             _output.WriteLine($"Operations per frame: {operationsPerFrame}, Frames: {frameCount}");
@@ -313,7 +313,7 @@ namespace Fdp.Tests
                     for (int i = 0; i < operationsPerFrame; i++)
                     {
                         tempEntities[i] = repo.CreateEntity();
-                        repo.AddUnmanagedComponent(tempEntities[i], frame * 1000 + i);
+                        repo.AddComponent(tempEntities[i], frame * 1000 + i);
                         totalOperations++;
                     }
                     
@@ -354,13 +354,13 @@ namespace Fdp.Tests
             
             using (var repo = new EntityRepository())
             {
-                repo.RegisterUnmanagedComponent<Transform>();
+                repo.RegisterComponent<Transform>();
                 
                 var entities = new Entity[entityCount];
                 for (int i = 0; i < entityCount; i++)
                 {
                     entities[i] = repo.CreateEntity();
-                    repo.AddUnmanagedComponent(entities[i], new Transform { X = i, Y = i, Z = i });
+                    repo.AddComponent(entities[i], new Transform { X = i, Y = i, Z = i });
                 }
                 
                 var sw = Stopwatch.StartNew();
@@ -371,7 +371,7 @@ namespace Fdp.Tests
                         repo.Tick();
                         for (int i = 0; i < entityCount; i += 2)
                         {
-                            ref var t = ref repo.GetUnmanagedComponentRW<Transform>(entities[i]);
+                            ref var t = ref repo.GetComponentRW<Transform>(entities[i]);
                             t.X += 1;
                         }
                         
@@ -387,7 +387,7 @@ namespace Fdp.Tests
             // Test 2: Managed components
             using (var repo = new EntityRepository())
             {
-                repo.RegisterManagedComponent<UnitStats>();
+                repo.RegisterComponent<UnitStats>();
                 
                 var entities = new Entity[entityCount];
                 for (int i = 0; i < entityCount; i++)
@@ -409,7 +409,7 @@ namespace Fdp.Tests
                         repo.Tick();
                         for (int i = 0; i < entityCount; i += 2)
                         {
-                            var stats = repo.GetManagedComponentRW<UnitStats>(entities[i]);
+                            var stats = repo.GetComponentRW<UnitStats>(entities[i]);
                             stats.Health = 100 - frame;
                         }
                         
@@ -444,9 +444,9 @@ namespace Fdp.Tests
         private void CreatePerformanceRecording(int entityCount, int frameCount, int keyframeInterval = 30)
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Transform>();
-            repo.RegisterUnmanagedComponent<Velocity>();
-            repo.RegisterManagedComponent<UnitStats>();
+            repo.RegisterComponent<Transform>();
+            repo.RegisterComponent<Velocity>();
+            repo.RegisterComponent<UnitStats>();
             
             var entities = new Entity[entityCount];
             for (int i = 0; i < entityCount; i++)
@@ -454,13 +454,13 @@ namespace Fdp.Tests
                 entities[i] = repo.CreateEntity();
                 
                 // Unmanaged components
-                repo.AddUnmanagedComponent(entities[i], new Transform
+                repo.AddComponent(entities[i], new Transform
                 {
                     X = i, Y = 0, Z = 0,
                     RotX = 0, RotY = 0, RotZ = 0,
                     ScaleX = 1, ScaleY = 1, ScaleZ = 1
                 });
-                repo.AddUnmanagedComponent(entities[i], new Velocity { VX = 1, VY = 0, VZ = 0 });
+                repo.AddComponent(entities[i], new Velocity { VX = 1, VY = 0, VZ = 0 });
                 
                 // Managed component
                 repo.AddManagedComponent(entities[i], new UnitStats
@@ -480,8 +480,8 @@ namespace Fdp.Tests
                 // Move half the entities (unmanaged update)
                 for (int i = 0; i < entityCount; i += 2)
                 {
-                    ref var transform = ref repo.GetUnmanagedComponentRW<Transform>(entities[i]);
-                    var velocity = repo.GetUnmanagedComponentRO<Velocity>(entities[i]);
+                    ref var transform = ref repo.GetComponentRW<Transform>(entities[i]);
+                    var velocity = repo.GetComponentRO<Velocity>(entities[i]);
                     transform.X += velocity.VX;
                 }
                 
@@ -490,7 +490,7 @@ namespace Fdp.Tests
                 {
                     for (int i = 0; i < entityCount; i += 4)
                     {
-                        var stats = repo.GetManagedComponentRW<UnitStats>(entities[i]);
+                        var stats = repo.GetComponentRW<UnitStats>(entities[i]);
                         stats.Health = Math.Max(0, 100 - frame / 5);
                     }
                 }

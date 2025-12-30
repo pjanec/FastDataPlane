@@ -33,7 +33,7 @@ namespace Fdp.Kernel.Tkb
         {
             _applicators.Add((repo, entity) =>
             {
-                repo.SetComponent(entity, component);
+                repo.AddComponent(entity, component);
             });
         }
 

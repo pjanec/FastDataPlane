@@ -153,10 +153,10 @@ namespace Fdp.Tests
             using var repo = new EntityRepository();
             
             // Register components
-            repo.RegisterUnmanagedComponent<Transform>();
-            repo.RegisterUnmanagedComponent<ParticleState>();
-            repo.RegisterManagedComponent<SoldierData>();
-            repo.RegisterManagedComponent<VehicleData>();
+            repo.RegisterComponent<Transform>();
+            repo.RegisterComponent<ParticleState>();
+            repo.RegisterComponent<SoldierData>();
+            repo.RegisterComponent<VehicleData>();
             
             
             // Create event bus (separate from EntityRepository for now)
@@ -171,7 +171,7 @@ namespace Fdp.Tests
             for (int i = 0; i < soldierCount; i++)
             {
                 soldiers[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(soldiers[i], new Transform
+                repo.AddComponent(soldiers[i], new Transform
                 {
                     X = (i % 50) * 10f,
                     Y = 0,
@@ -192,7 +192,7 @@ namespace Fdp.Tests
             for (int i = 0; i < vehicleCount; i++)
             {
                 vehicles[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(vehicles[i], new Transform
+                repo.AddComponent(vehicles[i], new Transform
                 {
                     X = (i % 10) * 50f,
                     Y = 0,
@@ -223,7 +223,7 @@ namespace Fdp.Tests
             for (int i = 0; i < particleCount; i++)
             {
                 particles[i] = repo.CreateEntity();
-                repo.AddUnmanagedComponent(particles[i], new ParticleState
+                repo.AddComponent(particles[i], new ParticleState
                 {
                     X = (float)(new Random(i).NextDouble() * 1000),
                     Y = (float)(new Random(i + 1000).NextDouble() * 50),
@@ -258,7 +258,7 @@ namespace Fdp.Tests
                     {
                         if (!repo.IsAlive(particles[i])) continue;
                         
-                        ref var particle = ref repo.GetUnmanagedComponentRW<ParticleState>(particles[i]);
+                        ref var particle = ref repo.GetComponentRW<ParticleState>(particles[i]);
                         particle.X += particle.VX;
                         particle.Y += particle.VY;
                         particle.Z += particle.VZ;
@@ -269,7 +269,7 @@ namespace Fdp.Tests
                         {
                             repo.DestroyEntity(particles[i]);
                             particles[i] = repo.CreateEntity();
-                            repo.AddUnmanagedComponent(particles[i], new ParticleState
+                            repo.AddComponent(particles[i], new ParticleState
                             {
                                 X = random.Next(1000),
                                 Y = random.Next(50),
@@ -287,14 +287,14 @@ namespace Fdp.Tests
                     {
                         if (!repo.IsAlive(soldiers[i])) continue;
                         
-                        ref var transform = ref repo.GetUnmanagedComponentRW<Transform>(soldiers[i]);
+                        ref var transform = ref repo.GetComponentRW<Transform>(soldiers[i]);
                         transform.X += (float)Math.Sin(frame * 0.1f) * 0.5f;
                         transform.Z += (float)Math.Cos(frame * 0.1f) * 0.5f;
                         
                         // Update soldier data occasionally
                         if (frame % 10 == 0)
                         {
-                            var soldier = repo.GetManagedComponentRW<SoldierData>(soldiers[i]);
+                            var soldier = repo.GetComponentRW<SoldierData>(soldiers[i]);
                             soldier.Ammo = Math.Max(0, soldier.Ammo - random.Next(5));
                         }
                     }
@@ -306,11 +306,11 @@ namespace Fdp.Tests
                         {
                             if (!repo.IsAlive(vehicles[i])) continue;
                             
-                            ref var transform = ref repo.GetUnmanagedComponentRW<Transform>(vehicles[i]);
+                            ref var transform = ref repo.GetComponentRW<Transform>(vehicles[i]);
                             transform.X += 0.2f;
                             transform.RotationY += 0.01f;
                             
-                            var vehicle = repo.GetManagedComponentRW<VehicleData>(vehicles[i]);
+                            var vehicle = repo.GetComponentRW<VehicleData>(vehicles[i]);
                             vehicle.Fuel = Math.Max(0, vehicle.Fuel - 1);
                             
                             // Wheel degradation
@@ -346,14 +346,14 @@ namespace Fdp.Tests
                         {
                             if (!repo.IsAlive(soldiers[i])) continue;
                             
-                            var transform = repo.GetUnmanagedComponentRO<Transform>(soldiers[i]);
+                            var transform = repo.GetComponentRO<Transform>(soldiers[i]);
                             float dist = MathF.Sqrt(
                                 (transform.X - explosionPos.X) * (transform.X - explosionPos.X) +
                                 (transform.Z - explosionPos.Z) * (transform.Z - explosionPos.Z));
                             
                             if (dist < 50)
                             {
-                                var soldier = repo.GetManagedComponentRW<SoldierData>(soldiers[i]);
+                                var soldier = repo.GetComponentRW<SoldierData>(soldiers[i]);
                                 soldier.Health -= 25;
                                 
                                 if (soldier.Health <= 0)
@@ -422,10 +422,10 @@ namespace Fdp.Tests
             _output.WriteLine($"=== PLAYBACK PERFORMANCE ===");
             
             using var playbackRepo = new EntityRepository();
-            playbackRepo.RegisterUnmanagedComponent<Transform>();
-            playbackRepo.RegisterUnmanagedComponent<ParticleState>();
-            playbackRepo.RegisterManagedComponent<SoldierData>();
-            playbackRepo.RegisterManagedComponent<VehicleData>();
+            playbackRepo.RegisterComponent<Transform>();
+            playbackRepo.RegisterComponent<ParticleState>();
+            playbackRepo.RegisterComponent<SoldierData>();
+            playbackRepo.RegisterComponent<VehicleData>();
             using var playbackEventBus = new FdpEventBus();
             
             using var controller = new PlaybackController(_testFilePath);

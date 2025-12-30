@@ -34,7 +34,7 @@ namespace Fdp.Tests
         {
             // Arrange
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<SquadName>();
+            repo.RegisterComponent<SquadName>();
             
             var e = repo.CreateEntity();
             
@@ -52,7 +52,7 @@ namespace Fdp.Tests
             
             // Replay
             using var replayRepo = new EntityRepository();
-            replayRepo.RegisterManagedComponent<SquadName>();
+            replayRepo.RegisterComponent<SquadName>();
             
             using (var reader = new RecordingReader(_testFilePath))
             {
@@ -61,7 +61,7 @@ namespace Fdp.Tests
             
             // Assert
             Assert.True(replayRepo.HasManagedComponent<SquadName>(e), "Managed component should be restored");
-            var comp = replayRepo.GetManagedComponent<SquadName>(e);
+            var comp = replayRepo.GetComponentRW<SquadName>(e);
             Assert.NotNull(comp);
             Assert.Equal("Alpha", comp.Name);
         }

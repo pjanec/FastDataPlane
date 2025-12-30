@@ -131,10 +131,10 @@ namespace Fdp.Tests
         public void EntityRepository_SetPartDescriptor_Works()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 1, Y = 2, Z = 3 });
+            repo.AddComponent(entity, new Position { X = 1, Y = 2, Z = 3 });
             
             var desc = PartDescriptor.Empty();
             desc.SetPart(0);
@@ -150,10 +150,10 @@ namespace Fdp.Tests
         public void EntityRepository_GetPartDescriptor_DefaultIsAll()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 1, Y = 2, Z = 3 });
+            repo.AddComponent(entity, new Position { X = 1, Y = 2, Z = 3 });
             
             // Never set, should return All
             var desc = repo.GetPartDescriptor<Position>(entity);
@@ -167,10 +167,10 @@ namespace Fdp.Tests
         public void EntityRepository_HasPart_Works()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 1, Y = 2, Z = 3 });
+            repo.AddComponent(entity, new Position { X = 1, Y = 2, Z = 3 });
             
             var desc = PartDescriptor.Empty();
             desc.SetPart(0);
@@ -184,7 +184,7 @@ namespace Fdp.Tests
         public unsafe void Integration_DeltaSync_WithRepository()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<LargeComponent>();
+            repo.RegisterComponent<LargeComponent>();
             
             // Server and client entities
             var serverEntity = repo.CreateEntity();
@@ -200,15 +200,15 @@ namespace Fdp.Tests
                 clientComp.Data[i] = (byte)i;
             }
             
-            repo.AddUnmanagedComponent(serverEntity, serverComp);
-            repo.AddUnmanagedComponent(clientEntity, clientComp);
+            repo.AddComponent(serverEntity, serverComp);
+            repo.AddComponent(clientEntity, clientComp);
             
             // Server modifies part 2
-            ref var serverData = ref repo.GetUnmanagedComponent<LargeComponent>(serverEntity);
+            ref var serverData = ref repo.GetComponentRW<LargeComponent>(serverEntity);
             serverData.Data[150] = 99;
             
             // Detect changes
-            ref var clientData = ref repo.GetUnmanagedComponent<LargeComponent>(clientEntity);
+            ref var clientData = ref repo.GetComponentRW<LargeComponent>(clientEntity);
             var changedParts = MultiPartComponent.GetChangedParts(clientComp, serverData);
             
             // Update client metadata
@@ -232,10 +232,10 @@ namespace Fdp.Tests
         public void SetPartDescriptor_DeadEntity_Throws()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 1, Y = 2, Z = 3 });
+            repo.AddComponent(entity, new Position { X = 1, Y = 2, Z = 3 });
             repo.DestroyEntity(entity);
             
             var desc = PartDescriptor.Empty();
@@ -250,7 +250,7 @@ namespace Fdp.Tests
         public void SetPartDescriptor_NoComponent_Throws()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var entity = repo.CreateEntity();
             

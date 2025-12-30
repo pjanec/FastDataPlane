@@ -47,7 +47,7 @@ namespace Fdp.Tests
         public void AddComponent_RecordsAndPlaysback()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var ecb = new EntityCommandBuffer();
             
@@ -62,7 +62,7 @@ namespace Fdp.Tests
             ecb.Playback(repo);
             
             Assert.True(repo.HasUnmanagedComponent<Position>(entity)); // Now added
-            ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(entity);
+            ref readonly var pos = ref repo.GetComponentRO<Position>(entity);
             Assert.Equal(10f, pos.X);
             Assert.Equal(20f, pos.Y);
             Assert.Equal(30f, pos.Z);
@@ -72,23 +72,23 @@ namespace Fdp.Tests
         public void SetComponent_RecordsAndPlaysback()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var ecb = new EntityCommandBuffer();
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 1, Y = 2, Z = 3 });
+            repo.AddComponent(entity, new Position { X = 1, Y = 2, Z = 3 });
             
             // Record set
             ecb.SetComponent(entity, new Position { X = 100, Y = 200, Z = 300 });
             
-            ref readonly var oldPos = ref repo.GetUnmanagedComponentRO<Position>(entity);
+            ref readonly var oldPos = ref repo.GetComponentRO<Position>(entity);
             Assert.Equal(1f, oldPos.X); // Still old value
             
             // Playback
             ecb.Playback(repo);
             
-            ref readonly var newPos = ref repo.GetUnmanagedComponentRO<Position>(entity);
+            ref readonly var newPos = ref repo.GetComponentRO<Position>(entity);
             Assert.Equal(100f, newPos.X);
             Assert.Equal(200f, newPos.Y);
             Assert.Equal(300f, newPos.Z);
@@ -98,12 +98,12 @@ namespace Fdp.Tests
         public void RemoveComponent_RecordsAndPlaysback()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var ecb = new EntityCommandBuffer();
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 10, Y = 20, Z = 30 });
+            repo.AddComponent(entity, new Position { X = 10, Y = 20, Z = 30 });
             
             // Record remove
             ecb.RemoveComponent<Position>(entity);
@@ -120,8 +120,8 @@ namespace Fdp.Tests
         public void MultipleOperations_PlaybackInOrder()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             using var ecb = new EntityCommandBuffer();
             
@@ -186,7 +186,7 @@ namespace Fdp.Tests
         public void CreateEntity_WithPlaceholder_RemapsOnPlayback()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var ecb = new EntityCommandBuffer();
             
@@ -204,7 +204,7 @@ namespace Fdp.Tests
             var realEntity = repo.Query().With<Position>().Build().FirstOrNull();
             Assert.False(realEntity.IsNull);
             
-            ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(realEntity);
+            ref readonly var pos = ref repo.GetComponentRO<Position>(realEntity);
             Assert.Equal(42f, pos.X);
         }
         
@@ -216,7 +216,7 @@ namespace Fdp.Tests
             // Playback MUST be done on the main thread
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var ecb1 = new EntityCommandBuffer();
             using var ecb2 = new EntityCommandBuffer();
@@ -244,7 +244,7 @@ namespace Fdp.Tests
         public void LargeBuffer_HandlesResize()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var ecb = new EntityCommandBuffer(initialCapacity: 64); // Start small
             

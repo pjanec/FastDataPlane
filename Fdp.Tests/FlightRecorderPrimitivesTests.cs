@@ -81,10 +81,10 @@ namespace Fdp.Tests
         {
             // Arrange
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 123, Y = 456, Z = 789 });
+            repo.AddComponent(e1, new Position { X = 123, Y = 456, Z = 789 });
             
             var table = repo.GetComponentTable<Position>();
             var chunkTable = table.GetChunkTable();
@@ -112,10 +112,10 @@ namespace Fdp.Tests
         {
             // Arrange
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 123, Y = 456, Z = 789 });
+            repo.AddComponent(e1, new Position { X = 123, Y = 456, Z = 789 });
             
             // Destroy entity (leaves garbage in memory)
             repo.DestroyEntity(e1);
@@ -143,10 +143,10 @@ namespace Fdp.Tests
         {
             // Arrange
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position { X = 10, Y = 20, Z = 30 });
+            repo.AddComponent(e1, new Position { X = 10, Y = 20, Z = 30 });
             
             var table = repo.GetComponentTable<Position>();
             var chunkTable = table.GetChunkTable();

@@ -31,7 +31,7 @@ namespace Fdp.Tests
         public void SetSingleton_UnmanagedComponent_StoresValue()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<GameConfig>();
+            repo.RegisterComponent<GameConfig>();
 
             var config = new GameConfig
             {
@@ -52,7 +52,7 @@ namespace Fdp.Tests
         public void GetSingleton_ReturnsReference_CanModifyInPlace()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<TimeState>();
+            repo.RegisterComponent<TimeState>();
             
             repo.SetSingletonUnmanaged(new TimeState { DeltaTime = 0.016f, TotalTime = 0.0, FrameCount = 0 });
             
@@ -71,7 +71,7 @@ namespace Fdp.Tests
         public void SetSingleton_CanUpdateExisting()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<GameConfig>();
+            repo.RegisterComponent<GameConfig>();
             
             repo.SetSingletonUnmanaged(new GameConfig { Gravity = -9.81f, MaxPlayers = 32, TimeScale = 1.0 });
             repo.SetSingletonUnmanaged(new GameConfig { Gravity = -10.0f, MaxPlayers = 64, TimeScale = 0.5 });
@@ -86,7 +86,7 @@ namespace Fdp.Tests
         public void HasSingleton_ReturnsTrueWhenSet()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<GameConfig>();
+            repo.RegisterComponent<GameConfig>();
             
             Assert.False(repo.HasSingleton<GameConfig>());
             
@@ -99,7 +99,7 @@ namespace Fdp.Tests
         public void HasSingleton_ReturnsFalseWhenNotSet()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<GameConfig>();
+            repo.RegisterComponent<GameConfig>();
             
             Assert.False(repo.HasSingleton<GameConfig>());
             Assert.False(repo.HasSingleton<TimeState>());
@@ -122,7 +122,7 @@ namespace Fdp.Tests
         public void SetSingleton_ManagedComponent_StoresValue()
         {
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<GlobalSettings>();
+            repo.RegisterComponent<GlobalSettings>();
             
             var settings = new GlobalSettings
             {
@@ -142,7 +142,7 @@ namespace Fdp.Tests
         public void SetSingleton_ManagedComponent_CanUpdate()
         {
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<GlobalSettings>();
+            repo.RegisterComponent<GlobalSettings>();
             
             repo.SetSingletonManaged(new GlobalSettings { GameName = "Game1", Version = 1 });
             repo.SetSingletonManaged(new GlobalSettings { GameName = "Game2", Version = 2 });
@@ -156,9 +156,9 @@ namespace Fdp.Tests
         public void MultipleSingletons_WorkIndependently()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<GameConfig>();
-            repo.RegisterUnmanagedComponent<TimeState>();
-            repo.RegisterManagedComponent<GlobalSettings>();
+            repo.RegisterComponent<GameConfig>();
+            repo.RegisterComponent<TimeState>();
+            repo.RegisterComponent<GlobalSettings>();
             
             repo.SetSingletonUnmanaged(new GameConfig { Gravity = -9.81f, MaxPlayers = 64 });
             repo.SetSingletonUnmanaged(new TimeState { DeltaTime = 0.016f, FrameCount = 100 });
@@ -183,7 +183,7 @@ namespace Fdp.Tests
         public void Singleton_PersistsAcrossFrames()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<TimeState>();
+            repo.RegisterComponent<TimeState>();
             
             repo.SetSingletonUnmanaged(new TimeState { DeltaTime = 0.016f, TotalTime = 0.0, FrameCount = 0 });
             
@@ -204,7 +204,7 @@ namespace Fdp.Tests
         public void Singleton_ZeroAllocationForUnmanaged()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<GameConfig>();
+            repo.RegisterComponent<GameConfig>();
             
             // Set initial value
             repo.SetSingletonUnmanaged(new GameConfig { Gravity = -9.81f });
@@ -237,7 +237,7 @@ namespace Fdp.Tests
         public void Singleton_AutoExpandsCapacity()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<GameConfig>();
+            repo.RegisterComponent<GameConfig>();
             
             // Create many different singleton types to test auto-expansion
             // (The array starts at 64, so we need to trigger growth)
@@ -257,8 +257,8 @@ namespace Fdp.Tests
         public void Singleton_DisposeCleansUp()
         {
             var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<GameConfig>();
-            repo.RegisterUnmanagedComponent<TimeState>();
+            repo.RegisterComponent<GameConfig>();
+            repo.RegisterComponent<TimeState>();
             
             repo.SetSingletonUnmanaged(new GameConfig { Gravity = -9.81f });
             repo.SetSingletonUnmanaged(new TimeState { DeltaTime = 0.016f });
@@ -276,7 +276,7 @@ namespace Fdp.Tests
         public void Singleton_UseCase_GameLoop()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<TimeState>();
+            repo.RegisterComponent<TimeState>();
             
             // Initialize game time
             repo.SetSingletonUnmanaged(new TimeState

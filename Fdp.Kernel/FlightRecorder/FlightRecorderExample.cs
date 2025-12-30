@@ -15,16 +15,16 @@ namespace Fdp.Examples
         {
             // Create repository and register components
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             // Create some entities
             var entity1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity1, new Position { X = 10, Y = 20, Z = 30 });
-            repo.AddUnmanagedComponent(entity1, new Velocity { X = 1, Y = 0, Z = 0 });
+            repo.AddComponent(entity1, new Position { X = 10, Y = 20, Z = 30 });
+            repo.AddComponent(entity1, new Velocity { X = 1, Y = 0, Z = 0 });
             
             var entity2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity2, new Position { X = 0, Y = 0, Z = 0 });
+            repo.AddComponent(entity2, new Position { X = 0, Y = 0, Z = 0 });
             
             // Start recording
             using var recorder = new AsyncRecorder("simulation.fdp");
@@ -42,8 +42,8 @@ namespace Fdp.Examples
                 
                 query.ForEach((Entity e) =>
                 {
-                    ref var pos = ref repo.GetUnmanagedComponentRW<Position>(e);
-                    ref readonly var vel = ref repo.GetUnmanagedComponentRO<Velocity>(e);
+                    ref var pos = ref repo.GetComponentRW<Position>(e);
+                    ref readonly var vel = ref repo.GetComponentRO<Velocity>(e);
                     
                     pos.X += vel.X;
                     pos.Y += vel.Y;
@@ -78,8 +78,8 @@ namespace Fdp.Examples
         {
             // Create fresh repository
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterUnmanagedComponent<Velocity>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<Velocity>();
             
             // Open recording
             using var reader = new RecordingReader("simulation.fdp");
@@ -100,7 +100,7 @@ namespace Fdp.Examples
                     var query = repo.Query().With<Position>().Build();
                     query.ForEach((Entity e) =>
                     {
-                        ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(e);
+                        ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                         Console.WriteLine($"  Entity {e.Index}: Position ({pos.X}, {pos.Y}, {pos.Z})");
                     });
                 }

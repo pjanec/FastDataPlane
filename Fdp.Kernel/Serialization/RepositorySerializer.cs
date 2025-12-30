@@ -142,7 +142,7 @@ namespace Fdp.Kernel.Serialization
                     // Ensure table exists via Registration logic if needed?
                     // User said: "Implicitly registers the component if new" 
                     // But `repo.GetTableByType` (or TryGetTable) might return null if not registered.
-                    // We need to ensuring it's registered. `repo.RegisterUnmanagedComponent<type>`? No, that requires generic T.
+                    // We need to ensuring it's registered. `repo.RegisterComponent<type>`? No, that requires generic T.
                     // Reflection time or specific method on Repo.
                     // `ComponentTypeRegistry.GetOrRegister(type)` handles registry, but `repo` allocates `Table` on demand only if generic method is called?
                     // `repo.GetTable<T>(true)` or `repo.GetManagedTable<T>(true)`.
@@ -160,16 +160,14 @@ namespace Fdp.Kernel.Serialization
                     
                     // So I MUST create the table.
                     // `repo` has `_componentTables`. I can't access it directly.
-                    // But I can use `repo.RegisterUnmanagedComponent<T>` via reflection.
+                    // But I can use `repo.RegisterComponent<T>` via reflection.
                     
                     if (!repo.TryGetTable(type, out var table))
                     {
                          // Register it to create the table
                          // Check if unmanaged or managed?
                          // `ComponentTypeRegistry` might help.
-                         var method = typeof(EntityRepository).GetMethod(
-                             type.IsValueType ? "RegisterUnmanagedComponent" : "RegisterManagedComponent"
-                         ).MakeGenericMethod(type);
+                         var method = typeof(EntityRepository).GetMethod("RegisterComponent").MakeGenericMethod(type);
                          method.Invoke(repo, null);
                          
                          // Now we should have it

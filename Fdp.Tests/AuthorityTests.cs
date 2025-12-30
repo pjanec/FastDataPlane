@@ -16,10 +16,10 @@ namespace Fdp.Tests
         public void SetAuthority_UpdatesMask()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e, new Position());
+            repo.AddComponent(e, new Position());
             
             Assert.False(repo.HasAuthority<Position>(e));
             
@@ -34,7 +34,7 @@ namespace Fdp.Tests
         public void SetAuthority_ThrowsIfComponentMissing()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e = repo.CreateEntity();
             // No component added
@@ -46,14 +46,14 @@ namespace Fdp.Tests
         public void Query_WithOwned_FiltersCorrectly()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position());
+            repo.AddComponent(e1, new Position());
             repo.SetAuthority<Position>(e1, true); // Owned
             
             var e2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e2, new Position());
+            repo.AddComponent(e2, new Position());
             // Not owned (default)
             
             int count = 0;
@@ -70,14 +70,14 @@ namespace Fdp.Tests
         public void Query_WithoutOwned_FiltersCorrectly()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var e1 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e1, new Position());
+            repo.AddComponent(e1, new Position());
             repo.SetAuthority<Position>(e1, true); // Owned
             
             var e2 = repo.CreateEntity();
-            repo.AddUnmanagedComponent(e2, new Position());
+            repo.AddComponent(e2, new Position());
             // Not owned
             
             int count = 0;

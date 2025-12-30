@@ -20,20 +20,20 @@ namespace Fdp.Tests
         }
         
         [Fact]
-        public void RegisterManagedComponent_Succeeds()
+        public void RegisterComponent_Succeeds()
         {
             using var repo = new EntityRepository();
             
             // Should not throw
-            repo.RegisterManagedComponent<PlayerName>();
-            repo.RegisterManagedComponent<InventoryData>();
+            repo.RegisterComponent<PlayerName>();
+            repo.RegisterComponent<InventoryData>();
         }
         
         [Fact]
         public void AddManagedComponent_StoresValue()
         {
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<PlayerName>();
+            repo.RegisterComponent<PlayerName>();
             
             var entity = repo.CreateEntity();
             var name = new PlayerName { Name = "Hero", Level = 5 };
@@ -42,7 +42,7 @@ namespace Fdp.Tests
             
             Assert.True(repo.HasManagedComponent<PlayerName>(entity));
             
-            var retrieved = repo.GetManagedComponent<PlayerName>(entity);
+            var retrieved = repo.GetComponentRW<PlayerName>(entity);
             Assert.NotNull(retrieved);
             Assert.Equal("Hero", retrieved.Name);
             Assert.Equal(5, retrieved.Level);
@@ -52,7 +52,7 @@ namespace Fdp.Tests
         public void RemoveManagedComponent_ClearsValue()
         {
             using var repo = new EntityRepository();
-            repo.RegisterManagedComponent<PlayerName>();
+            repo.RegisterComponent<PlayerName>();
             
             var entity = repo.CreateEntity();
             repo.AddManagedComponent(entity, new PlayerName { Name = "Test" });
@@ -68,13 +68,13 @@ namespace Fdp.Tests
         public void MixedTier1And2_WorkTogether()
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
-            repo.RegisterManagedComponent<PlayerName>();
+            repo.RegisterComponent<Position>();
+            repo.RegisterComponent<PlayerName>();
             
             var entity = repo.CreateEntity();
             
             // Tier 1
-            repo.AddUnmanagedComponent(entity, new Position { X = 10, Y = 20, Z = 30 });
+            repo.AddComponent(entity, new Position { X = 10, Y = 20, Z = 30 });
             
             // Tier 2
             repo.AddManagedComponent(entity, new PlayerName { Name = "Hero", Level = 99 });
@@ -83,10 +83,10 @@ namespace Fdp.Tests
             Assert.True(repo.HasUnmanagedComponent<Position>(entity));
             Assert.True(repo.HasManagedComponent<PlayerName>(entity));
             
-            ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(entity);
+            ref readonly var pos = ref repo.GetComponentRO<Position>(entity);
             Assert.Equal(10f, pos.X);
             
-            var name = repo.GetManagedComponent<PlayerName>(entity);
+            var name = repo.GetComponentRW<PlayerName>(entity);
             Assert.Equal("Hero", name?.Name);
         }
     }

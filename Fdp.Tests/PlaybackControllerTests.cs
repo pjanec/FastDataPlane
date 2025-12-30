@@ -29,10 +29,10 @@ namespace Fdp.Tests
         private void CreateTestRecording(int frameCount, int keyframeInterval)
         {
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 0, Y = 0, Z = 0 });
+            repo.AddComponent(entity, new Position { X = 0, Y = 0, Z = 0 });
             
             using var recorder = new AsyncRecorder(_testFilePath);
             uint prevTick = 0;
@@ -44,7 +44,7 @@ namespace Fdp.Tests
                 uint currentTick = repo.GlobalVersion;
                 
                 // NOW modify components - tagged with currentTick
-                ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entity);
+                ref var pos = ref repo.GetComponentRW<Position>(entity);
                 pos.X = frame;
                 pos.Y = frame * 2;
                 pos.Z = frame * 3;
@@ -130,7 +130,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 10, keyframeInterval: 5);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -150,7 +150,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 3, keyframeInterval: 5);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -172,7 +172,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 15, keyframeInterval: 5);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -194,7 +194,7 @@ namespace Fdp.Tests
             var query = repo.Query().With<Position>().Build();
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(6f, pos.X); // Frame 6 position
             });
         }
@@ -205,7 +205,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 10, keyframeInterval: 5);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -226,7 +226,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 50, keyframeInterval: 10);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -240,7 +240,7 @@ namespace Fdp.Tests
             var query = repo.Query().With<Position>().Build();
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(25f, pos.X);
                 Assert.Equal(50f, pos.Y);
                 Assert.Equal(75f, pos.Z);
@@ -253,7 +253,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 50, keyframeInterval: 10);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -266,7 +266,7 @@ namespace Fdp.Tests
             var query = repo.Query().With<Position>().Build();
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(37f, pos.X);
             });
         }
@@ -277,7 +277,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 10, keyframeInterval: 5);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -292,7 +292,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 20, keyframeInterval: 5);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -313,7 +313,7 @@ namespace Fdp.Tests
             var query = repo.Query().With<Position>().Build();
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(8f, pos.X);
             });
         }
@@ -328,7 +328,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 20, keyframeInterval: 5);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -347,7 +347,7 @@ namespace Fdp.Tests
             var query = repo.Query().With<Position>().Build();
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(0f, pos.X);
             });
         }
@@ -362,7 +362,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 100, keyframeInterval: 10);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -378,7 +378,7 @@ namespace Fdp.Tests
             var query = repo.Query().With<Position>().Build();
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(50f, pos.X);
             });
         }
@@ -389,7 +389,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 10, keyframeInterval: 5);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -412,7 +412,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 20, keyframeInterval: 5);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -441,7 +441,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 30, keyframeInterval: 5);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -465,7 +465,7 @@ namespace Fdp.Tests
             var query = repo.Query().With<Position>().Build();
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(14f, pos.X);
                 Assert.Equal(28f, pos.Y);
                 Assert.Equal(42f, pos.Z);
@@ -478,7 +478,7 @@ namespace Fdp.Tests
             // Arrange
             CreateTestRecording(frameCount: 50, keyframeInterval: 10);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             using var controller = new PlaybackController(_testFilePath);
             
@@ -501,7 +501,7 @@ namespace Fdp.Tests
             var query = repo.Query().With<Position>().Build();
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(expectedX, pos.X);
                 Assert.Equal(expectedX * 2, pos.Y);
                 Assert.Equal(expectedX * 3, pos.Z);

@@ -70,7 +70,7 @@ namespace Fdp.Tests
             
             using var controller = new PlaybackController(_testFilePath);
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             // Act: Test the problematic scenario
             controller.SeekToTick(repo, 10);
@@ -98,10 +98,10 @@ namespace Fdp.Tests
             var log = new RecordingLog();
             
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             var entity = repo.CreateEntity();
-            repo.AddUnmanagedComponent(entity, new Position { X = 0, Y = 0, Z = 0 });
+            repo.AddComponent(entity, new Position { X = 0, Y = 0, Z = 0 });
             
             using var recorder = new AsyncRecorder(_testFilePath);
             uint prevTick = 0; // Initialize for delta recording
@@ -113,7 +113,7 @@ namespace Fdp.Tests
                 uint currentTick = repo.GlobalVersion;
                 
                 // NOW modify position - will be tagged with currentTick
-                ref var pos = ref repo.GetUnmanagedComponentRW<Position>(entity);
+                ref var pos = ref repo.GetComponentRW<Position>(entity);
                 pos.X = frame;
                 pos.Y = frame * 2;
                 pos.Z = frame * 3;
@@ -179,7 +179,7 @@ namespace Fdp.Tests
             
             // Test seeking to tick 10 (should be frame 8)
             using var repo = new EntityRepository();
-            repo.RegisterUnmanagedComponent<Position>();
+            repo.RegisterComponent<Position>();
             
             controller.SeekToTick(repo, 10);
             
@@ -197,7 +197,7 @@ namespace Fdp.Tests
             var query = repo.Query().With<Position>().Build();
             query.ForEach((Entity e) =>
             {
-                ref readonly var pos = ref repo.GetUnmanagedComponentRO<Position>(e);
+                ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 result = pos;
             });
             
