@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 
 namespace Fdp.Kernel.FlightRecorder
 {
@@ -59,7 +60,28 @@ namespace Fdp.Kernel.FlightRecorder
             ReadAndInjectEvents(reader, eventBus, processEvents);
 
             
-            // 3. APPLY CHUNKS
+            // 3. RESTORE SINGLETONS
+            int singletonCount = reader.ReadInt32();
+            for (int i = 0; i < singletonCount; i++)
+            {
+                int typeId = reader.ReadInt32();
+                int len = reader.ReadInt32();
+                
+                // Optimized: Read directly into scratch buffer to avoid allocation
+                if (len > _scratchBuffer.Length)
+                {
+                    // Fallback for huge singletons (rare)
+                    byte[] hugeBuffer = reader.ReadBytes(len);
+                    RestoreSingleton(repo, typeId, hugeBuffer, 0, len);
+                }
+                else
+                {
+                    reader.Read(_scratchBuffer, 0, len);
+                    RestoreSingleton(repo, typeId, _scratchBuffer, 0, len);
+                }
+            }
+
+            // 4. APPLY CHUNKS
             int cCount = reader.ReadInt32();
             for (int i = 0; i < cCount; i++)
             {
@@ -171,7 +193,7 @@ namespace Fdp.Kernel.FlightRecorder
                     // Deserialize events using reflection to call FdpAutoSerializer.Deserialize<T>()
                     var events = new System.Collections.Generic.List<object>(count);
                     var deserializeMethod = typeof(FdpAutoSerializer)
-                        .GetMethod("Deserialize", new[] { typeof(BinaryReader) })!
+                        .GetMethod( nameof(FdpAutoSerializer.Deserialize), new[] { typeof(BinaryReader) })!
                         .MakeGenericMethod(eventType);
                     
                     for (int j = 0; j < count; j++)
@@ -287,6 +309,67 @@ namespace Fdp.Kernel.FlightRecorder
              }
         }
         
+        private void RestoreSingleton(EntityRepository repo, int typeId, byte[] buffer, int offset, int length)
+        {
+            // 1. Get existing table or Auto-Create it
+            var table = repo.GetSingletonTable(typeId);
+            
+            if (table == null)
+            {
+                // We need to auto-register the singleton if it doesn't exist on playback.
+                // This requires the Type.
+                Type? type = ComponentTypeRegistry.GetType(typeId);
+                if (type == null) 
+                {
+                    // Warn or skip? If we don't know the type, we can't restore.
+                    return; 
+                }
+
+                // Reflection hack to call "SetSingleton<T>(default)" to initialize the table
+                if (type.IsValueType)
+                {
+                    // This will init the unmanaged table
+                    var method = typeof(EntityRepository).GetMethod(nameof(EntityRepository.SetSingletonUnmanaged))!.MakeGenericMethod(type);
+                    method.Invoke(repo, new object[] { Activator.CreateInstance(type) });
+                }
+                else
+                {
+                    var method = typeof(EntityRepository).GetMethod(nameof(EntityRepository.SetSingletonManaged))!.MakeGenericMethod(type);
+                    method.Invoke(repo, new object[] { null });
+                }
+                
+                // Re-fetch
+                table = repo.GetSingletonTable(typeId);
+            }
+
+            // 2. Restore Data
+            if (table is IUnmanagedComponentTable unmanaged)
+            {
+                // Zero-Alloc: Create span from buffer slice
+                var span = new ReadOnlySpan<byte>(buffer, offset, length);
+                unmanaged.RestoreChunkFromBuffer(0, span);
+            }
+            else
+            {
+                // Managed restoration
+                Type type = table.ComponentType;
+                // Zero-Alloc: Wrap existing buffer
+                using (var ms = new MemoryStream(buffer, offset, length))
+                using (var reader = new BinaryReader(ms))
+                {
+                    // Deserialize using dynamic dispatch to FdpAutoSerializer
+                    var deserializeMethod = typeof(FdpAutoSerializer)
+                        .GetMethod(nameof(FdpAutoSerializer.Deserialize), new[] { typeof(BinaryReader) })!
+                        .MakeGenericMethod(type);
+                    
+                    object val = deserializeMethod.Invoke(null, new object[] { reader });
+                    
+                    // Set to index 0 (Singleton) via dynamic to bypass generic constraint on variable
+                    ((dynamic)table)[0] = (dynamic)val;
+                }
+            }
+        }
+
         private void RestoreChunkData(IUnmanagedComponentTable table, int chunkIndex, byte[] data)
         {
             // Copy data directly into the chunk

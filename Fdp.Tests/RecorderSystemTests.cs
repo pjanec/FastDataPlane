@@ -95,6 +95,7 @@ namespace Fdp.Tests
             // Read Chunk Count
             reader.ReadInt32(); // Unmanaged Events
             reader.ReadInt32(); // Managed Events
+            reader.ReadInt32(); // Singleton Count
             int chunkCount = reader.ReadInt32();
             // Should have at least 1 chunk (EntityIndex chunk 0)
             Assert.True(chunkCount >= 1, "Should have one chunk for EntityIndex updates");
@@ -140,6 +141,7 @@ namespace Fdp.Tests
             Assert.Equal(0, reader.ReadInt32()); // DestroyCount
             Assert.Equal(0, reader.ReadInt32()); // Unmanaged Events
             Assert.Equal(0, reader.ReadInt32()); // Managed Events
+            Assert.Equal(0, reader.ReadInt32()); // Singleton Count
             Assert.Equal(0, reader.ReadInt32()); // ChunkCount (Look ma, no changes!)
         }
         
@@ -179,6 +181,11 @@ namespace Fdp.Tests
             reader.ReadInt32(); // Destroy
             reader.ReadInt32(); // Unmanaged Events
             reader.ReadInt32(); // Managed Events
+            
+            // Singletons
+            int sCount = reader.ReadInt32();
+            for(int k=0; k<sCount; k++) { reader.ReadInt32(); int l=reader.ReadInt32(); reader.ReadBytes(l); }
+            
             int chunkCount = reader.ReadInt32();
             
             Assert.True(chunkCount >= 1);

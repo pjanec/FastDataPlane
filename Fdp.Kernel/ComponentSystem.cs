@@ -15,6 +15,32 @@ namespace Fdp.Kernel
         public EntityRepository World { get; internal set; }
         
         /// <summary>
+        /// Shortcut to get the current DeltaTime from the World singleton.
+        /// Returns 0 if Time has not been initialized.
+        /// </summary>
+        protected float DeltaTime
+        {
+            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+            get 
+            {
+                if (World.HasSingleton<GlobalTime>())
+                {
+                    return World.GetSingletonUnmanaged<GlobalTime>().DeltaTime;
+                }
+                return 0f;
+            }
+        }
+        
+        /// <summary>
+        /// Shortcut to get the GlobalTime struct directly (for TotalTime/Tick).
+        /// </summary>
+        protected ref GlobalTime Time
+        {
+            [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+            get => ref World.GetSingletonUnmanaged<GlobalTime>();
+        }
+        
+        /// <summary>
         /// Whether this system is enabled and should execute during Update.
         /// Disabled systems are skipped.
         /// </summary>

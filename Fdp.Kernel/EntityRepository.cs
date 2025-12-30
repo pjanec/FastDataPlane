@@ -25,6 +25,14 @@ namespace Fdp.Kernel
         private readonly object _tableLock = new object();
         private bool _disposed;
         
+        // Stage 21: Lifecycle Event Stream
+        private NativeEventStream<EntityLifecycleEvent>? _lifecycleStream;
+        
+        public void RegisterLifecycleStream(NativeEventStream<EntityLifecycleEvent> stream)
+        {
+            _lifecycleStream = stream;
+        }
+        
         // Flight Recorder Destruction Log
         private readonly List<Entity> _destructionLog = new List<Entity>(128);
         
@@ -157,6 +165,42 @@ namespace Fdp.Kernel
             var entity = _entityIndex.CreateEntity();
             ref var header = ref _entityIndex.GetHeader(entity.Index);
             header.LastChangeTick = _globalVersion;
+            
+            // Emit Lifecycle Event
+            if (_lifecycleStream != null)
+            {
+                _lifecycleStream.Write(new EntityLifecycleEvent {
+                    Entity = entity,
+                    Type = LifecycleEventType.Created,
+                    Generation = (int)header.Generation
+                });
+            }
+            
+            return entity;
+        }
+
+        /// <summary>
+        /// Creates an entity in the 'Constructing' state, waiting for modules to attach components.
+        /// </summary>
+        /// <param name="requiredModulesMask">Bitmask of modules that must ACK before entity is Active.</param>
+        /// <param name="authorityMask">Bitmask of components this peer has authority over.</param>
+        public Entity CreateStagedEntity(ulong requiredModulesMask, BitMask256 authorityMask)
+        {
+            // 1. Create Entity (Allocates + Emits 'Created' Event)
+            var entity = CreateEntity();
+
+            // 2. Add Lifecycle Descriptor (Constructing)
+            AddUnmanagedComponent(entity, new LifecycleDescriptor {
+                State = EntityState.Constructing,
+                RequiredModulesMask = requiredModulesMask,
+                AckedModulesMask = 0,
+                CreatedTime = 0 // Caller responsible or external system logic
+            });
+
+            // 3. Set Authority Mask (Directly in header for speed)
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.AuthorityMask = authorityMask;
+
             return entity;
         }
 
@@ -179,6 +223,20 @@ namespace Fdp.Kernel
         {
             // Note: Authority mask matches default (cleared) unless we serialize it later
             _entityIndex.ForceRestoreEntity(index, isActive, generation, componentMask, disType);
+            
+            if (isActive && _lifecycleStream != null)
+            {
+                 // We rely on the caller to fire 'BatchRestored' if this is too spammy, 
+                 // but strictly speaking, each re-appearance is a Restore event.
+                 // User approved "BatchRestore" preference, but RestoreEntity is per-entity.
+                 // We will emit 'Restored' here to be safe and consistent.
+                 var entity = new Entity(index, (ushort)generation);
+                 _lifecycleStream.Write(new EntityLifecycleEvent {
+                    Entity = entity,
+                    Type = LifecycleEventType.Restored,
+                    Generation = generation
+                 });
+            }
         }
         
         /// <summary>
@@ -230,6 +288,18 @@ namespace Fdp.Kernel
             
             // RECORDER HOOK: Log destruction before freeing (so we have valid generation)
             _destructionLog.Add(entity);
+            
+            // Emit Lifecycle Event (BEFORE destruction logic so systems can read final state)
+            if (_lifecycleStream != null)
+            {
+                ref var header = ref _entityIndex.GetHeader(entity.Index);
+                _lifecycleStream.Write(new EntityLifecycleEvent {
+                    Entity = entity,
+                    Type = LifecycleEventType.Destroyed,
+                     // Use current generation
+                    Generation = header.Generation
+                });
+            }
             
             _entityIndex.DestroyEntity(entity);
         }
@@ -1149,13 +1219,13 @@ namespace Fdp.Kernel
             if (_singletons[typeId] == null)
             {
                 // Tier 1: Create table with just one slot
-                var table = new NativeChunkTable<T>();
+                var table = new ComponentTable<T>();
                 _singletons[typeId] = table;
             }
             
             // Write data
-            var storage = (NativeChunkTable<T>)_singletons[typeId];
-            storage[0] = value;
+            var storage = (ComponentTable<T>)_singletons[typeId];
+            storage.Set(0, value, _globalVersion);
         }
         
         /// <summary>
@@ -1197,8 +1267,10 @@ namespace Fdp.Kernel
             #endif
             
             // Fast path: direct cast and access
-            var storage = (NativeChunkTable<T>)_singletons[typeId];
-            return ref storage[0];
+            var storage = (ComponentTable<T>)_singletons[typeId];
+            // GetRW with version 0 guarantees access but doesn't bump version to current global.
+            // This mimics legacy behavior but beware of delta recording issues if modified via ref.
+            return ref storage.GetRW(0, 0);
         }
         
         /// <summary>
@@ -1238,6 +1310,31 @@ namespace Fdp.Kernel
             int typeId = ManagedComponentType<T>.ID;
             if (typeId >= _singletons.Length) return false;
             return _singletons[typeId] != null;
+        }
+
+        /// <summary>
+        /// Returns all active singleton tables.
+        /// Used by Flight Recorder.
+        /// </summary>
+        public IEnumerable<IComponentTable> GetSingletonTables()
+        {
+            for (int i = 0; i < _singletons.Length; i++)
+            {
+                if (_singletons[i] != null)
+                {
+                    yield return (IComponentTable)_singletons[i];
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets a singleton table by Type ID.
+        /// Used by PlaybackSystem to restore data.
+        /// </summary>
+        internal IComponentTable GetSingletonTable(int typeId)
+        {
+            if (typeId < 0 || typeId >= _singletons.Length) return null;
+            return (IComponentTable)_singletons[typeId];
         }
         
         /// <summary>

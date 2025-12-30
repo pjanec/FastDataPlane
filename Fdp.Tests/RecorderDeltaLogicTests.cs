@@ -223,6 +223,7 @@ namespace Fdp.Tests
             reader.ReadInt32(); // DestroyCount = 0
             reader.ReadInt32(); // Unmanaged Events
             reader.ReadInt32(); // Managed Events
+            reader.ReadInt32(); // Singleton Count (0)
 
             int chunkCount = reader.ReadInt32();
             Assert.True(chunkCount > 0, "Keyframe must contain chunks even if stable");
@@ -240,6 +241,15 @@ namespace Fdp.Tests
             // Assuming 0 events for these logic tests
             reader.ReadInt32(); // Unmanaged Count
             reader.ReadInt32(); // Managed Count
+            
+            // Skip Singletons
+            int sCount = reader.ReadInt32();
+            for(int i=0; i<sCount; i++) 
+            {
+                reader.ReadInt32(); // Type
+                int len = reader.ReadInt32(); 
+                reader.BaseStream.Seek(len, SeekOrigin.Current); // Skip Data
+            }
         }
     }
 }

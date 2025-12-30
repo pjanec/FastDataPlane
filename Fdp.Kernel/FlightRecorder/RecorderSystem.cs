@@ -58,7 +58,12 @@ namespace Fdp.Kernel.FlightRecorder
             WriteEvents(writer, eventBus); // TODO: Pass actual eventBus when available
             
             // ---------------------------------------------------------
-            // 4. DIRTY SCAN & WRITE (PER TABLE)
+            // 4. RECORD SINGLETONS
+            // ---------------------------------------------------------
+            RecordSingletons(repo, writer, prevTick);
+            
+            // ---------------------------------------------------------
+            // 5. DIRTY SCAN & WRITE (PER TABLE)
             // ---------------------------------------------------------
             var componentTables = repo.GetRegisteredComponentTypes();
             var entityIndex = repo.GetEntityIndex();
@@ -268,6 +273,9 @@ namespace Fdp.Kernel.FlightRecorder
             
             // Write events (same as delta frames)
             WriteEvents(writer, eventBus);
+            
+            // Record Singletons (force all dirty)
+            RecordSingletons(repo, writer, 0);
             
             // Force all chunks to be considered "dirty" by using prevTick = 0
             RecordAllChunks(repo, writer);
@@ -579,6 +587,68 @@ namespace Fdp.Kernel.FlightRecorder
         }
 
 
+        private void RecordSingletons(EntityRepository repo, BinaryWriter writer, uint prevTick)
+        {
+            var tables = repo.GetSingletonTables();
+            
+            // We need to write the count first, but we don't know how many are dirty.
+            // So we write a placeholder, write data, then patch count.
+            long countPos = writer.BaseStream.Position;
+            writer.Write(0); // Placeholder
+            int actualCount = 0;
+
+            foreach (var table in tables)
+            {
+                // Check version (Singletons are always in Chunk 0)
+                if (table.GetVersionForEntity(0) <= prevTick) 
+                    continue;
+
+                int typeId = table.ComponentTypeId;
+
+                // Serialize based on Tier 1 vs Tier 2
+                if (table is IUnmanagedComponentTable unmanaged)
+                {
+                    // Unmanaged: Copy raw bytes
+                    int bytes = unmanaged.CopyChunkToBuffer(0, _scratchBuffer);
+                    if (bytes > 0)
+                    {
+                        actualCount++;
+                        writer.Write(typeId);
+                        writer.Write(bytes);
+                        writer.Write(_scratchBuffer, 0, bytes);
+                    }
+                }
+                else
+                {
+                    // Managed: Use Serializer (Reflection for generic access)
+                    // We assume ManagedComponentTable is the underlying type
+                    var managedTable = table as dynamic; // Shortcut to access generic methods
+                    // Accessing index 0 (Singleton)
+                    object? val = managedTable[0];
+                    
+                    if (val != null)
+                    {
+                        using (var ms = new MemoryStream())
+                        using (var bw = new BinaryWriter(ms))
+                        {
+                            FdpAutoSerializer.Serialize((dynamic)val, bw);
+                            byte[] data = ms.ToArray();
+                            
+                            actualCount++;
+                            writer.Write(typeId);
+                            writer.Write(data.Length);
+                            writer.Write(data);
+                        }
+                    }
+                }
+            }
+
+            // Patch count
+            long endPos = writer.BaseStream.Position;
+            writer.BaseStream.Position = countPos;
+            writer.Write(actualCount);
+            writer.BaseStream.Position = endPos;
+        }
     }
     
     /// <summary>

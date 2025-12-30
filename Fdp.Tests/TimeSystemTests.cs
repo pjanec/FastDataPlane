@@ -5,63 +5,82 @@ using Fdp.Kernel;
 
 namespace Fdp.Tests
 {
-    public class TimeSystemTests
+    public class TimeSystemTests : IDisposable
     {
-        [Fact]
-        public void SetFrameTime_DeterministicMode_AdvancesTimeCorrectly()
+        private EntityRepository _repo;
+
+        public TimeSystemTests()
         {
-            var system = new TimeSystem();
-            system.IsDeterministic = true;
+            _repo = new EntityRepository();
+            // Register expected component
+            _repo.RegisterComponent<GlobalTime>();
+        }
+
+        public void Dispose()
+        {
+            _repo.Dispose();
+        }
+
+        [Fact]
+        public void Step_DeterministicMode_AdvancesTimeCorrectly()
+        {
+            var system = new TimeSystem(_repo);
             
-            system.SetFrameTime(0.1);
-            Assert.Equal(0.1, system.DeltaTime);
-            Assert.Equal(0.1, system.TotalTime);
-            Assert.Equal(1ul, system.CurrentTick);
+            system.Step(0.1f);
             
-            system.SetFrameTime(0.2);
-            Assert.Equal(0.2, system.DeltaTime);
-            Assert.Equal(0.3, system.TotalTime, precision: 6);
-            Assert.Equal(2ul, system.CurrentTick);
+            ref var time = ref _repo.GetSingletonUnmanaged<GlobalTime>();
+            Assert.Equal(0.1f, time.DeltaTime);
+            Assert.Equal(0.1, time.TotalTime, precision: 6);
+            Assert.Equal(1ul, time.FrameCount);
+            
+            system.Step(0.2f);
+            
+            time = ref _repo.GetSingletonUnmanaged<GlobalTime>();
+            Assert.Equal(0.2f, time.DeltaTime);
+            Assert.Equal(0.3, time.TotalTime, precision: 6);
+            Assert.Equal(2ul, time.FrameCount);
         }
         
         [Fact]
-        public void BeginFrame_RealTimeMode_ReadingClock()
+        public void Update_RealTimeMode_ReadingClock()
         {
             var clock = new ManualTimeProvider();
-            var system = new TimeSystem(clock);
-            system.IsDeterministic = false;
+            var system = new TimeSystem(_repo, clock);
             
             // Initial state (created at clock=0)
             
             // Advance clock by 100ms
             clock.Advance(TimeSpan.FromMilliseconds(100));
             
-            system.BeginFrame();
+            system.Update();
             
-            Assert.Equal(0.1, system.DeltaTime, precision: 4);
-            Assert.Equal(0.1, system.TotalTime, precision: 4);
-            Assert.Equal(1ul, system.CurrentTick);
+            ref var time = ref _repo.GetSingletonUnmanaged<GlobalTime>();
+            Assert.Equal(0.1f, time.DeltaTime);
+            Assert.Equal(0.1, time.TotalTime, precision: 4);
+            Assert.Equal(1ul, time.FrameCount);
             
             // Advance clock by 50ms
             clock.Advance(TimeSpan.FromMilliseconds(50));
-            system.BeginFrame();
+            system.Update();
             
-            Assert.Equal(0.05, system.DeltaTime, precision: 4);
-            Assert.Equal(0.15, system.TotalTime, precision: 4);
-            Assert.Equal(2ul, system.CurrentTick);
+            time = ref _repo.GetSingletonUnmanaged<GlobalTime>();
+            Assert.Equal(0.05f, time.DeltaTime);
+            Assert.Equal(0.15, time.TotalTime, precision: 4);
+            Assert.Equal(2ul, time.FrameCount);
         }
         
         [Fact]
         public void HasTimeRemaining_ChecksBudget()
         {
             var clock = new ManualTimeProvider();
-            var system = new TimeSystem(clock);
+            var system = new TimeSystem(_repo, clock);
             
             // Start frame with 10ms budget
-            system.IsDeterministic = false;
-            system.BeginFrame(budgetMs: 10.0);
+            // Simulate 16ms timestamp delta so logic runs
+            clock.Advance(TimeSpan.FromMilliseconds(16));
+            system.Update(budgetMs: 10.0);
             
-            // 0ms elapsed, requires 5ms
+            // 0ms elapsed locally since start of frame logic, requires 5ms
             Assert.True(system.HasTimeRemaining(5.0));
             
             // Advance clock by 6ms
@@ -83,25 +102,18 @@ namespace Fdp.Tests
         }
         
         [Fact]
-        public void SetFrameTime_ResetsBudgetTimer()
+        public void Step_ResetsBudgetTimer()
         {
             var clock = new ManualTimeProvider();
-            var system = new TimeSystem(clock);
-            system.IsDeterministic = true;
+            var system = new TimeSystem(_repo, clock);
             
             clock.Advance(TimeSpan.FromSeconds(1)); // Some time passed before frame
             
-            // Start deterministic frame with 5ms budget
-            system.SetFrameTime(0.016, budgetMs: 5.0);
+            // Start deterministic frame (Step) -> mocks infinite budget internally
+            system.Step(0.016f);
             
-            // Should verify that budgeting starts counting from NOW
-            // Advance clock 2ms
-            clock.Advance(TimeSpan.FromMilliseconds(2));
-            
-            Assert.True(system.HasTimeRemaining(2.0)); // 5 - 2 = 3 left
-            
-            clock.Advance(TimeSpan.FromMilliseconds(4)); // Total 6ms
-            Assert.False(system.HasTimeRemaining(1.0));
+            // Step sets budget to Infinity
+            Assert.True(system.HasTimeRemaining(99999.0));
         }
     }
     

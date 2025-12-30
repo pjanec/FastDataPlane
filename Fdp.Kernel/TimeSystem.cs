@@ -3,128 +3,147 @@ using System;
 namespace Fdp.Kernel
 {
     /// <summary>
-    /// Manages time tracking, frame deltas, and execution budgeting.
-    /// Supports both deterministic (fixed step) and real-time (clock-based) modes.
-    /// Uses System.TimeProvider for abstracting time sources (testing, real-time).
+    /// Manages the game loop clock and pushes time data into the EntityRepository.
+    /// Supports Real-time (Variable Step) and Deterministic (Fixed Step) modes.
     /// </summary>
     public class TimeSystem
     {
+        private readonly EntityRepository _repo;
         private readonly TimeProvider _timeProvider;
+        
+        private long _lastTimestamp;
+        private double _accumulatedTotalTime;
+        private double _accumulatedUnscaledTotalTime;
+        private ulong _frameCount;
+
+        // Configuration
+        public float TimeScale { get; set; } = 1.0f;
+        public float MaxDeltaTime { get; set; } = 0.1f; // Cap dt to prevent physics explosions during lag spikes
+
+        // Budgeting (for time-sliced systems)
         private long _frameStartTimestamp;
-        private double _frameBudgetMs;
-        private long _lastFrameTimestamp;
+        private double _currentFrameBudgetMs;
 
-        /// <summary>
-        /// Gets the time elapsed since the last frame in seconds.
-        /// </summary>
-        public double DeltaTime { get; private set; }
-
-        /// <summary>
-        /// Gets the total time accumulated since start in seconds.
-        /// </summary>
-        public double TotalTime { get; private set; }
-
-        /// <summary>
-        /// Gets the current frame/tick count.
-        /// </summary>
-        public ulong CurrentTick { get; private set; }
-
-        /// <summary>
-        /// If true, automatic clock reading is disabled and time must be injected via SetFrameTime.
-        /// </summary>
-        public bool IsDeterministic { get; set; }
-
-        /// <summary>
-        /// Initializes a new instance of the TimeSystem.
-        /// </summary>
-        /// <param name="timeProvider">Optional time source. Defaults to System.TimeProvider.System.</param>
-        public TimeSystem(TimeProvider? timeProvider = null)
+        public TimeSystem(EntityRepository repo, TimeProvider? timeProvider = null)
         {
+            _repo = repo ?? throw new ArgumentNullException(nameof(repo));
             _timeProvider = timeProvider ?? TimeProvider.System;
             Reset();
         }
 
-        /// <summary>
-        /// Resets the time system state (TotalTime, Tick, etc).
-        /// </summary>
         public void Reset()
         {
-            TotalTime = 0;
-            CurrentTick = 0;
-            DeltaTime = 0;
-            _lastFrameTimestamp = _timeProvider.GetTimestamp();
-            _frameStartTimestamp = _lastFrameTimestamp;
-            _frameBudgetMs = double.PositiveInfinity;
+            _lastTimestamp = _timeProvider.GetTimestamp();
+            _accumulatedTotalTime = 0;
+            _accumulatedUnscaledTotalTime = 0;
+            _frameCount = 0;
+            _repo.SetSingletonUnmanaged(new GlobalTime { TimeScale = 1.0f });
         }
 
         /// <summary>
-        /// Injects a specific time delta for the current frame.
-        /// Enforces deterministic mode logic.
-        /// Resets the frame budget timer.
+        /// Advances time based on the wall clock (Variable Step).
+        /// Call this at the start of your Game Loop.
         /// </summary>
-        /// <param name="deltaSeconds">The time step to advance.</param>
-        /// <param name="budgetMs">Optional execution budget for this frame in milliseconds.</param>
-        public void SetFrameTime(double deltaSeconds, double budgetMs = double.PositiveInfinity)
+        /// <param name="budgetMs">Optional CPU budget for this frame (for time-slicing).</param>
+        public void Update(double budgetMs = double.PositiveInfinity)
         {
-            // Deterministic mode: Time is advanced explicitly
-            DeltaTime = deltaSeconds;
-            TotalTime += deltaSeconds;
-            CurrentTick++;
-            
-            // Mark start of frame for budgeting purposes
-            _frameStartTimestamp = _timeProvider.GetTimestamp();
-            _frameBudgetMs = budgetMs;
-        }
-
-        /// <summary>
-        /// Advances the frame based on the attached clock (real-time mode).
-        /// Should typically be used when IsDeterministic is false.
-        /// </summary>
-        /// <param name="budgetMs">Optional execution budget for this frame in milliseconds.</param>
-        public void BeginFrame(double budgetMs = double.PositiveInfinity)
-        {
-            if (IsDeterministic)
-            {
-                // In deterministic mode, BeginFrame conceptually just resets the budget timer
-                // assuming SetFrameTime was called or will be called.
-                // However, usually SetFrameTime handles the advance.
-                // We'll just reset the budget anchors here to be safe without advancing time if not asked.
-                _frameStartTimestamp = _timeProvider.GetTimestamp();
-                _frameBudgetMs = budgetMs;
-                return;
-            }
-
             long now = _timeProvider.GetTimestamp();
-            TimeSpan elapsed = _timeProvider.GetElapsedTime(_lastFrameTimestamp, now);
             
-            DeltaTime = elapsed.TotalSeconds;
-            TotalTime += DeltaTime;
-            CurrentTick++;
+            // Calculate raw delta
+            double rawDt = _timeProvider.GetElapsedTime(_lastTimestamp, now).TotalSeconds;
+            _lastTimestamp = now;
 
-            _lastFrameTimestamp = now;
+            // Apply budget tracking
             _frameStartTimestamp = now;
-            _frameBudgetMs = budgetMs;
+            _currentFrameBudgetMs = budgetMs;
+
+            // Apply Caps and Scales
+            float unscaledDt = (float)rawDt;
+            
+            // Prevent spiral of death by capping dt
+            if (unscaledDt > MaxDeltaTime) 
+                unscaledDt = MaxDeltaTime;
+
+            float dt = unscaledDt * TimeScale;
+
+            // Update State
+            _accumulatedTotalTime += dt;
+            _accumulatedUnscaledTotalTime += unscaledDt;
+            _frameCount++;
+
+            // PUSH TO REPOSITORY
+            PushToRepository(dt, unscaledDt);
         }
 
         /// <summary>
-        /// Checks if there is enough budget remaining to perform an operation.
+        /// Advances time by a fixed amount (Deterministic Step).
+        /// Used for Flight Recorder Playback, Unit Tests, or FixedUpdate loops.
         /// </summary>
-        /// <param name="msRequired">Estimated milliseconds required for the operation.</param>
-        /// <returns>True if the operation fits in the remaining budget.</returns>
-        public bool HasTimeRemaining(double msRequired)
+        public void Step(float fixedDeltaTime)
         {
-            if (double.IsPositiveInfinity(_frameBudgetMs))
-                return true;
+            // Update State
+            float unscaledDt = fixedDeltaTime; // Assume 1:1 for fixed steps usually
+            float dt = fixedDeltaTime * TimeScale;
+
+            _accumulatedTotalTime += dt;
+            _accumulatedUnscaledTotalTime += unscaledDt;
+            _frameCount++;
+
+            // Mock budget for fixed steps (infinite)
+            _currentFrameBudgetMs = double.PositiveInfinity;
+            _frameStartTimestamp = _timeProvider.GetTimestamp();
+
+            // PUSH TO REPOSITORY
+            PushToRepository(dt, unscaledDt);
+        }
+
+        /// <summary>
+        /// Forcefully sets the time state (e.g. when seeking in a replay).
+        /// </summary>
+        public void SnapTo(double totalTime, ulong frameCount)
+        {
+            _accumulatedTotalTime = totalTime;
+            _frameCount = frameCount;
+            // Note: We don't change DeltaTime here, the next Update/Step will handle it
+            
+            // Sync internal clock to avoid a huge delta on next Update()
+            _lastTimestamp = _timeProvider.GetTimestamp();
+        }
+
+        private void PushToRepository(float dt, float unscaledDt)
+        {
+            // We use SetSingletonUnmanaged to ensure it goes into the Tier 1 storage
+            // which the Flight Recorder is configured to capture.
+            _repo.SetSingletonUnmanaged(new GlobalTime
+            {
+                DeltaTime = dt,
+                UnscaledDeltaTime = unscaledDt,
+                TotalTime = _accumulatedTotalTime,
+                UnscaledTotalTime = _accumulatedUnscaledTotalTime,
+                FrameCount = _frameCount,
+                TimeScale = TimeScale
+            });
+        }
+
+        // ====================================================================
+        // Budgeting Helpers (For Time-Sliced Systems)
+        // ====================================================================
+
+        /// <summary>
+        /// Checks if there is CPU time remaining in the current frame budget.
+        /// </summary>
+        public bool HasTimeRemaining(double estimatedCostMs)
+        {
+            if (double.IsPositiveInfinity(_currentFrameBudgetMs)) return true;
 
             long now = _timeProvider.GetTimestamp();
             double elapsedMs = _timeProvider.GetElapsedTime(_frameStartTimestamp, now).TotalMilliseconds;
-            double remaining = _frameBudgetMs - elapsedMs;
-
-            return remaining >= msRequired;
+            
+            return (elapsedMs + estimatedCostMs) <= _currentFrameBudgetMs;
         }
-        
+
         /// <summary>
-        /// Gets the elapsed milliseconds spent in the current frame so far.
+        /// Gets ms elapsed since Update() started.
         /// </summary>
         public double GetFrameElapsedMs()
         {
