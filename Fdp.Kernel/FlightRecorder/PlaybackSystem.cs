@@ -254,20 +254,18 @@ namespace Fdp.Kernel.FlightRecorder
         
         private static void RestoreManagedTableAdapter<T>(object tableObj, int chunkIndex, byte[] data, EntityRepository repo) where T : class
         {
-             // We need access to the repository to update entity component masks
-             // This is a limitation of the current design - we need to pass repo through the delegate
-             // For now, let's store it as a static variable that gets set during ApplyFrame
-             RestoreManagedTable((ManagedComponentTable<T>)tableObj, chunkIndex, data);
+             // Pass the repository to RestoreManagedTable so it can update component masks
+             RestoreManagedTable((ManagedComponentTable<T>)tableObj, chunkIndex, data, repo);
         }
 
-        private static void RestoreManagedTable<T>(ManagedComponentTable<T> table, int chunkIndex, byte[] data) where T : class
+        private static void RestoreManagedTable<T>(ManagedComponentTable<T> table, int chunkIndex, byte[] data, EntityRepository repo) where T : class
         {
              using (var ms = new MemoryStream(data))
              using (var reader = new BinaryReader(ms))
              {
                  T?[] chunkData = FdpAutoSerializer.Deserialize<T?[]>(reader);
                  
-                 // We don't have the exact version from the file in this chunk? 
+                 // We don't have the exact version from the file in this chunk. 
                  // The file format: [ChunkID] [CompCount] [TypeID] [Len] [Data]
                  // It doesn't store 'ChunkVersion'.
                  // But we are dealing with a SNAPSHOT or DELTA.
@@ -282,6 +280,10 @@ namespace Fdp.Kernel.FlightRecorder
                  // unless we support further recording *on top* of playback (which assigns new versions anyway).
                  
                  table.SetChunk(chunkIndex, chunkData, 0);
+                 
+                 // NOTE: ComponentMask synchronization is deferred to RepairManagedComponentMasks()
+                 // which runs after ALL chunks (including EntityIndex) have been restored.
+                 // Doing it here would cause IndexOutOfRangeException if EntityIndex chunks aren't loaded yet.
              }
         }
         
