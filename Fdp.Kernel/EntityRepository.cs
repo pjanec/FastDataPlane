@@ -1,0 +1,1201 @@
+using System;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+
+namespace Fdp.Kernel
+{
+    public enum TimeSliceMetric
+    {
+        WallClockTime,
+        EntityCount
+    }
+
+    /// <summary>
+    /// Main ECS repository managing entities and their components.
+    /// Provides high-level API for entity/component operations.
+    /// Thread-safe for entity creation/destruction.
+    /// Component access is NOT thread-safe (by design for performance).
+    /// </summary>
+    public sealed class EntityRepository : IDisposable
+    {
+        private readonly EntityIndex _entityIndex;
+        private readonly Dictionary<Type, IComponentTable> _componentTables;
+        private readonly ComponentMetadataTable _metadata;
+        private readonly object _tableLock = new object();
+        private bool _disposed;
+        
+        // Flight Recorder Destruction Log
+        private readonly List<Entity> _destructionLog = new List<Entity>(128);
+        
+        // Stage 18: Singleton Storage
+        // Index = ComponentType<T>.ID
+        // Value = NativeChunkTable<T> (capacity 1) or ManagedComponentTable<T> (capacity 1)
+        private object[] _singletons;
+        
+        // Versioning for Delta Iterator (Stage 11/16)
+        private uint _globalVersion = 1;
+        
+        /// <summary>
+        /// Global configuration for Time Slicing metric. 
+        /// Set to EntityCount for deterministic simulation.
+        /// </summary>
+        public TimeSliceMetric DefaultTimeSliceMetric { get; set; } = TimeSliceMetric.WallClockTime;
+        
+        // Stage 16: Phase System
+        private Phase _currentPhase = Phase.Initialization;
+        private PhasePermission _currentPhasePermission = PhasePermission.ReadWriteAll; // Cache
+        public Phase CurrentPhase => _currentPhase;
+        
+        /// <summary>
+        /// Configuration for phase transitions and permissions.
+        /// Defaults to strict enforcement.
+        /// </summary>
+        private PhaseConfig _phaseConfig = PhaseConfig.Default;
+        public PhaseConfig PhaseConfig 
+        { 
+            get => _phaseConfig;
+            set
+            {
+                _phaseConfig = value;
+                _phaseConfig?.BuildCache();  // Build ID-based cache for hot path
+                UpdatePermissionCache();
+            }
+        }
+        
+        private void UpdatePermissionCache()
+        {
+            // HOT PATH: Use ID-based lookup
+            if (_phaseConfig != null)
+            {
+                _currentPhasePermission = _phaseConfig.GetPermissionById(_currentPhase.Id);
+            }
+            else
+            {
+                _currentPhasePermission = PhasePermission.ReadWriteAll;
+            }
+        }
+        
+        public EntityRepository()
+        {
+            _entityIndex = new EntityIndex();
+            _componentTables = new Dictionary<Type, IComponentTable>();
+            _metadata = new ComponentMetadataTable();
+            _singletons = new object[64]; // Start with 64 slots, will grow if needed
+            _phaseConfig.BuildCache();  // Build ID cache at initialization
+        }
+        
+        /// <summary>
+        /// Total number of active entities.
+        /// </summary>
+        public int EntityCount => _entityIndex.ActiveCount;
+        
+        /// <summary>
+        /// Highest entity index ever issued (for iteration bounds).
+        /// </summary>
+        public int MaxEntityIndex => _entityIndex.MaxIssuedIndex;
+        
+        /// <summary>
+        /// Current global change version. Incremented by Tick().
+        /// </summary>
+        public uint GlobalVersion => _globalVersion;
+        
+        /// <summary>
+        /// Increments the global version. Should be called at start of frame.
+        /// </summary>
+        public void Tick()
+        {
+            System.Threading.Interlocked.Increment(ref _globalVersion);
+        }
+
+        /// <summary>
+        /// Force sets the global version. Used by PlaybackSystem.
+        /// </summary>
+        internal void SetGlobalVersion(uint version)
+        {
+            _globalVersion = version;
+        }
+        
+        /// <summary>
+        /// Advances or changes the current execution phase.
+        /// </summary>
+        public void SetPhase(Phase phase)
+        {
+            // HOT PATH: Use ID-based transition check (O(1) integer lookups)
+            if (PhaseConfig != null && !PhaseConfig.IsTransitionValidById(_currentPhase.Id, phase.Id))
+            {
+                throw new InvalidOperationException(
+                    $"Invalid phase transition: {_currentPhase} -> {phase}.");
+            }
+            
+            _currentPhase = phase;
+            
+            // Cache permission for the new phase (called only on phase change, not hot path)
+            UpdatePermissionCache();
+        }
+        
+        /// <summary>
+        /// Asserts that the engine is in the required phase.
+        /// Throws WrongPhaseException if not.
+        /// </summary>
+        public void AssertPhase(Phase required)
+        {
+            if (_currentPhase != required)
+                throw new WrongPhaseException(_currentPhase, required);
+        }
+
+        // ================================================
+        // ENTITY LIFECYCLE
+        // ================================================
+        
+        /// <summary>
+        /// Creates a new entity.
+        /// Thread-safe.
+        /// </summary>
+        public Entity CreateEntity()
+        {
+            var entity = _entityIndex.CreateEntity();
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.LastChangeTick = _globalVersion;
+            return entity;
+        }
+
+        /// <summary>
+        /// Returns the list of entities destroyed since the last ClearDestructionLog().
+        /// Used by the Recorder to write the "Destroyed" block.
+        /// </summary>
+        public IReadOnlyList<Entity> GetDestructionLog() => _destructionLog;
+    
+        /// <summary>
+        /// Clears the log. Must be called AFTER the Recorder has run for the frame.
+        /// </summary>
+        public void ClearDestructionLog() => _destructionLog.Clear();
+
+        /// <summary>
+        /// Restores an entity from serialized data.
+        /// Internal use only by serializer.
+        /// </summary>
+        internal void RestoreEntity(int index, bool isActive, int generation, BitMask256 componentMask, DISEntityType disType = default)
+        {
+            // Note: Authority mask matches default (cleared) unless we serialize it later
+            _entityIndex.ForceRestoreEntity(index, isActive, generation, componentMask, disType);
+        }
+        
+        /// <summary>
+        /// Sets the DIS Entity Type in the EntityHeader.
+        /// Optimization: Stored directly in header for single-instruction filtering.
+        /// </summary>
+        public void SetDisType(Entity entity, DISEntityType type)
+        {
+            if (!IsAlive(entity)) throw new InvalidOperationException($"Entity {entity} is not alive");
+            
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.DisType = type;
+            header.LastChangeTick = _globalVersion;
+        }
+
+        internal void Clear()
+        {
+            _entityIndex.Clear();
+            // Optionally clear component tables if needed (managed references) for GC correctness
+            // But relying on overwrite for now.
+        }
+        
+        internal void RebuildFreeList()
+        {
+            _entityIndex.RebuildFreeList();
+        }
+        
+        /// <summary>
+        /// Explicitly registers an unmanaged component type (Tier 1) and allocates its table.
+        /// </summary>
+        public void RegisterUnmanagedComponent<T>() where T : unmanaged
+        {
+            GetTable<T>(true);
+        }
+        
+        /// <summary>
+        /// Destroys an entity and removes all its components.
+        /// Thread-safe.
+        /// </summary>
+        public void DestroyEntity(Entity entity)
+        {
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity))
+                throw new InvalidOperationException($"Entity {entity} is not alive");
+            #endif
+            
+            // Note: Component data is not explicitly cleared (for performance)
+            // The ComponentMask is cleared in EntityIndex.DestroyEntity
+            
+            // RECORDER HOOK: Log destruction before freeing (so we have valid generation)
+            _destructionLog.Add(entity);
+            
+            _entityIndex.DestroyEntity(entity);
+        }
+        
+        /// <summary>
+        /// Checks if an entity is currently alive.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool IsAlive(Entity entity)
+        {
+            return _entityIndex.IsAlive(entity);
+        }
+        
+        // ================================================
+        // COMPONENT MANAGEMENT
+        // ================================================
+        
+        /// <summary>
+        /// Adds an unmanaged component (Tier 1) to an entity.
+        /// Updates ComponentMask automatically.
+        /// </summary>
+        public void AddUnmanagedComponent<T>(Entity entity, in T component) where T : unmanaged
+        {
+            ValidateWriteAccess<T>(entity);
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity))
+                throw new InvalidOperationException($"Entity {entity} is not alive");
+            #endif
+            
+            // Ensure component table exists (must be registered)
+            var table = GetTable<T>(false);
+            
+            // Set component data (updates chunk version)
+            table.Set(entity.Index, component, _globalVersion);
+            
+            // Update component mask
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.ComponentMask.SetBit(ComponentType<T>.ID);
+            header.LastChangeTick = _globalVersion;
+        }
+        
+        /// <summary>
+        /// Removes an unmanaged component (Tier 1) from an entity.
+        /// Updates ComponentMask automatically.
+        /// Component data remains in table but is inaccessible.
+        /// </summary>
+        public void RemoveUnmanagedComponent<T>(Entity entity) where T : unmanaged
+        {
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity))
+                throw new InvalidOperationException($"Entity {entity} is not alive");
+            if (!HasUnmanagedComponent<T>(entity))
+                throw new InvalidOperationException($"Entity {entity} does not have component {typeof(T).Name}");
+            #endif
+            
+            // Clear component mask bit
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.ComponentMask.ClearBit(ComponentType<T>.ID);
+            header.LastChangeTick = _globalVersion;
+            
+            // Note: Component data is not cleared for performance
+            // It will be overwritten if component is re-added
+        }
+        
+        /// <summary>
+        /// Checks if entity has a specific unmanaged component (Tier 1).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool HasUnmanagedComponent<T>(Entity entity) where T : unmanaged
+        {
+            if (!IsAlive(entity))
+                return false;
+            
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            return header.ComponentMask.IsSet(ComponentType<T>.ID);
+        }
+        
+        /// <summary>
+        /// Gets reference to unmanaged component (Tier 1).
+        /// DANGEROUS: Does not validate if component exists!
+        /// Use HasUnmanagedComponent first or ensure component exists via query.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T GetUnmanagedComponent<T>(Entity entity) where T : unmanaged
+        {
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity))
+                throw new InvalidOperationException($"Entity {entity} is not alive");
+            if (!HasUnmanagedComponent<T>(entity))
+                throw new InvalidOperationException($"Entity {entity} does not have component {typeof(T).Name}");
+            #endif
+            
+            var table = GetTable<T>(false);
+            // Legacy/Default: Treat as Read/Write (updates version)
+            return ref table.GetRW(entity.Index, _globalVersion);
+        }
+        
+        /// <summary>
+        /// Gets WRITE access to unmanaged component (Tier 1). Updates chunk version.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T GetUnmanagedComponentRW<T>(Entity entity) where T : unmanaged
+        {
+            ValidateWriteAccess<T>(entity);
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity)) throw new InvalidOperationException($"Entity {entity} is not alive");
+            if (!HasUnmanagedComponent<T>(entity)) throw new InvalidOperationException($"Entity {entity} missing {typeof(T).Name}");
+            #endif
+            return ref GetTable<T>(false).GetRW(entity.Index, _globalVersion);
+        }
+        
+        /// <summary>
+        /// Gets READ-ONLY access to unmanaged component (Tier 1). Does NOT update chunk version.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref readonly T GetUnmanagedComponentRO<T>(Entity entity) where T : unmanaged
+        {
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity)) throw new InvalidOperationException($"Entity {entity} is not alive");
+            if (!HasUnmanagedComponent<T>(entity)) throw new InvalidOperationException($"Entity {entity} missing {typeof(T).Name}");
+            #endif
+            return ref GetTable<T>(false).GetRO(entity.Index);
+        }
+        
+        /// <summary>
+        /// Sets unmanaged component (Tier 1) value.
+        /// Adds component if it doesn't exist.
+        /// </summary>
+        public void SetUnmanagedComponent<T>(Entity entity, in T component) where T : unmanaged
+        {
+            ValidateWriteAccess<T>(entity);
+            
+            if (!HasUnmanagedComponent<T>(entity))
+            {
+                AddUnmanagedComponent(entity, component);
+            }
+            else
+            {
+                var table = GetTable<T>(false);
+                table.Set(entity.Index, component, _globalVersion);
+            }
+        }
+        
+        /// <summary>
+        /// Tries to get component, returns false if not present.
+        /// Safer alternative to GetComponent.
+        /// </summary>
+        public bool TryGetComponent<T>(Entity entity, out T component) where T : unmanaged
+        {
+            component = default;
+            
+            if (!IsAlive(entity))
+                return false;
+            
+            if (!HasUnmanagedComponent<T>(entity))
+                return false;
+            
+            var table = GetTable<T>(false);
+            component = table.Get(entity.Index);
+            return true;
+        }
+
+        /// <summary>
+        /// Sets whether this peer has authority over the specified component.
+        /// Throws if component is missing.
+        /// </summary>
+        public void SetAuthority<T>(Entity entity, bool hasAuthority) where T : unmanaged
+        {
+            if (!IsAlive(entity)) throw new InvalidOperationException($"Entity {entity} is not alive");
+            // Verify component type is registered
+            GetTable<T>(false);
+            
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            int typeId = ComponentType<T>.ID;
+            
+            if (!header.ComponentMask.IsSet(typeId))
+                 throw new InvalidOperationException($"Cannot set authority for {typeof(T).Name}: Entity does not have component.");
+
+            if (hasAuthority)
+                header.AuthorityMask.SetBit(typeId);
+            else
+                header.AuthorityMask.ClearBit(typeId);
+        }
+        
+        /// <summary>
+        /// Checks if this peer has authority over the specified component.
+        /// Returns false if component is missing or no authority.
+        /// </summary>
+        public bool HasAuthority<T>(Entity entity) where T : unmanaged
+        {
+            // Verify component type is registered
+            GetTable<T>(false);
+            
+            if (!IsAlive(entity)) return false;
+            
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            int typeId = ComponentType<T>.ID;
+            return header.AuthorityMask.IsSet(typeId);
+        }
+        
+        private void ValidateWriteAccess<T>(Entity entity) where T : unmanaged
+        {
+            if (_currentPhasePermission == PhasePermission.ReadWriteAll) return;
+            
+            if (_currentPhasePermission == PhasePermission.ReadOnly)
+                  throw new InvalidOperationException($"Phase Error: Cannot modify component {typeof(T).Name} during {_currentPhase} (ReadOnly).");
+            
+            // Allow adding new components (structural change) unless ReadOnly.
+            if (!HasUnmanagedComponent<T>(entity))
+                return;
+
+            bool hasAuth = HasAuthority<T>(entity);
+            
+            if (_currentPhasePermission == PhasePermission.OwnedOnly && !hasAuth)
+                 throw new InvalidOperationException($"Phase Error: Cannot modify REMOTE component {typeof(T).Name} during {_currentPhase} (OwnedOnly).");
+                 
+            if (_currentPhasePermission == PhasePermission.UnownedOnly && hasAuth)
+                 throw new InvalidOperationException($"Phase Error: Cannot modify OWNED component {typeof(T).Name} during {_currentPhase} (UnownedOnly).");
+        }
+        
+        // ================================================
+        // TIER 2: MANAGED COMPONENTS
+        // ================================================
+        
+        /// <summary>
+        /// Registers a managed component type (classes, strings, etc.).
+        /// Tier 2 storage uses GC-managed arrays.
+        /// </summary>
+        public void RegisterManagedComponent<T>() where T : class
+        {
+            Type type = typeof(T);
+            if (_componentTables.ContainsKey(type))
+                return;
+            
+            var table = new ManagedComponentTable<T>();
+            _componentTables[type] = table;
+            
+            // Type ID is auto-assigned via ManagedComponentType<T>.ID
+            _ = ManagedComponentType<T>.ID; // Ensure it's registered
+        }
+        
+        /// <summary>
+        /// Checks if entity has a managed component.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool HasManagedComponent<T>(Entity entity) where T : class
+        {
+            if (!IsAlive(entity))
+                return false;
+            
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            return header.ComponentMask.IsSet(ManagedComponentType<T>.ID);
+        }
+        
+        /// <summary>
+        /// Gets managed component reference (nullable).
+        /// Returns null if component not set.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T? GetManagedComponent<T>(Entity entity) where T : class
+        {
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity))
+                throw new InvalidOperationException($"Entity {entity} is not alive");
+            #endif
+            
+            var table = GetManagedTable<T>(false);
+            return table[entity.Index];
+        }
+        
+        /// <summary>
+        /// Gets managed component for read/write access.
+        /// Allocates if component doesn't exist yet.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T? GetManagedComponentRW<T>(Entity entity) where T : class
+        {
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity))
+                throw new InvalidOperationException($"Entity {entity} is not alive");
+            #endif
+            
+            var table = GetManagedTable<T>(false);
+            return ref table.GetRW(entity.Index, _globalVersion);
+        }
+        
+        /// <summary>
+        /// Gets managed component for read-only access.
+        /// Does not update version or allocate.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T? GetManagedComponentRO<T>(Entity entity) where T : class
+        {
+            var table = GetManagedTable<T>(false);
+            return table.GetRO(entity.Index);
+        }
+        
+        /// <summary>
+        /// Sets (or adds) a managed component.
+        /// </summary>
+        public void SetManagedComponent<T>(Entity entity, T? value) where T : class
+        {
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity))
+                throw new InvalidOperationException($"Entity {entity} is not alive");
+            #endif
+            
+            var table = GetManagedTable<T>(false);
+            table.Set(entity.Index, value, _globalVersion);
+            
+            // Update component mask
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            
+            if (value != null)
+                header.ComponentMask.SetBit(ManagedComponentType<T>.ID);
+            else
+                header.ComponentMask.ClearBit(ManagedComponentType<T>.ID);
+                
+            header.LastChangeTick = _globalVersion;
+        }
+
+        // ================================================
+        // ALIASES (For API Convenience/TKB)
+        // ================================================
+
+        /// <summary>
+        /// Alias for SetUnmanagedComponent. 
+        /// Adds or updates an unmanaged component.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetComponent<T>(Entity entity, in T component) where T : unmanaged
+        {
+            SetUnmanagedComponent(entity, in component);
+        }
+
+        /// <summary>
+        /// Alias for GetUnmanagedComponent.
+        /// Gets an unmanaged component reference.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T GetComponent<T>(Entity entity) where T : unmanaged
+        {
+            return ref GetUnmanagedComponent<T>(entity);
+        }
+
+        /// <summary>
+        /// Alias for HasUnmanagedComponent.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool HasComponent<T>(Entity entity) where T : unmanaged
+        {
+            return HasUnmanagedComponent<T>(entity);
+        }
+
+        /// <summary>
+        /// Alias for RegisterUnmanagedComponent.
+        /// </summary>
+        public void RegisterComponent<T>() where T : unmanaged
+        {
+            RegisterUnmanagedComponent<T>();
+        }
+        
+        /// <summary>
+        /// Adds a managed component to an entity.
+        /// </summary>
+        public void AddManagedComponent<T>(Entity entity, T? value) where T : class
+        {
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity))
+                throw new InvalidOperationException($"Entity {entity} is not alive");
+            if (HasManagedComponent<T>(entity))
+                throw new InvalidOperationException($"Entity {entity} already has component {typeof(T).Name}");
+            #endif
+            
+            SetManagedComponent(entity, value);
+        }
+        
+        /// <summary>
+        /// Removes a managed component from an entity.
+        /// </summary>
+        public void RemoveManagedComponent<T>(Entity entity) where T : class
+        {
+            if (!IsAlive(entity) || !HasManagedComponent<T>(entity))
+                return;
+            
+            var table = GetManagedTable<T>(false);
+            table.Clear(entity.Index);
+            
+            // Update component mask
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.ComponentMask.ClearBit(ManagedComponentType<T>.ID);
+            header.LastChangeTick = _globalVersion;
+        }
+        
+        /// <summary>
+        /// Gets managed component table (Tier 2).
+        /// </summary>
+        private ManagedComponentTable<T> GetManagedTable<T>(bool allowCreate) where T : class
+        {
+            Type type = typeof(T);
+            
+            if (!_componentTables.TryGetValue(type, out var table))
+            {
+                if (!allowCreate)
+                    throw new InvalidOperationException($"Managed component {type.Name} has not been registered. Call RegisterManagedComponent<{type.Name}>() first.");
+                
+                var newTable = new ManagedComponentTable<T>();
+                _componentTables[type] = newTable;
+                return newTable;
+            }
+            
+            return (ManagedComponentTable<T>)table;
+        }
+        
+        // ================================================
+        // COMPONENT TABLE MANAGEMENT (Internal)
+        // ================================================
+        
+        private ComponentTable<T> GetTable<T>(bool allowCreate) where T : unmanaged
+        {
+            Type type = typeof(T);
+            
+            // Fast path: table already exists
+            if (_componentTables.TryGetValue(type, out var existingTable))
+            {
+                return (ComponentTable<T>)existingTable;
+            }
+            
+            if (!allowCreate)
+            {
+                throw new InvalidOperationException($"Component {type.Name} is not registered. Call RegisterComponent<{type.Name}>() first.");
+            }
+            
+            // Slow path: create new table (thread-safe)
+            lock (_tableLock)
+            {
+                // Double-check after acquiring lock
+                if (_componentTables.TryGetValue(type, out existingTable))
+                {
+                    return (ComponentTable<T>)existingTable;
+                }
+                
+                var newTable = new ComponentTable<T>();
+                _componentTables[type] = newTable;
+                return newTable;
+            }
+        }
+        
+        /// <summary>
+        /// Gets component table for advanced scenarios.
+        /// Creates table if it doesn't exist.
+        /// </summary>
+        public ComponentTable<T> GetComponentTable<T>() where T : unmanaged
+        {
+            return GetTable<T>(false);
+        }
+
+        /// <summary>
+        /// Tries to get the component table for a given type (Unmanaged or Managed).
+        /// Returns false if not registered/found, unless allowCreate is true (and it's registered).
+        /// Since this is generic-less, we assume type is valid.
+        /// </summary>
+        public bool TryGetTable(Type type, out IComponentTable table)
+        {
+            return _componentTables.TryGetValue(type, out table);
+        }
+        /// WARNING: Direct header access bypasses safety checks!
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref EntityHeader GetHeader(int entityIndex)
+        {
+            return ref _entityIndex.GetHeader(entityIndex);
+        }
+        
+        /// <summary>
+        /// Gets the EntityIndex for advanced scenarios (iteration, chunk access).
+        /// </summary>
+        public EntityIndex GetEntityIndex()
+        {
+            return _entityIndex;
+        }
+        
+        /// <summary>
+        /// Gets all registered component tables.
+        /// Used by Flight Recorder for serialization.
+        /// </summary>
+        public IReadOnlyDictionary<Type, IComponentTable> GetRegisteredComponentTypes()
+        {
+            return _componentTables;
+        }
+        
+        // ================================================
+        // QUERY API
+        // ================================================
+        
+        /// <summary>
+        /// Creates a new query builder for filtering entities.
+        /// Use fluent API: repo.Query().With<Position>().Without<Velocity>().Build()
+        /// </summary>
+        public QueryBuilder Query()
+        {
+            return new QueryBuilder(this);
+        }
+        
+        /// <summary>
+        /// Iterates entities that match the query AND have changed since the specified version.
+        /// Checks structural changes (EntityHeader) and component value changes (Chunk Version).
+        /// </summary>
+        public void QueryDelta(EntityQuery query, uint sinceVersion, Action<Entity> action)
+        {
+            // 1. Resolve tables involved in query
+            var tables = new List<IComponentTable>();
+            int typeCount = ComponentTypeRegistry.RegisteredCount;
+            for (int id = 0; id < typeCount; id++)
+            {
+                if (query.IncludeMask.IsSet(id))
+                {
+                    Type? t = ComponentTypeRegistry.GetType(id);
+                    if (t != null && _componentTables.TryGetValue(t, out var table))
+                    {
+                        tables.Add(table);
+                    }
+                }
+            }
+            
+            int maxIndex = _entityIndex.MaxIssuedIndex;
+            
+            // 2. Iterate entities
+            // Optimization TODO: Use Chunk Skipping if possible (requires aligned chunks or block checks)
+            // For now, linear scan with O(1) version checks is reasonably fast.
+            for (int i = 0; i <= maxIndex; i++)
+            {
+                 ref var header = ref _entityIndex.GetHeader(i);
+                 if (!header.IsActive) continue;
+                 
+                 bool changed = false;
+                 
+                 // Check structural change (Header version)
+                 if (header.LastChangeTick > sinceVersion)
+                 {
+                     changed = true;
+                 }
+                 else
+                 {
+                     // Check component value changes
+                     foreach (var table in tables)
+                     {
+                         if (table.GetVersionForEntity(i) > sinceVersion)
+                         {
+                             changed = true;
+                             break;
+                         }
+                     }
+                 }
+                 
+                 if (changed)
+                 {
+                     // Verify Query Match
+                     // Note: We create Entity struct to pass to logic, checking Generation implicitly matching header
+                     if (query.Matches(i, header))
+                     {
+                         action(new Entity(i, header.Generation));
+                     }
+                 }
+            }
+        
+        }
+        
+        /// <summary>
+        /// Iterates entities with a time budget using the DefaultTimeSliceMetric.
+        /// </summary>
+        public void QueryTimeSliced(EntityQuery query, IteratorState state, double budget, Action<Entity> action)
+        {
+            QueryTimeSliced(query, state, budget, DefaultTimeSliceMetric, action);
+        }
+
+        /// <summary>
+        /// Iterates entities with a time budget. Resumes from where it left off.
+        /// </summary>
+        public void QueryTimeSliced(EntityQuery query, IteratorState state, double budget, TimeSliceMetric metric, Action<Entity> action)
+        {
+            if (state == null) throw new ArgumentNullException(nameof(state));
+            
+            // Allow restarting automatically if previously complete
+            if (state.IsComplete) state.Reset();
+            
+            int maxIndex = _entityIndex.MaxIssuedIndex;
+            long startTick = (metric == TimeSliceMetric.WallClockTime && budget > 0) ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+            double freq = System.Diagnostics.Stopwatch.Frequency;
+            int checkInterval = 64; // Check time every 64 entities
+            int processedCount = 0;
+            
+            for (int i = state.NextEntityId; i <= maxIndex; i++)
+            {
+                // Verify entity matches
+                ref var header = ref _entityIndex.GetHeader(i);
+                if (header.IsActive && query.Matches(i, header))
+                {
+                    action(new Entity(i, header.Generation));
+                    processedCount++;
+                }
+                
+                // Check limit
+                if (metric == TimeSliceMetric.EntityCount && processedCount >= (int)budget)
+                {
+                    state.NextEntityId = i + 1;
+                    state.IsComplete = false;
+                    return;
+                }
+                
+                // Check budget periodically (Wall Clock)
+                if (metric == TimeSliceMetric.WallClockTime && (i % checkInterval) == 0)
+                {
+                    long currentTick = System.Diagnostics.Stopwatch.GetTimestamp();
+                    double elapsedMs = (currentTick - startTick) * 1000.0 / freq;
+                    
+                    if (elapsedMs >= budget)
+                    {
+                        // Time's up! Save state and exit
+                        state.NextEntityId = i + 1;
+                        state.IsComplete = false;
+                        return;
+                    }
+                }
+            }
+            
+            // Completed
+            state.IsComplete = true;
+            state.NextEntityId = 0;
+        }
+
+        
+        // ================================================
+        // MULTI-PART METADATA (Stage 10)
+        // ================================================
+        
+        /// <summary>
+        /// Sets the part descriptor for a component on an entity.
+        /// Used for network synchronization to track which parts are present.
+        /// </summary>
+        public void SetPartDescriptor<T>(Entity entity, PartDescriptor descriptor) where T : unmanaged
+        {
+            #if FDP_PARANOID_MODE
+            if (!IsAlive(entity))
+                throw new InvalidOperationException($"Entity {entity} is not alive");
+            if (!HasUnmanagedComponent<T>(entity))
+                throw new InvalidOperationException($"Entity {entity} does not have component {typeof(T).Name}");
+            #endif
+            
+            _metadata.SetPartDescriptor(entity.Index, ComponentType<T>.ID, descriptor);
+        }
+        
+        /// <summary>
+        /// Gets the part descriptor for a component on an entity.
+        /// Returns full descriptor if not explicitly set.
+        /// </summary>
+        public PartDescriptor GetPartDescriptor<T>(Entity entity) where T : unmanaged
+        {
+            return _metadata.GetPartDescriptor(entity.Index, ComponentType<T>.ID);
+        }
+        
+        /// <summary>
+        /// Checks if a specific part is present for a component.
+        /// </summary>
+        public bool HasPart<T>(Entity entity, int partIndex) where T : unmanaged
+        {
+            return _metadata.HasPart(entity.Index, ComponentType<T>.ID, partIndex);
+        }
+        
+        /// <summary>
+        /// Gets the metadata table for advanced scenarios.
+        /// </summary>
+        public ComponentMetadataTable GetMetadataTable()
+        {
+            return _metadata;
+        }
+        
+        // ================================================
+        // RAW COMPONENT ACCESS (For EntityCommandBuffer)
+        // ================================================
+        
+        /// <summary>
+        /// Adds a component using raw bytes (type-erased).
+        /// Used internally by EntityCommandBuffer during playback.
+        /// </summary>
+        internal unsafe void AddComponentRaw(Entity entity, int typeId, IntPtr dataPtr, int size)
+        {
+            if (!IsAlive(entity)) return;
+            
+            Type? componentType = ComponentTypeRegistry.GetType(typeId);
+            if (componentType == null)
+                throw new InvalidOperationException($"Component type ID {typeId} not registered");
+            
+            if (!_componentTables.TryGetValue(componentType, out var table))
+                throw new InvalidOperationException($"Component {componentType.Name} not registered. Call RegisterComponent first.");
+            
+            // Use the raw write interface
+            table.SetRaw(entity.Index, dataPtr, size, _globalVersion);
+            
+            // Update component mask
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.ComponentMask.SetBit(typeId);
+            header.LastChangeTick = _globalVersion;
+        }
+        
+        /// <summary>
+        /// Sets a component using raw bytes (type-erased).
+        /// Used internally by EntityCommandBuffer during playback.
+        /// </summary>
+        internal unsafe void SetComponentRaw(Entity entity, int typeId, IntPtr dataPtr, int size)
+        {
+            if (!IsAlive(entity)) return;
+            
+            Type? componentType = ComponentTypeRegistry.GetType(typeId);
+            if (componentType == null)
+                throw new InvalidOperationException($"Component type ID {typeId} not registered");
+            
+            if (!_componentTables.TryGetValue(componentType, out var table))
+                throw new InvalidOperationException($"Component {componentType.Name} not registered. Call RegisterComponent first.");
+            
+            // Use the raw write interface
+            table.SetRaw(entity.Index, dataPtr, size, _globalVersion);
+            
+            // Update component mask (in case it wasn't set)
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.ComponentMask.SetBit(typeId);
+            header.LastChangeTick = _globalVersion;
+        }
+        
+        /// <summary>
+        /// Removes a component by type ID (type-erased).
+        /// Used internally by EntityCommandBuffer during playback.
+        /// </summary>
+        internal void RemoveComponentRaw(Entity entity, int typeId)
+        {
+            if (!IsAlive(entity)) return;
+            
+            // Clear component mask bit
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.ComponentMask.ClearBit(typeId);
+            header.LastChangeTick = _globalVersion;
+        }
+        
+        /// <summary>
+        /// Adds a managed component using object reference (type-erased).
+        /// Used internally by EntityCommandBuffer during playback.
+        /// </summary>
+        internal void AddManagedComponentRaw(Entity entity, int typeId, object componentObj)
+        {
+            if (!IsAlive(entity)) return;
+            
+            Type? componentType = ComponentTypeRegistry.GetType(typeId);
+            if (componentType == null)
+                throw new InvalidOperationException($"Component type ID {typeId} not registered");
+            
+            if (!_componentTables.TryGetValue(componentType, out var table))
+                throw new InvalidOperationException($"Component {componentType.Name} not registered. Call RegisterManagedComponent first.");
+            
+            // Cast to managed table and set
+            var managedTable = table as dynamic; // Use dynamic to avoid generic constraint issues
+            managedTable[entity.Index] = componentObj;
+            
+            // Update component mask
+            ref var header2 = ref _entityIndex.GetHeader(entity.Index);
+            header2.ComponentMask.SetBit(typeId);
+            header2.LastChangeTick = _globalVersion;
+        }
+        
+        /// <summary>
+        /// Sets a managed component using object reference (type-erased).
+        /// Used internally by EntityCommand Buffer during playback.
+        /// </summary>
+        internal void SetManagedComponentRaw(Entity entity, int typeId, object componentObj)
+        {
+            if (!IsAlive(entity)) return;
+            
+            Type? componentType = ComponentTypeRegistry.GetType(typeId);
+            if (componentType == null)
+                throw new InvalidOperationException($"Component type ID {typeId} not registered");
+            
+            if (!_componentTables.TryGetValue(componentType, out var table))
+                throw new InvalidOperationException($"Component {componentType.Name} not registered. Call RegisterManagedComponent first.");
+            
+            // Cast to managed table and set
+            var managedTable = table as dynamic;
+            managedTable[entity.Index] = componentObj;
+            
+            // Update component mask
+            ref var header2 = ref _entityIndex.GetHeader(entity.Index);
+            header2.ComponentMask.SetBit(typeId);
+            header2.LastChangeTick = _globalVersion;
+        }
+        
+        /// <summary>
+        /// Removes a managed component (type-erased).
+        /// Used internally by EntityCommandBuffer during playback.
+        /// </summary>
+        internal void RemoveManagedComponentRaw(Entity entity, int typeId)
+        {
+            if (!IsAlive(entity)) return;
+            
+            Type? componentType = ComponentTypeRegistry.GetType(typeId);
+            if (componentType == null)
+                throw new InvalidOperationException($"Component type ID {typeId} not registered");
+            
+            if (!_componentTables.TryGetValue(componentType, out var table))
+                return; // Component not registered, nothing to remove
+            
+            // Cast to managed table and clear
+            var managedTable = table as dynamic;
+            managedTable[entity.Index] = null;
+            
+            // Clear component mask bit
+            ref var header2 = ref _entityIndex.GetHeader(entity.Index);
+            header2.ComponentMask.ClearBit(typeId);
+            header2.LastChangeTick = _globalVersion;
+        }
+        
+        // =========================================================
+        // STAGE 18: SINGLETON API (Global Components)
+        // =========================================================
+        
+        /// <summary>
+        /// Sets or updates a global singleton component (unmanaged).
+        /// Allocates Tier 1 memory if it doesn't exist.
+        /// Use this for struct/value types that you want ref access to.
+        /// </summary>
+        public void SetSingletonUnmanaged<T>(T value) where T : unmanaged
+        {
+            int typeId = ComponentType<T>.ID;  // Will auto-register via ComponentType<T>
+            EnsureSingletonCapacity(typeId);
+            
+            // Lazy allocation
+            if (_singletons[typeId] == null)
+            {
+                // Tier 1: Create table with just one slot
+                var table = new NativeChunkTable<T>();
+                _singletons[typeId] = table;
+            }
+            
+            // Write data
+            var storage = (NativeChunkTable<T>)_singletons[typeId];
+            storage[0] = value;
+        }
+        
+        /// <summary>
+        /// Sets or updates a global singleton component (managed).
+        /// Allocates Tier 2 memory if it doesn't exist.
+        /// Use this for class/reference types.
+        /// </summary>
+        public void SetSingletonManaged<T>(T value) where T : class
+        {
+            int typeId = ManagedComponentType<T>.ID;  // Will auto-register via ManagedComponentType<T>
+            EnsureSingletonCapacity(typeId);
+            
+            // Lazy allocation
+            if (_singletons[typeId] == null)
+            {
+                // Tier 2: Create managed table
+                var table = new ManagedComponentTable<T>();
+                _singletons[typeId] = table;
+            }
+            
+            // Write data
+            var storage = (ManagedComponentTable<T>)_singletons[typeId];
+            storage[0] = value;
+        }
+        
+        /// <summary>
+        /// Gets a reference to the global singleton component (unmanaged structs only).
+        /// Throws if not set.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref T GetSingletonUnmanaged<T>() where T : unmanaged
+        {
+            int typeId = ComponentType<T>.ID;
+            
+            #if FDP_PARANOID_MODE
+            if (typeId >= _singletons.Length || _singletons[typeId] == null)
+                throw new InvalidOperationException(
+                    $"Singleton {typeof(T).Name} not set. Call SetSingletonUnmanaged<{typeof(T).Name}>() first.");
+            #endif
+            
+            // Fast path: direct cast and access
+            var storage = (NativeChunkTable<T>)_singletons[typeId];
+            return ref storage[0];
+        }
+        
+        /// <summary>
+        /// Gets the global singleton component (managed classes).
+        /// Throws if not set.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T GetSingletonManaged<T>() where T : class
+        {
+            int typeId = ManagedComponentType<T>.ID;
+            
+            #if FDP_PARANOID_MODE
+            if (typeId >= _singletons.Length || _singletons[typeId] == null)
+                throw new InvalidOperationException(
+                    $"Singleton {typeof(T).Name} not set. Call SetSingletonManaged<{typeof(T).Name}>() first.");
+            #endif
+            
+            var storage = (ManagedComponentTable<T>)_singletons[typeId];
+            return storage[0];
+        }
+        
+        /// <summary>
+        /// Checks if a singleton has been set.
+        /// </summary>
+        public bool HasSingleton<T>() where T : unmanaged
+        {
+            int typeId = ComponentType<T>.ID;
+            if (typeId >= _singletons.Length) return false;
+            return _singletons[typeId] != null;
+        }
+        
+        /// <summary>
+        /// Checks if a managed singleton has been set.
+        /// </summary>
+        public bool HasSingletonManaged<T>() where T : class
+        {
+            int typeId = ManagedComponentType<T>.ID;
+            if (typeId >= _singletons.Length) return false;
+            return _singletons[typeId] != null;
+        }
+        
+        /// <summary>
+        /// Ensures singleton array has capacity for the given type ID.
+        /// </summary>
+        private void EnsureSingletonCapacity(int typeId)
+        {
+            if (typeId >= _singletons.Length)
+            {
+                int newSize = Math.Max(_singletons.Length * 2, typeId + 1);
+                Array.Resize(ref _singletons, newSize);
+            }
+        }
+        
+        public void Dispose()
+        {
+            if (_disposed) return;
+            
+            // Dispose all component tables
+            foreach (var table in _componentTables.Values)
+            {
+                table?.Dispose();
+            }
+            _componentTables.Clear();
+            
+            // Dispose singletons
+            for (int i = 0; i < _singletons.Length; i++)
+            {
+                if (_singletons[i] is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+                _singletons[i] = default!;
+            }
+            
+            // Dispose metadata
+            _metadata?.Dispose();
+            
+            // Dispose entity index
+            _entityIndex?.Dispose();
+            
+            _disposed = true;
+        }
+    }
+}

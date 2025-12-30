@@ -1,0 +1,2 @@
+﻿# Overview
+Fast Data Plane (FDP) engine is a high-performance, hybrid (managed/unmanaged) Entity Component System specifically architected for deterministic military simulations and networked environments. It prioritizes memory layout control (cache locality) and zero-allocation patterns over syntactic sugar, utilizing advanced C# features like pointers, SIMD/AVX2 intrinsics, and direct OS memory allocation.

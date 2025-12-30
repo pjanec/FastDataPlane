@@ -1,0 +1,306 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+
+namespace Fdp.Kernel.FlightRecorder
+{
+    /// <summary>
+    /// Advanced playback controller with seeking, fast-forward, and rewind capabilities.
+    /// Maintains frame index for random access.
+    /// </summary>
+    public class PlaybackController : IDisposable
+    {
+        private readonly FileStream _fileStream;
+        private readonly BinaryReader _reader;
+        private readonly PlaybackSystem _playback;
+        private readonly List<FrameMetadata> _frameIndex;
+        
+        private int _currentFrameIndex = -1;
+        private long _headerEndPosition;
+        
+        public uint FormatVersion { get; private set; }
+        public long RecordingTimestamp { get; private set; }
+        public int TotalFrames => _frameIndex.Count;
+        public int CurrentFrame => _currentFrameIndex;
+        public bool IsAtEnd => _currentFrameIndex >= _frameIndex.Count - 1;
+        public bool IsAtStart => _currentFrameIndex < 0;
+        
+        public PlaybackController(string filePath)
+        {
+            _fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            _reader = new BinaryReader(_fileStream);
+            _playback = new PlaybackSystem();
+            _frameIndex = new List<FrameMetadata>();
+            
+            ReadGlobalHeader();
+            BuildFrameIndex();
+        }
+        
+        private void ReadGlobalHeader()
+        {
+            // Read magic
+            byte[] magic = _reader.ReadBytes(6);
+            string magicStr = System.Text.Encoding.ASCII.GetString(magic);
+            
+            if (magicStr != "FDPREC")
+            {
+                throw new InvalidDataException($"Invalid file format. Expected 'FDPREC', got '{magicStr}'");
+            }
+            
+            // Read version
+            FormatVersion = _reader.ReadUInt32();
+            
+            if (FormatVersion != FdpConfig.FORMAT_VERSION)
+            {
+                throw new InvalidDataException(
+                    $"Format version mismatch. File version: {FormatVersion}, Expected: {FdpConfig.FORMAT_VERSION}");
+            }
+            
+            // Read timestamp
+            RecordingTimestamp = _reader.ReadInt64();
+            
+            _headerEndPosition = _fileStream.Position;
+        }
+        
+        /// <summary>
+        /// Builds an index of all frames in the file for fast seeking.
+        /// </summary>
+        private void BuildFrameIndex()
+        {
+            _frameIndex.Clear();
+            _fileStream.Position = _headerEndPosition;
+            
+            while (_fileStream.Position < _fileStream.Length)
+            {
+                try
+                {
+                    long frameStart = _fileStream.Position;
+                    int frameSize = _reader.ReadInt32();
+                    
+                    if (frameSize <= 0 || frameSize > 32 * 1024 * 1024)
+                    {
+                        break; // Invalid or end of file
+                    }
+                    
+                    // Peek at frame metadata without reading the whole frame
+                    long dataStart = _fileStream.Position;
+                    ulong tick = _reader.ReadUInt64();
+                    byte frameType = _reader.ReadByte();
+                    
+                    _frameIndex.Add(new FrameMetadata
+                    {
+                        FilePosition = frameStart,
+                        FrameSize = frameSize,
+                        Tick = tick,
+                        FrameType = (FrameType)frameType
+                    });
+                    
+                    // Skip to next frame
+                    _fileStream.Position = dataStart + frameSize;
+                }
+                catch (EndOfStreamException)
+                {
+                    break;
+                }
+            }
+        }
+        
+        /// <summary>
+        /// Plays the next frame. Returns false if at end.
+        /// </summary>
+        public bool StepForward(EntityRepository repo)
+        {
+            if (IsAtEnd)
+                return false;
+            
+            _currentFrameIndex++;
+            ApplyFrame(repo, _currentFrameIndex);
+            return true;
+        }
+        
+        /// <summary>
+        /// Rewinds to the previous keyframe and replays to the previous frame.
+        /// Returns false if at start.
+        /// </summary>
+        public bool StepBackward(EntityRepository repo)
+        {
+            if (_currentFrameIndex <= 0)
+                return false;
+            
+            int targetFrame = _currentFrameIndex - 1;
+            
+            // Find the last keyframe before target
+            int keyframeIndex = FindPreviousKeyframe(targetFrame);
+            
+            // Seek to keyframe and replay to target
+            SeekToFrame(repo, targetFrame, keyframeIndex);
+            
+            return true;
+        }
+        
+        /// <summary>
+        /// Seeks to a specific frame index.
+        /// Automatically finds the nearest keyframe and replays from there.
+        /// </summary>
+        public void SeekToFrame(EntityRepository repo, int frameIndex)
+        {
+            if (frameIndex < 0 || frameIndex >= _frameIndex.Count)
+                throw new ArgumentOutOfRangeException(nameof(frameIndex));
+            
+            int keyframeIndex = FindPreviousKeyframe(frameIndex);
+            SeekToFrame(repo, frameIndex, keyframeIndex);
+        }
+        
+        private void SeekToFrame(EntityRepository repo, int targetFrame, int startKeyframe)
+        {
+            // Apply keyframe
+            ApplyFrame(repo, startKeyframe);
+            _currentFrameIndex = startKeyframe;
+            
+            // Replay deltas up to target
+            while (_currentFrameIndex < targetFrame)
+            {
+                _currentFrameIndex++;
+                ApplyFrame(repo, _currentFrameIndex);
+            }
+        }
+        
+        /// <summary>
+        /// Seeks to a specific simulation tick.
+        /// </summary>
+        public void SeekToTick(EntityRepository repo, ulong tick)
+        {
+            // Find frame with matching or closest tick
+            int frameIndex = -1;
+            for (int i = 0; i < _frameIndex.Count; i++)
+            {
+                if (_frameIndex[i].Tick >= tick)
+                {
+                    frameIndex = i;
+                    break;
+                }
+            }
+            
+            if (frameIndex == -1)
+                frameIndex = _frameIndex.Count - 1;
+            
+            SeekToFrame(repo, frameIndex);
+        }
+        
+        /// <summary>
+        /// Rewinds to the start (first keyframe).
+        /// </summary>
+        public void Rewind(EntityRepository repo)
+        {
+            if (_frameIndex.Count > 0)
+            {
+                SeekToFrame(repo, 0);
+            }
+        }
+        
+        /// <summary>
+        /// Fast-forwards by applying frames without invoking systems.
+        /// Useful for quickly reaching a specific point in the recording.
+        /// </summary>
+        public void FastForward(EntityRepository repo, int frameCount)
+        {
+            int targetFrame = Math.Min(_currentFrameIndex + frameCount, _frameIndex.Count - 1);
+            SeekToFrame(repo, targetFrame);
+        }
+        
+        /// <summary>
+        /// Plays all frames from current position to end.
+        /// </summary>
+        public void PlayToEnd(EntityRepository repo, Action<int, int>? progressCallback = null)
+        {
+            while (!IsAtEnd)
+            {
+                StepForward(repo);
+                progressCallback?.Invoke(_currentFrameIndex, _frameIndex.Count);
+            }
+        }
+        
+        /// <summary>
+        /// Gets metadata for a specific frame without applying it.
+        /// </summary>
+        public FrameMetadata GetFrameMetadata(int frameIndex)
+        {
+            if (frameIndex < 0 || frameIndex >= _frameIndex.Count)
+                throw new ArgumentOutOfRangeException(nameof(frameIndex));
+            
+            return _frameIndex[frameIndex];
+        }
+        
+        /// <summary>
+        /// Gets all keyframe indices.
+        /// </summary>
+        public List<int> GetKeyframeIndices()
+        {
+            var keyframes = new List<int>();
+            for (int i = 0; i < _frameIndex.Count; i++)
+            {
+                if (_frameIndex[i].FrameType == FrameType.Keyframe)
+                {
+                    keyframes.Add(i);
+                }
+            }
+            return keyframes;
+        }
+        
+        private int FindPreviousKeyframe(int fromFrame)
+        {
+            for (int i = fromFrame; i >= 0; i--)
+            {
+                if (_frameIndex[i].FrameType == FrameType.Keyframe)
+                {
+                    return i;
+                }
+            }
+            return 0; // Should always find at least one keyframe
+        }
+        
+        private void ApplyFrame(EntityRepository repo, int frameIndex)
+        {
+            var metadata = _frameIndex[frameIndex];
+            
+            // Seek to frame position
+            _fileStream.Position = metadata.FilePosition;
+            
+            // Read frame size (already in metadata, but need to advance stream)
+            _reader.ReadInt32();
+            
+            // Read frame data
+            byte[] frameData = _reader.ReadBytes(metadata.FrameSize);
+            
+            // Apply frame
+            using (var ms = new MemoryStream(frameData))
+            using (var frameReader = new BinaryReader(ms))
+            {
+                _playback.ApplyFrame(repo, frameReader);
+            }
+        }
+        
+        public void Dispose()
+        {
+            _reader?.Dispose();
+            _fileStream?.Dispose();
+        }
+    }
+    
+    /// <summary>
+    /// Metadata about a recorded frame.
+    /// </summary>
+    public struct FrameMetadata
+    {
+        public long FilePosition;
+        public int FrameSize;
+        public ulong Tick;
+        public FrameType FrameType;
+    }
+    
+    public enum FrameType : byte
+    {
+        Delta = 0,
+        Keyframe = 1
+    }
+}

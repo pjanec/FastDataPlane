@@ -1,0 +1,430 @@
+using System;
+using System.IO;
+
+namespace Fdp.Kernel.FlightRecorder
+{
+    /// <summary>
+    /// Playback system for Flight Recorder snapshots.
+    /// Implements FDP-DES-005 design for state restoration.
+    /// </summary>
+    public class PlaybackSystem
+    {
+        private readonly byte[] _scratchBuffer = new byte[FdpConfig.CHUNK_SIZE_BYTES];
+
+        private delegate void ManagedRestorerDelegate(object table, int chunkIndex, byte[] data, EntityRepository repo);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, ManagedRestorerDelegate> _managedRestorers = new();
+        
+        /// <summary>
+        /// Applies a recorded frame to the repository.
+        /// Handles both keyframes and deltas.
+        /// </summary>
+        /// <param name="repo">Entity repository</param>
+        /// <param name="reader">Binary reader to read from</param>
+        /// <param name="eventBus">Optional event bus for event restoration</param>
+        /// <param name="processEvents">If false, skips event processing (for seeking/fast-forward)</param>
+        public void ApplyFrame(EntityRepository repo, BinaryReader reader, FdpEventBus? eventBus = null, bool processEvents = true)
+        {
+            ulong tick = reader.ReadUInt64();
+            repo.SetGlobalVersion((uint)tick);
+            byte frameType = reader.ReadByte();
+            
+            // 1. APPLY DESTRUCTIONS (Delta Only)
+            if (frameType == 0)
+            {
+                // ...
+                int dCount = reader.ReadInt32();
+                for (int i = 0; i < dCount; i++)
+                {
+                    int idx = reader.ReadInt32();
+                    ushort gen = reader.ReadUInt16();
+                    
+                    // Logic: If entity exists and matches gen, kill it.
+                    var e = new Entity(idx, gen);
+                    if (repo.IsAlive(e))
+                    {
+                        repo.DestroyEntity(e);
+                    }
+                }
+            }
+            else if (frameType == 1)
+            {
+                // Keyframe - Full state reset
+                repo.Clear();
+                
+                // Keyframe - no destructions, skip destruction count
+                int dCount = reader.ReadInt32();
+            }
+            
+            // 2. RESTORE EVENTS (if eventBus provided)
+            ReadAndInjectEvents(reader, eventBus, processEvents);
+
+            
+            // 3. APPLY CHUNKS
+            int cCount = reader.ReadInt32();
+            for (int i = 0; i < cCount; i++)
+            {
+                int chunkId = reader.ReadInt32();
+                int compCount = reader.ReadInt32();
+                
+                for (int j = 0; j < compCount; j++)
+                {
+                    int typeId = reader.ReadInt32();
+                    int len = reader.ReadInt32();
+                    
+                    if (len > 0)
+                    {
+                        byte[] data = reader.ReadBytes(len);
+                        
+                        // LOGIC:
+                        // 1. Find the component table for typeId
+                        // 2. Memcpy 'data' DIRECTLY into the table at chunkId
+                        // 3. Implicit Creation: The data contains the components for entities.
+                        //    If the EntityIndex marks them as dead, we must "Revive" them.
+                        
+                        ApplyChunkData(repo, typeId, chunkId, data);
+                    }
+                }
+            }
+            
+            // 4. INDEX REPAIR PASS
+            // After applying all chunk data, we need to synchronize the EntityIndex
+            // Metadata (ActiveCount, MaxIssuedIndex, etc.) needs to be rebuilt from the restored headers
+            repo.GetEntityIndex().RebuildMetadata();
+        }
+
+        /// <summary>
+        /// Reads events from the binary reader and injects them into the event bus.
+        /// Format: [UnmanagedStreamCount][...unmanaged...] [ManagedStreamCount][...managed...]
+        /// Creates event streams on-demand - no registration needed!
+        /// </summary>
+        private void ReadAndInjectEvents(BinaryReader reader, FdpEventBus? eventBus, bool processEvents)
+        {
+            // ========== UNMANAGED EVENTS ==========
+            int unmanagedStreamCount = reader.ReadInt32();
+            
+            if (eventBus == null || !processEvents)
+            {
+                // Skip unmanaged events
+                for (int i = 0; i < unmanagedStreamCount; i++)
+                {
+                    reader.ReadInt32(); // typeId
+                    int elementSize = reader.ReadInt32(); // elementSize
+                    int count = reader.ReadInt32(); // count
+                    reader.BaseStream.Seek((long)count * elementSize, System.IO.SeekOrigin.Current);
+                }
+            }
+            else
+            {
+                eventBus.ClearCurrentBuffers();
+                
+                for (int i = 0; i < unmanagedStreamCount; i++)
+                {
+                    int typeId = reader.ReadInt32();
+                    int elementSize = reader.ReadInt32();
+                    int count = reader.ReadInt32();
+                    int byteCount = count * elementSize;
+                    
+                    byte[] eventData = reader.ReadBytes(byteCount);
+                    eventBus.InjectIntoCurrentBySize(typeId, elementSize, eventData);
+                }
+            }
+            
+            // ========== MANAGED EVENTS ==========
+            int managedStreamCount = reader.ReadInt32();
+            
+            if (managedStreamCount == 0) return; // No managed events
+
+            
+            if (eventBus == null || !processEvents)
+            {
+                // Skip managed events
+                for (int i = 0; i < managedStreamCount; i++)
+                {
+                    reader.ReadInt32(); // typeId
+                    reader.ReadInt32(); // elementSize (0)
+                    string typeName = reader.ReadString();
+                    int count = reader.ReadInt32();
+                    
+                    // Can't skip efficiently without knowing byte length
+                    throw new NotImplementedException(
+                        "Seeking through managed events requires storing byte length in file format.");
+                }
+            }
+            else
+            {
+                for (int i = 0; i < managedStreamCount; i++)
+                {
+                    int typeId = reader.ReadInt32();
+                    reader.ReadInt32(); // elementSize (0)
+                    string typeName = reader.ReadString();
+                    int count = reader.ReadInt32();
+                    
+                    // Resolve type from fully qualified name
+                    Type? eventType = Type.GetType(typeName);
+                    if (eventType == null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Cannot deserialize managed event - type '{typeName}' not found. " +
+                            "Ensure the assembly containing this type is loaded.");
+                    }
+                    
+                    // Deserialize events using reflection to call FdpAutoSerializer.Deserialize<T>()
+                    var events = new System.Collections.Generic.List<object>(count);
+                    var deserializeMethod = typeof(FdpAutoSerializer)
+                        .GetMethod("Deserialize", new[] { typeof(BinaryReader) })!
+                        .MakeGenericMethod(eventType);
+                    
+                    for (int j = 0; j < count; j++)
+                    {
+                        object evt = deserializeMethod.Invoke(null, new object[] { reader })!;
+                        events.Add(evt);
+                    }
+                    
+                    // Inject into event bus
+                    eventBus.InjectManagedIntoCurrent(typeId, eventType, events);
+                }
+            }
+        }
+
+
+        
+        private void ApplyChunkData(EntityRepository repo, int typeId, int chunkIndex, byte[] data)
+        {
+            
+            // Case 0: Special Entity Index Chunk
+            if (typeId == -1)
+            {
+                repo.GetEntityIndex().RestoreChunkFromBuffer(chunkIndex, data);
+                return;
+            }
+
+            // Find the component table by type ID
+            var componentTables = repo.GetRegisteredComponentTypes();
+            
+            IComponentTable? targetTable = null;
+            foreach (var kvp in componentTables)
+            {
+                if (kvp.Value.ComponentTypeId == typeId)
+                {
+                    targetTable = kvp.Value;
+                    break;
+                }
+            }
+            
+            if (targetTable == null)
+            {
+                throw new InvalidOperationException(
+                    $"Component type ID {typeId} not found in repository. " +
+                    "Ensure all component types are registered before playback.");
+            }
+            
+            // For unmanaged tables, we can do raw memory copy
+            if (targetTable is IUnmanagedComponentTable unmanagedTable)
+            {
+                // We need to copy data directly into the chunk
+                // This requires access to the underlying NativeChunkTable
+                // For now, we'll use a helper method
+                RestoreChunkData(unmanagedTable, chunkIndex, data);
+            }
+            else 
+            {
+                // Managed Component Support
+                if (targetTable.GetType().IsGenericType && 
+                    targetTable.GetType().GetGenericTypeDefinition() == typeof(ManagedComponentTable<>))
+                {
+                    Type componentType = targetTable.GetType().GetGenericArguments()[0];
+                    
+                    if (!_managedRestorers.TryGetValue(componentType, out var restorer))
+                    {
+                        var method = typeof(PlaybackSystem).GetMethod(nameof(RestoreManagedTableAdapter), 
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                            .MakeGenericMethod(componentType);
+                        restorer = (ManagedRestorerDelegate)Delegate.CreateDelegate(typeof(ManagedRestorerDelegate), method);
+                        _managedRestorers.TryAdd(componentType, restorer);
+                    }
+                    
+                    restorer(targetTable, chunkIndex, data, repo);
+                }
+                else
+                {
+                    throw new NotImplementedException($"Unknown component table type: {targetTable.GetType().Name}");
+                }
+            }
+        }
+        
+        private static void RestoreManagedTableAdapter<T>(object tableObj, int chunkIndex, byte[] data, EntityRepository repo) where T : class
+        {
+             // We need access to the repository to update entity component masks
+             // This is a limitation of the current design - we need to pass repo through the delegate
+             // For now, let's store it as a static variable that gets set during ApplyFrame
+             RestoreManagedTable((ManagedComponentTable<T>)tableObj, chunkIndex, data);
+        }
+
+        private static void RestoreManagedTable<T>(ManagedComponentTable<T> table, int chunkIndex, byte[] data) where T : class
+        {
+             using (var ms = new MemoryStream(data))
+             using (var reader = new BinaryReader(ms))
+             {
+                 T?[] chunkData = FdpAutoSerializer.Deserialize<T?[]>(reader);
+                 
+                 // We don't have the exact version from the file in this chunk? 
+                 // The file format: [ChunkID] [CompCount] [TypeID] [Len] [Data]
+                 // It doesn't store 'ChunkVersion'.
+                 // But we are dealing with a SNAPSHOT or DELTA.
+                 // If it's in the delta, it's effectively version = CurrentTick.
+                 // But PlaybackSystem doesn't easily expose CurrentTick in this method signature.
+                 // We need to pass it down or assume 0/max?
+                 // Actually, ApplyFrame reads the tick/GlobalVersion.
+                 // But ApplyChunkData doesn't take it. 
+                 // However, for restoration, ensuring data is set is enough.
+                 // We can use 0 or some value, key is that it's there.
+                 // Let's use 0 because we don't have the tick easily here and it might not matter for pure playback 
+                 // unless we support further recording *on top* of playback (which assigns new versions anyway).
+                 
+                 table.SetChunk(chunkIndex, chunkData, 0);
+             }
+        }
+        
+        private void RestoreChunkData(IUnmanagedComponentTable table, int chunkIndex, byte[] data)
+        {
+            // Copy data directly into the chunk
+            table.RestoreChunkFromBuffer(chunkIndex, data);
+        }
+        
+        /// <summary>
+        /// Repairs the EntityIndex after loading chunk data.
+        /// This is the "Index Repair Pass" from FDP-DES-005.
+        /// </summary>
+        private void RepairEntityIndex(EntityRepository repo)
+        {
+            var entityIndex = repo.GetEntityIndex();
+            var componentTables = repo.GetRegisteredComponentTypes();
+            
+            int maxIndex = entityIndex.MaxIssuedIndex;
+            int chunkCapacity = entityIndex.GetChunkCapacity();
+            
+            // Iterate all entities and check if they have components
+            for (int i = 0; i <= maxIndex; i++)
+            {
+                ref var header = ref entityIndex.GetHeader(i);
+                
+                // Check if this entity has any components
+                bool hasComponents = false;
+                foreach (var kvp in componentTables)
+                {
+                    if (header.ComponentMask.IsSet(kvp.Value.ComponentTypeId))
+                    {
+                        hasComponents = true;
+                        break;
+                    }
+                }
+                
+                // If entity has components but is marked dead, revive it
+                if (hasComponents && !header.IsActive)
+                {
+                    // Force restore this entity
+                    // We need to determine the generation from the data
+                    // For now, use generation 1
+                    repo.RestoreEntity(i, true, header.Generation > 0 ? header.Generation : 1, header.ComponentMask);
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Reader for Flight Recorder files.
+    /// Handles file format and decompression.
+    /// </summary>
+    public class RecordingReader : IDisposable
+    {
+        private readonly FileStream _fileStream;
+        private readonly BinaryReader _reader;
+        private readonly PlaybackSystem _playback;
+        
+        public uint FormatVersion { get; private set; }
+        public long RecordingTimestamp { get; private set; }
+        
+        public RecordingReader(string filePath)
+        {
+            _fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            try
+            {
+                _reader = new BinaryReader(_fileStream);
+                _playback = new PlaybackSystem();
+                ReadGlobalHeader();
+            }
+            catch
+            {
+                _reader?.Dispose();
+                _fileStream?.Dispose();
+                throw;
+            }
+        }
+        
+        private void ReadGlobalHeader()
+        {
+            // Read magic
+            byte[] magic = _reader.ReadBytes(6);
+            string magicStr = System.Text.Encoding.ASCII.GetString(magic);
+            
+            if (magicStr != "FDPREC")
+            {
+                throw new InvalidDataException(
+                    $"Invalid file format. Expected 'FDPREC', got '{magicStr}'");
+            }
+            
+            // Read version
+            FormatVersion = _reader.ReadUInt32();
+            
+            if (FormatVersion != FdpConfig.FORMAT_VERSION)
+            {
+                throw new InvalidDataException(
+                    $"Format version mismatch. File version: {FormatVersion}, " +
+                    $"Expected: {FdpConfig.FORMAT_VERSION}");
+            }
+            
+            // Read timestamp
+            RecordingTimestamp = _reader.ReadInt64();
+        }
+        
+        /// <summary>
+        /// Reads and applies the next frame to the repository.
+        /// Returns false if end of file reached.
+        /// </summary>
+        public bool ReadNextFrame(EntityRepository repo)
+        {
+            try
+            {
+                // Read frame size
+                int frameSize = _reader.ReadInt32();
+                
+                if (frameSize <= 0 || frameSize > 32 * 1024 * 1024)
+                {
+                    return false; // Invalid or end of file
+                }
+                
+                // Read frame data
+                byte[] frameData = _reader.ReadBytes(frameSize);
+                
+                // Apply frame
+                using (var ms = new MemoryStream(frameData))
+                using (var frameReader = new BinaryReader(ms))
+                {
+                    _playback.ApplyFrame(repo, frameReader);
+                }
+                
+                return true;
+            }
+            catch (EndOfStreamException)
+            {
+                return false;
+            }
+        }
+        
+        public void Dispose()
+        {
+            _reader?.Dispose();
+            _fileStream?.Dispose();
+        }
+    }
+}
