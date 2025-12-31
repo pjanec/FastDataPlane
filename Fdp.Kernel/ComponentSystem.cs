@@ -50,6 +50,14 @@ namespace Fdp.Kernel
         private bool _disposed = false;
         
         /// <summary>
+        /// Public initialization for manual system management.
+        /// </summary>
+        public void Create(EntityRepository world)
+        {
+            InternalCreate(world);
+        }
+
+        /// <summary>
         /// Internal initialization called by SystemGroup.
         /// DO NOT call this directly.
         /// </summary>
@@ -70,6 +78,14 @@ namespace Fdp.Kernel
             OnCreate();
         }
         
+        /// <summary>
+        /// Public entry point to run the system for a frame.
+        /// </summary>
+        public void Run()
+        {
+            InternalUpdate();
+        }
+
         /// <summary>
         /// Internal update called by SystemGroup.
         /// DO NOT call this directly.
