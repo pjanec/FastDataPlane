@@ -538,7 +538,15 @@ namespace Fdp.Kernel.FlightRecorder
         /// Format: [StreamCount] then for each stream: [TypeID][ElementSize][Count][Data]
         /// This follows FDP-DES-011 specification.
         /// </summary>
-        private static void WriteEvents(BinaryWriter writer, FdpEventBus? eventBus)
+        // Reusable lists for event recording (Zero-Alloc)
+        private readonly List<INativeEventStream> _cachedNativeStreams = new();
+        private readonly List<IManagedEventStreamInfo> _cachedManagedStreams = new();
+
+        /// <summary>
+        /// Writes all events from the event bus to the recorder.
+        /// Zero-allocation on hot path.
+        /// </summary>
+        private void WriteEvents(BinaryWriter writer, FdpEventBus? eventBus)
         {
             if (eventBus == null)
             {
@@ -548,14 +556,12 @@ namespace Fdp.Kernel.FlightRecorder
                 return;
             }
 
+            // Get all streams with pending events (Zero-Alloc using population)
+            eventBus.PopulatePendingStreams(_cachedNativeStreams);
+            
+            writer.Write(_cachedNativeStreams.Count);
 
-            // Get all streams with pending events
-            var pendingStreams = new System.Collections.Generic.List<INativeEventStream>(
-                eventBus.GetAllPendingStreams());
-
-            writer.Write(pendingStreams.Count);
-
-            foreach (var stream in pendingStreams)
+            foreach (var stream in _cachedNativeStreams)
             {
                 writer.Write(stream.EventTypeId);
                 writer.Write(stream.ElementSize);  // CRITICAL: Store element size for replay!
@@ -569,23 +575,50 @@ namespace Fdp.Kernel.FlightRecorder
             
             // ========== MANAGED EVENTS ==========
             // Write managed events with type name for auto-recreation
-            var managedStreams = new System.Collections.Generic.List<IManagedEventStreamInfo>(
-                eventBus.GetAllPendingManagedStreams());
+            eventBus.PopulatePendingManagedStreams(_cachedManagedStreams);
             
-            writer.Write(managedStreams.Count);
+            writer.Write(_cachedManagedStreams.Count);
             
-            foreach (var streamInfo in managedStreams)
+            foreach (var streamInfo in _cachedManagedStreams)
             {
                 writer.Write(streamInfo.TypeId);
-                writer.Write(0);  // ElementSize = 0 indicates managed event
-                writer.Write(streamInfo.EventType.AssemblyQualifiedName);  // Type name for auto-creation
+                writer.Write(0);  // ElementSize = 0 indicates Managed
+                
+                // ------------------------------------------------------------
+                // [New] Block Size Tracking (Format Version 2)
+                // Format: [BlockBytes: int] [TypeName] [Count] [Data...]
+                // ------------------------------------------------------------
+                
+                // 1. Remember position of the size placeholder
+                writer.Flush();
+                long sizeFieldPos = writer.BaseStream.Position;
+                
+                // 2. Write Placeholder (0)
+                writer.Write((int)0);
+                
+                // 3. Track start of data payload
+                long payloadStartPos = writer.BaseStream.Position;
+
+                // 4. Write Data (TypeName + Count + Events)
+                writer.Write(streamInfo.EventType.AssemblyQualifiedName);
                 writer.Write(streamInfo.PendingEvents.Count);
                 
-                // Serialize each event using FdpAutoSerializer
                 foreach (var evt in streamInfo.PendingEvents)
                 {
                     FdpAutoSerializer.Serialize(evt, writer);
                 }
+                
+                // 5. Calculate Size
+                writer.Flush();
+                long payloadEndPos = writer.BaseStream.Position;
+                int blockSize = (int)(payloadEndPos - payloadStartPos);
+                
+                // 6. Seek back and Patch
+                writer.BaseStream.Position = sizeFieldPos;
+                writer.Write(blockSize);
+                
+                // 7. Seek forward to continue
+                writer.BaseStream.Position = payloadEndPos;
             }
         }
 

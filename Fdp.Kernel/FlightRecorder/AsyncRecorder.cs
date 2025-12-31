@@ -68,12 +68,13 @@ namespace Fdp.Kernel.FlightRecorder
         /// Call this at End-Of-Frame (Phase: PostSimulation).
         /// </summary>
         /// <param name="blocking">If true, waits for previous write to complete instead of dropping frame.</param>
-        public void CaptureFrame(EntityRepository repo, uint prevTick, bool blocking = false)
+        /// <param name="eventBus">Optional event bus to capture events from for this frame.</param>
+        public void CaptureFrame(EntityRepository repo, uint prevTick, bool blocking = false, FdpEventBus? eventBus = null)
         {
             // Auto-Recovery: If we dropped a frame previously, force a Keyframe now to restore state.
             if (_forceKeyframeNext)
             {
-                CaptureKeyframe(repo, blocking);
+                CaptureKeyframe(repo, blocking, eventBus);
                 _forceKeyframeNext = false;
                 return;
             }
@@ -104,7 +105,8 @@ namespace Fdp.Kernel.FlightRecorder
             using (var writer = new BinaryWriter(ms))
             {
                 // Use the logic from FDP-DES-002
-                _recorderSystem.RecordDeltaFrame(repo, prevTick, writer);
+                // Use the logic from FDP-DES-002
+                _recorderSystem.RecordDeltaFrame(repo, prevTick, writer, eventBus);
                 writer.Flush();
                 
                 bytesWritten = (int)ms.Position;
@@ -129,7 +131,7 @@ namespace Fdp.Kernel.FlightRecorder
         /// <summary>
         /// Captures a full keyframe instead of a delta.
         /// </summary>
-        public void CaptureKeyframe(EntityRepository repo, bool blocking = false)
+        public void CaptureKeyframe(EntityRepository repo, bool blocking = false, FdpEventBus? eventBus = null)
         {
             // Wait for previous frame to complete
             _workerTask?.Wait();
@@ -139,7 +141,7 @@ namespace Fdp.Kernel.FlightRecorder
             using (var ms = new MemoryStream(_frontBuffer))
             using (var writer = new BinaryWriter(ms))
             {
-                _recorderSystem.RecordKeyframe(repo, writer);
+                _recorderSystem.RecordKeyframe(repo, writer, eventBus);
                 writer.Flush();
                 bytesWritten = (int)ms.Position;
             }

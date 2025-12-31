@@ -9,13 +9,21 @@ namespace Fdp.Kernel
     /// Suitable for low-volume events (< 100/frame).
     /// </summary>
     /// <typeparam name="T">Managed event type (class)</typeparam>
-    public class ManagedEventStream<T> where T : class
+    public class ManagedEventStream<T> : IManagedEventStreamInfo where T : class
     {
         // Double buffers: front for reading, back for writing
         private List<T> _front = new List<T>();
         private List<T> _back = new List<T>();
         
         private readonly object _lock = new object();
+
+        // IManagedEventStreamInfo implementation
+        public int TypeId => typeof(T).FullName.GetHashCode() & 0x7FFFFFFF;
+        public Type EventType => typeof(T);
+
+        // Zero-Alloc access to pending events.
+        // WARNING: Not thread-safe if concurrent writes occur. Assumes recording happens in safe phase.
+        public System.Collections.IList PendingEvents => _back;
 
         /// <summary>
         /// Writes an event to the stream.
@@ -54,6 +62,15 @@ namespace Fdp.Kernel
                 // Clear the new write buffer (old read buffer)
                 _back.Clear();
             }
+        }
+        
+        /// <summary>
+        /// Injects events directly into the current (read) buffer.
+        /// Used by Flight Recorder during replay.
+        /// </summary>
+        public void InjectIntoCurrent(IEnumerable<T> events)
+        {
+            _front.AddRange(events);
         }
 
         /// <summary>

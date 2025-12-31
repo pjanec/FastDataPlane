@@ -33,6 +33,7 @@ namespace Fdp.Kernel
             _lifecycleStream = stream;
         }
         
+        
         // Flight Recorder Destruction Log
         private readonly List<Entity> _destructionLog = new List<Entity>(128);
         

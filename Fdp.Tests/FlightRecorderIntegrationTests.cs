@@ -423,6 +423,101 @@ namespace Fdp.Tests
             Assert.Equal(456, managedComp2.Count);
         }
 
+        [Fact]
+        public void ManagedEventSkipping_SkipsDataCorrectly()
+        {
+            // Verify that we can correctly skip over managed events (using the new BlockSize feature)
+            // and successfully read the subsequent data in the stream.
+            
+            using var sourceRepo = new EntityRepository();
+            sourceRepo.RegisterComponent<int>();
+            
+            var e1 = sourceRepo.CreateEntity();
+            sourceRepo.AddComponent(e1, 42);
+            
+            // Generate some events
+            var bus = new FdpEventBus();
+            
+            // Record
+            using (var recorder = new AsyncRecorder(_testFilePath))
+            {
+                sourceRepo.Tick();
+                // Inject managed events
+                bus.PublishManaged(new TestManagedComponent { Value = "Event1", Count = 1 });
+                bus.PublishManaged(new TestManagedComponent { Value = "Event2", Count = 2 });
+                
+                // Frame 0: Has Managed Events
+                recorder.CaptureKeyframe(sourceRepo, blocking: true, eventBus: bus);
+                
+                // Frame 1: Simple delta to verify we landed correctly
+                sourceRepo.Tick();
+                sourceRepo.SetUnmanagedComponent(e1, 100);
+                recorder.CaptureFrame(sourceRepo, sourceRepo.GlobalVersion - 1, blocking: true, eventBus: bus);
+            }
+            
+            // Playback with skipping
+            using var targetRepo = new EntityRepository();
+            targetRepo.RegisterComponent<int>();
+            // Note: We intentionally DON'T register TestManagedComponent if we want to test "unknown type" scenario,
+            // but for "processEvents=false" it shouldn't matter if we know the type or not.
+            
+
+            
+            // Access private _playback field or use a public method that exposes 'processEvents'
+            // The RecordingReader.ReadNextFrame calls ApplyFrame(..., processEvents: true) by default.
+            // We need to bypass Reader wrapper to test specific PlaybackSystem flag, 
+            // OR we rely on the fact that Seeking logic (not yet exposed in Reader) would use this.
+            
+            // Since RecordingReader doesn't expose 'processEvents', we'll reconstruct the flow manually with PlaybackSystem
+            // to verify the skipping logic specifically.
+            
+            using (var fs = new FileStream(_testFilePath, FileMode.Open))
+            using (var binaryReader = new BinaryReader(fs))
+            {
+                // Skip Global Header
+                fs.Position = 18; // Magic(6) + Version(4) + Timestamp(8)
+                
+                var playback = new PlaybackSystem();
+                
+                // --- READ FRAME 0 (Skip Events) ---
+                // Manually read frame wrapper like RecordingReader does
+                int f0CompSize = binaryReader.ReadInt32();
+                int f0UncompSize = binaryReader.ReadInt32();
+                fs.Position += 9; // Skip Tick/Type in header
+                
+                byte[] f0Data = binaryReader.ReadBytes(f0CompSize);
+                byte[] f0Raw = new byte[f0UncompSize];
+                K4os.Compression.LZ4.LZ4Codec.Decode(f0Data, 0, f0Data.Length, f0Raw, 0, f0UncompSize);
+                
+                using (var ms0 = new MemoryStream(f0Raw))
+                using (var br0 = new BinaryReader(ms0))
+                {
+                    // Call ApplyFrame with processEvents = false
+                    playback.ApplyFrame(targetRepo, br0, eventBus: null, processEvents: false);
+                    
+                    // Verify: If skipping worked, br0 position should be at end of stream or valid end of data
+                    // Actually, ApplyFrame consumes the whole inner stream.
+                    // The real test is: Did it crash? And did it verify correct pointer math?
+                }
+                
+                // --- READ FRAME 1 (Verify Sync) ---
+                // If we messed up skipping in Frame 0 (which was inside the compressed payload),
+                // it wouldn't affect the FileStream position for Frame 1, because Frame 0 was fully read into 'f0Data'.
+                //
+                // WAIT! The skipping happens inside the *decompressed* stream (MemoryStream).
+                // If skipping is broken, 'br0' would be at the wrong position, causing the REST of Frame 0 to be read incorrectly.
+                // Frame 0 contains: [Events] [Singletons] [Chunks] [IndexRepair]
+                // If we skip events incorrectly, Singletons/Chunks will be read as garbage.
+                
+                // So checking basic entity state after Frame 0 is sufficient proof!
+                Assert.Equal(1, targetRepo.GetEntityIndex().ActiveCount);
+                Assert.Equal(42, targetRepo.GetComponentRO<int>(e1));
+                
+                // Verify Frame 1 works too just in case
+                int f1CompSize = binaryReader.ReadInt32();
+                Assert.True(f1CompSize > 0);
+            }
+        }
         #endregion
     }
     
