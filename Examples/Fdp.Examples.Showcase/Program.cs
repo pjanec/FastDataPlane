@@ -3,6 +3,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Threading;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using Fdp.Kernel;
 using Fdp.Kernel.FlightRecorder;
 using Fdp.Examples.Showcase.Components;
@@ -42,6 +43,11 @@ namespace Fdp.Examples.Showcase
         private static bool _isRecording = true;
         private static bool _isReplaying = false;
         private static bool _isPaused = false;
+        private static bool _showInspector = false;
+        private static bool _singleStep = false; // Execute one frame when paused
+        
+        // Entity Inspector
+        private static EntityInspector _inspector = null!;
         
         // Frame tracking
         private static int _totalRecordedFrames = 0;
@@ -103,6 +109,9 @@ namespace Fdp.Examples.Showcase
             // Flight Recorder - Async disk recorder with double buffering
             _diskRecorder = new AsyncRecorder(_recordingFilePath);
             _playback = new PlaybackSystem();
+            
+            // Entity Inspector for debugging
+            _inspector = new EntityInspector(_repo);
 
             // Spawn Initial Entities
             SpawnUnit(UnitType.Tank, 10, 10, 5, 0);
@@ -175,8 +184,15 @@ namespace Fdp.Examples.Showcase
             HandleInput();
             
             // 2. Logic Step
-            if (!_isReplaying && !_isPaused)
+            // Execute if: (not replaying AND not paused) OR single-step requested
+            bool shouldExecuteLogic = !_isReplaying && (!_isPaused || _singleStep);
+            
+            if (shouldExecuteLogic)
             {
+                // Clear single step flag (one-shot execution)
+                if (_singleStep)
+                    _singleStep = false;
+                
                 // Increment the Global Version so changes this frame get a new timestamp
                 // This is CRITICAL for delta frame recording - without it, the dirty scan
                 // algorithm won't detect changes and will record empty deltas
@@ -246,6 +262,20 @@ namespace Fdp.Examples.Showcase
             if (!Console.IsInputRedirected && Console.KeyAvailable)
             {
                 var keyInfo = Console.ReadKey(true);
+                
+                // Inspector mode - handle inspector-specific keys, then fall through to common shortcuts
+                if (_showInspector)
+                {
+                    // Inspector handles Tab (focus cycling) and Up/Down (navigation within lists)
+                    bool inspectorHandled = _inspector.HandleInput(keyInfo);
+                    
+                    // If inspector consumed the input, don't process common shortcuts
+                    if (inspectorHandled)
+                        return;
+                    
+                    // Otherwise, fall through to allow common shortcuts (ESC, R, P, I, etc.)
+                }
+                
                 var key = keyInfo.Key;
                 var shift = (keyInfo.Modifiers & ConsoleModifiers.Shift) != 0;
                 var ctrl = (keyInfo.Modifiers & ConsoleModifiers.Control) != 0;
@@ -258,6 +288,10 @@ namespace Fdp.Examples.Showcase
                         
                     case ConsoleKey.R: 
                         _isRecording = !_isRecording; 
+                        break;
+                    
+                    case ConsoleKey.I:
+                        _showInspector = !_showInspector;
                         break;
                         
                     case ConsoleKey.Spacebar:
@@ -311,9 +345,15 @@ namespace Fdp.Examples.Showcase
                     case ConsoleKey.RightArrow:
                         if (_isReplaying && _playbackController != null)
                         {
+                            // Replay mode - seek forward
                             int step = ctrl ? 100 : (shift ? 10 : 1);
                             int targetFrame = Math.Min(_playbackController.TotalFrames - 1, _playbackController.CurrentFrame + step);
                             _playbackController.SeekToFrame(_repo, targetFrame);
+                        }
+                        else if (_isPaused && !_isReplaying)
+                        {
+                            // Live mode + paused - execute one frame
+                            _singleStep = true;
                         }
                         break;
                         
@@ -427,29 +467,42 @@ namespace Fdp.Examples.Showcase
               }
 
               // Add controls hint
-              var controls = new Panel(
-                  "[yellow]ESC[/]=Quit [yellow]SPACE[/]=Pause [yellow]R[/]=Record [yellow]P[/]=Replay\n" +
-                  "[yellow]←→[/]=Seek +[yellow]SHIFT[/]=10x +[yellow]CTRL[/]=100x\n" +
-                  "[yellow]HOME/END[/]=First/Last [yellow]1/2/3[/]=Spawn [yellow]DEL[/]=Remove"
-              )
+              string controlsText = _showInspector 
+                  ? "[yellow]I[/]=Inspector [yellow]TAB[/]=Next [yellow]SHIFT+TAB[/]=Back [yellow]↑↓[/]=Navigate\n" +
+                    "[yellow]ESC/SPACE/R/P[/]=Common shortcuts still work"
+                  : "[yellow]ESC[/]=Quit [yellow]SPACE[/]=Pause [yellow]R[/]=Record [yellow]P[/]=Replay [yellow]I[/]=Inspector\n" +
+                    "[yellow]arrows[/]=Seek +[yellow]SHIFT[/]=10x +[yellow]CTRL[/]=100x\n" +
+                    "[yellow]HOME/END[/]=First/Last [yellow]1/2/3[/]=Spawn [yellow]DEL[/]=Remove";
+              
+              var controls = new Panel(controlsText)
               {
                   Header = new PanelHeader("Controls"),
                   Border = BoxBorder.Rounded
               };
               
-              var grid = new Grid();
-             grid.AddColumn();
-             grid.AddRow(table);
-             grid.AddRow(controls);
-             // Note: Spectre.Console Canvas isn't fully robust for 60fps blit in a loop efficiently without specialized handling,
-             // so we might just use Table or text dump for "Radar".
-             // Actually, let's just output text map string.
-             
-             var map = new System.Text.StringBuilder();
-             map.AppendLine($"[bold white on blue] FDP BATTLEFIELD [/]");
-             
-             // Simple ASCII buffer render
-             char[,] buffer = new char[20, 60];
+              // Build right side content
+              IRenderable rightContent;
+              if (_showInspector)
+              {
+                  // Update and render inspector
+                  _inspector.Update();
+                  rightContent = _inspector.Render(30); // Approx width
+              }
+              else
+              {
+                  // Normal stats view
+                  var grid = new Grid();
+                  grid.AddColumn();
+                  grid.AddRow(table);
+                  grid.AddRow(controls);
+                  rightContent = grid;
+              }
+              
+              var map = new System.Text.StringBuilder();
+              map.AppendLine($"[bold white on blue] FDP BATTLEFIELD [/]");
+              
+              // Simple ASCII buffer render
+              char[,] buffer = new char[20, 60];
              for(int y=0; y<20;y++) for(int x=0; x<60; x++) buffer[y,x] = ' ';
              
              renderQuery.ForEach(entity =>
@@ -468,8 +521,8 @@ namespace Fdp.Examples.Showcase
 
              var layout = new Layout("Root")
                 .SplitColumns(
-                    new Layout("Left").Ratio(2).Update(new Panel(map.ToString())),
-                    new Layout("Right").Ratio(1).Update(grid)
+                    new Layout("Left").Size(62).Update(new Panel(map.ToString())),
+                    new Layout("Right").Update(rightContent)
                 );
                 
              ctx.UpdateTarget(layout);
