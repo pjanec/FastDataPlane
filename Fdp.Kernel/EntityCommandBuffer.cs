@@ -139,7 +139,7 @@ namespace Fdp.Kernel
             int typeId = ManagedComponentType<T>.ID;
             
             int objectIndex = _managedObjects.Count;
-            _managedObjects.Add(component);
+            _managedObjects.Add(component!);
             
             EnsureCapacity(1 + 8 + 4 + 4); // OpCode + Entity + TypeID + ObjectIndex
             
@@ -160,7 +160,7 @@ namespace Fdp.Kernel
             int typeId = ManagedComponentType<T>.ID;
             
             int objectIndex = _managedObjects.Count;
-            _managedObjects.Add(component);
+            _managedObjects.Add(component!);
             
             EnsureCapacity(1 + 8 + 4 + 4); // OpCode + Entity + TypeID + ObjectIndex
             
@@ -423,7 +423,7 @@ namespace Fdp.Kernel
         
         public void Dispose()
         {
-            _buffer = null;
+            _buffer = null!;
         }
     }
 }

@@ -239,7 +239,7 @@ namespace Fdp.Kernel
         {
             // Use hash of full name for stable ID
             // Note: This is simpler than requiring [EventId] on managed types
-            return typeof(T).FullName.GetHashCode() & 0x7FFFFFFF;
+            return typeof(T).FullName!.GetHashCode() & 0x7FFFFFFF;
         }
 
         /// <summary>

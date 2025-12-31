@@ -194,7 +194,7 @@ namespace Fdp.Kernel
             // We could null out arrays to help GC, but it's not strictly necessary
             for (int i = 0; i < _chunks.Length; i++)
             {
-                _chunks[i] = null;
+                _chunks[i] = null!;
             }
         }
         public byte[] Serialize(EntityRepository repo, MessagePack.MessagePackSerializerOptions options)

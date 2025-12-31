@@ -89,7 +89,7 @@ namespace Fdp.Kernel.Serialization
                      // AssemblyQualifiedName is safest for strict typing.
                      // User snippet used `FullName`. I will use `FullName` BUT fallback logic in Load handles resolution.
                      // Let's use `FullName` to be "friendly".
-                     root.ComponentBlobs[type.FullName] = table.Serialize(repo, options);
+                     root.ComponentBlobs[type.FullName!] = table.Serialize(repo, options);
                 }
             }
 
@@ -126,7 +126,7 @@ namespace Fdp.Kernel.Serialization
                 byte[] blob = kvp.Value;
 
                 // Robust Type Resolution
-                Type type = Type.GetType(typeName);
+                Type? type = Type.GetType(typeName);
                 if (type == null)
                 {
                     foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
@@ -167,7 +167,7 @@ namespace Fdp.Kernel.Serialization
                          // Register it to create the table
                          // Check if unmanaged or managed?
                          // `ComponentTypeRegistry` might help.
-                         var method = typeof(EntityRepository).GetMethod(nameof(EntityRepository.RegisterComponent)).MakeGenericMethod(type);
+                         var method = typeof(EntityRepository).GetMethod(nameof(EntityRepository.RegisterComponent))!.MakeGenericMethod(type);
                          method.Invoke(repo, null);
                          
                          // Now we should have it

@@ -268,7 +268,7 @@ namespace Fdp.Kernel.FlightRecorder
                     if (!_managedRestorers.TryGetValue(componentType, out var restorer))
                     {
                         var method = typeof(PlaybackSystem).GetMethod(nameof(RestoreManagedTableAdapter), 
-                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
                             .MakeGenericMethod(componentType);
                         restorer = (ManagedRestorerDelegate)Delegate.CreateDelegate(typeof(ManagedRestorerDelegate), method);
                         _managedRestorers.TryAdd(componentType, restorer);
@@ -344,11 +344,11 @@ namespace Fdp.Kernel.FlightRecorder
                 else
                 {
                     var method = typeof(EntityRepository).GetMethod(nameof(EntityRepository.SetSingletonManaged))!.MakeGenericMethod(type);
-                    method.Invoke(repo, new object[] { null });
+                    method.Invoke(repo, new object?[] { null });
                 }
                 
                 // Re-fetch
-                table = repo.GetSingletonTable(typeId);
+                table = repo.GetSingletonTable(typeId)!;
             }
 
             // 2. Restore Data
@@ -371,10 +371,10 @@ namespace Fdp.Kernel.FlightRecorder
                         .GetMethod(nameof(FdpAutoSerializer.Deserialize), new[] { typeof(BinaryReader) })!
                         .MakeGenericMethod(type);
                     
-                    object val = deserializeMethod.Invoke(null, new object[] { reader });
+                    object? val = deserializeMethod.Invoke(null, new object[] { reader });
                     
                     // Set to index 0 (Singleton) via dynamic to bypass generic constraint on variable
-                    ((dynamic)table)[0] = (dynamic)val;
+                    ((dynamic)table!)[0] = (dynamic)val!;
                 }
             }
         }

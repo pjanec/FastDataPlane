@@ -131,22 +131,22 @@ namespace Fdp.Kernel.Internal
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
 
                 _register = (RegisterDelegate)Delegate.CreateDelegate(typeof(RegisterDelegate), null, 
-                    repoType.GetMethod(nameof(EntityRepository.RegisterUnmanagedComponent), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.RegisterUnmanagedComponent), flags)!.MakeGenericMethod(typeT));
 
                 _add = (AddUnmanagedDelegate<T>)Delegate.CreateDelegate(typeof(AddUnmanagedDelegate<T>), null, 
-                    repoType.GetMethod(nameof(EntityRepository.AddUnmanagedComponent), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.AddUnmanagedComponent), flags)!.MakeGenericMethod(typeT));
 
                 _getRW = (GetRWDelegate<T>)Delegate.CreateDelegate(typeof(GetRWDelegate<T>), null, 
-                    repoType.GetMethod(nameof(EntityRepository.GetUnmanagedComponentRW), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.GetUnmanagedComponentRW), flags)!.MakeGenericMethod(typeT));
 
                 _getRO = (GetROUnmanagedDelegate<T>)Delegate.CreateDelegate(typeof(GetROUnmanagedDelegate<T>), null, 
-                    repoType.GetMethod(nameof(EntityRepository.GetUnmanagedComponentRO), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.GetUnmanagedComponentRO), flags)!.MakeGenericMethod(typeT));
 
                 _has = (HasDelegate)Delegate.CreateDelegate(typeof(HasDelegate), null, 
-                    repoType.GetMethod(nameof(EntityRepository.HasUnmanagedComponent), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.HasUnmanagedComponent), flags)!.MakeGenericMethod(typeT));
 
                 _remove = (RemoveDelegate)Delegate.CreateDelegate(typeof(RemoveDelegate), null, 
-                    repoType.GetMethod(nameof(EntityRepository.RemoveUnmanagedComponent), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.RemoveUnmanagedComponent), flags)!.MakeGenericMethod(typeT));
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -184,19 +184,19 @@ namespace Fdp.Kernel.Internal
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
 
                 _register = (RegisterDelegate)Delegate.CreateDelegate(typeof(RegisterDelegate), null, 
-                    repoType.GetMethod(nameof(EntityRepository.RegisterManagedComponent), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.RegisterManagedComponent), flags)!.MakeGenericMethod(typeT));
 
                 _add = (AddManagedDelegate<T>)Delegate.CreateDelegate(typeof(AddManagedDelegate<T>), null, 
-                    repoType.GetMethod(nameof(EntityRepository.AddManagedComponent), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.AddManagedComponent), flags)!.MakeGenericMethod(typeT));
 
                 _getRW = (GetRWDelegate<T>)Delegate.CreateDelegate(typeof(GetRWDelegate<T>), null, 
-                    repoType.GetMethod(nameof(EntityRepository.GetManagedComponentRW), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.GetManagedComponentRW), flags)!.MakeGenericMethod(typeT));
 
                 _has = (HasDelegate)Delegate.CreateDelegate(typeof(HasDelegate), null, 
-                    repoType.GetMethod(nameof(EntityRepository.HasManagedComponent), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.HasManagedComponent), flags)!.MakeGenericMethod(typeT));
 
                 _remove = (RemoveDelegate)Delegate.CreateDelegate(typeof(RemoveDelegate), null, 
-                    repoType.GetMethod(nameof(EntityRepository.RemoveManagedComponent), flags).MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.RemoveManagedComponent), flags)!.MakeGenericMethod(typeT));
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]

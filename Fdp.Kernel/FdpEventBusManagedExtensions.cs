@@ -31,7 +31,7 @@ namespace Fdp.Kernel
                 
                 // Use reflection to get stream type and pending events
                 var streamType = streamObj.GetType();
-                var getPendingMethod = streamType.GetMethod(nameof(ManagedEventStream<object>.GetPendingList));
+                var getPendingMethod = streamType.GetMethod(nameof(ManagedEventStream<object>.GetPendingList))!;
                 
                 if (getPendingMethod != null)
                 {

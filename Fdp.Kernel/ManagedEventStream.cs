@@ -18,7 +18,7 @@ namespace Fdp.Kernel
         private readonly object _lock = new object();
 
         // IManagedEventStreamInfo implementation
-        public int TypeId => typeof(T).FullName.GetHashCode() & 0x7FFFFFFF;
+        public int TypeId => typeof(T).FullName!.GetHashCode() & 0x7FFFFFFF;
         public Type EventType => typeof(T);
 
         // Zero-Alloc access to pending events.

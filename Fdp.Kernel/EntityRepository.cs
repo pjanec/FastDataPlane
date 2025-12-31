@@ -425,7 +425,7 @@ namespace Fdp.Kernel
                 component = GetComponentRW<T>(entity);
                 return true;
             }
-            component = default;
+            component = default!;
             return false;
         }
 
@@ -848,7 +848,7 @@ namespace Fdp.Kernel
         /// </summary>
         public bool TryGetTable(Type type, out IComponentTable table)
         {
-            return _componentTables.TryGetValue(type, out table);
+            return _componentTables.TryGetValue(type, out table!);
         }
         /// WARNING: Direct header access bypasses safety checks!
         /// </summary>
@@ -1279,7 +1279,7 @@ namespace Fdp.Kernel
         /// Throws if not set.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public T GetSingletonManaged<T>() where T : class
+        public T? GetSingletonManaged<T>() where T : class
         {
             int typeId = ManagedComponentType<T>.ID;
             
@@ -1289,7 +1289,7 @@ namespace Fdp.Kernel
                     $"Singleton {typeof(T).Name} not set. Call SetSingletonManaged<{typeof(T).Name}>() first.");
             #endif
             
-            var storage = (ManagedComponentTable<T>)_singletons[typeId];
+            var storage = (ManagedComponentTable<T>)_singletons[typeId]!;
             return storage[0];
         }
         
@@ -1332,10 +1332,10 @@ namespace Fdp.Kernel
         /// Gets a singleton table by Type ID.
         /// Used by PlaybackSystem to restore data.
         /// </summary>
-        internal IComponentTable GetSingletonTable(int typeId)
+        internal IComponentTable? GetSingletonTable(int typeId)
         {
             if (typeId < 0 || typeId >= _singletons.Length) return null;
-            return (IComponentTable)_singletons[typeId];
+            return (IComponentTable?)_singletons[typeId];
         }
         
         /// <summary>

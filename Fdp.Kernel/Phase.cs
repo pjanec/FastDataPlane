@@ -88,14 +88,14 @@ namespace Fdp.Kernel
         public bool Equals(Phase? other) => other != null && Id == other.Id;
         
         // HOT PATH: Integer comparison, not string
-        public static bool operator ==(Phase left, Phase right)
+        public static bool operator ==(Phase? left, Phase? right)
         {
             if (ReferenceEquals(left, right)) return true;
             if (left is null || right is null) return false;
             return left.Id == right.Id;  // Fast integer comparison
         }
         
-        public static bool operator !=(Phase left, Phase right) => !(left == right);
+        public static bool operator !=(Phase? left, Phase? right) => !(left == right);
     }
     
     public class WrongPhaseException : System.Exception

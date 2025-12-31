@@ -71,7 +71,7 @@ namespace Fdp.Kernel
         public static Type GetType(int id)
         {
             _idToType.TryGetValue(id, out var type);
-            return type;
+            return type!;
         }
 
         /// <summary>

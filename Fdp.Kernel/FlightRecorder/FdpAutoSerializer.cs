@@ -235,7 +235,7 @@ namespace Fdp.Kernel.FlightRecorder
             
             // CASE Z: Recursive nested object
             var recurseMethod = typeof(FdpAutoSerializer)
-                .GetMethod("Serialize", BindingFlags.Public | BindingFlags.Static)
+                .GetMethod("Serialize", BindingFlags.Public | BindingFlags.Static)!
                 .MakeGenericMethod(type);
             
             return Expression.Call(recurseMethod, valueAccess, writer);
@@ -253,7 +253,7 @@ namespace Fdp.Kernel.FlightRecorder
             // Special case for String
             if (type == typeof(string))
             {
-                return Expression.Call(reader, typeof(BinaryReader).GetMethod("ReadString"));
+                return Expression.Call(reader, typeof(BinaryReader).GetMethod("ReadString")!);
             }
             
             // CASE B: List<T>
@@ -306,7 +306,7 @@ namespace Fdp.Kernel.FlightRecorder
             
             // CASE Z: Recursive nested object
             var recurseMethod = typeof(FdpAutoSerializer)
-                .GetMethod("Deserialize", BindingFlags.Public | BindingFlags.Static)
+                .GetMethod("Deserialize", BindingFlags.Public | BindingFlags.Static)!
                 .MakeGenericMethod(type);
             
             return Expression.Call(recurseMethod, reader);
@@ -319,8 +319,8 @@ namespace Fdp.Kernel.FlightRecorder
         private static Expression GenerateListWrite(Type listType, Expression listAccess, ParameterExpression writer)
         {
             var itemType = listType.GetGenericArguments()[0];
-            var countProp = listType.GetProperty("Count");
-            var itemProp = listType.GetProperty("Item"); // Indexer
+            var countProp = listType.GetProperty("Count")!;
+            var itemProp = listType.GetProperty("Item")!; // Indexer
             
             var writeCount = CallWrite(writer, typeof(int), Expression.Property(listAccess, countProp));
             var index = Expression.Variable(typeof(int), "i");
@@ -337,7 +337,7 @@ namespace Fdp.Kernel.FlightRecorder
             if (isPolymorphic)
             {
                 // Use FdpPolymorphicSerializer for interface/abstract types
-                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static);
+                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static)!;
                 writeElement = Expression.Call(polyWriteMethod, writer, Expression.Convert(elementAccess, typeof(object)));
             }
             else if (!itemType.IsValueType)
@@ -386,7 +386,7 @@ namespace Fdp.Kernel.FlightRecorder
             var index = Expression.Variable(typeof(int), "i");
             var breakLabel = Expression.Label();
             
-            var addMethod = listType.GetMethod("Add");
+            var addMethod = listType.GetMethod("Add")!;
             
             // Check if element type is polymorphic
             bool isPolymorphic = (itemType.IsInterface || itemType.IsAbstract) && 
@@ -397,7 +397,7 @@ namespace Fdp.Kernel.FlightRecorder
             if (isPolymorphic)
             {
                 //Use FdpPolymorphicSerializer for interface/abstract types
-                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static);
+                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static)!;
                 readElement = Expression.Convert(
                     Expression.Call(polyReadMethod, reader),
                     itemType
@@ -447,8 +447,8 @@ namespace Fdp.Kernel.FlightRecorder
         
         private static Expression GenerateArrayWrite(Type arrayType, Expression arrayAccess, ParameterExpression writer)
         {
-            var itemType = arrayType.GetElementType();
-            var lengthProp = arrayType.GetProperty("Length");
+            var itemType = arrayType.GetElementType()!;
+            var lengthProp = arrayType.GetProperty("Length")!;
             
             var writeLength = CallWrite(writer, typeof(int), Expression.Property(arrayAccess, lengthProp));
             var index = Expression.Variable(typeof(int), "i");
@@ -465,7 +465,7 @@ namespace Fdp.Kernel.FlightRecorder
             if (isPolymorphic)
             {
                 // Use FdpPolymorphicSerializer for interface/abstract types
-                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static);
+                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static)!;
                 writeElement = Expression.Call(polyWriteMethod, writer, Expression.Convert(elementAccess, typeof(object)));
             }
             else if (!itemType.IsValueType)
@@ -508,7 +508,7 @@ namespace Fdp.Kernel.FlightRecorder
         
         private static Expression GenerateArrayRead(Type arrayType, ParameterExpression reader)
         {
-            var itemType = arrayType.GetElementType();
+            var itemType = arrayType.GetElementType()!;
             var array = Expression.Variable(arrayType, "array");
             var length = Expression.Variable(typeof(int), "length");
             var index = Expression.Variable(typeof(int), "i");
@@ -523,7 +523,7 @@ namespace Fdp.Kernel.FlightRecorder
             if (isPolymorphic)
             {
                 // Use FdpPolymorphicSerializer for interface/abstract types
-                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static);
+                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static)!;
                 readElement = Expression.Convert(
                     Expression.Call(polyReadMethod, reader),
                     itemType
@@ -584,14 +584,14 @@ namespace Fdp.Kernel.FlightRecorder
             var keyType = args[0];
             var valueType = args[1];
             
-            var countProp = dictType.GetProperty("Count");
-            var enumeratorMethod = dictType.GetMethod("GetEnumerator");
+            var countProp = dictType.GetProperty("Count")!;
+            var enumeratorMethod = dictType.GetMethod("GetEnumerator")!;
             var enumeratorType = enumeratorMethod.ReturnType;
-            var moveNextMethod = enumeratorType.GetMethod("MoveNext");
-            var currentProp = enumeratorType.GetProperty("Current");
+            var moveNextMethod = enumeratorType.GetMethod("MoveNext")!;
+            var currentProp = enumeratorType.GetProperty("Current")!;
             var kvpType = currentProp.PropertyType;
-            var keyProp = kvpType.GetProperty("Key");
-            var valueProp = kvpType.GetProperty("Value");
+            var keyProp = kvpType.GetProperty("Key")!;
+            var valueProp = kvpType.GetProperty("Value")!;
             
             var enumerator = Expression.Variable(enumeratorType, "enumerator");
             var kvp = Expression.Variable(kvpType, "kvp");
@@ -607,7 +607,7 @@ namespace Fdp.Kernel.FlightRecorder
             Expression writeKey;
             if (keyIsPolymorphic)
             {
-                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static);
+                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static)!;
                 writeKey = Expression.Call(polyWriteMethod, writer, Expression.Convert(keyAccess, typeof(object)));
             }
             else if (!keyType.IsValueType)
@@ -631,7 +631,7 @@ namespace Fdp.Kernel.FlightRecorder
             Expression writeValue;
             if (valueIsPolymorphic)
             {
-                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static);
+                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static)!;
                 writeValue = Expression.Call(polyWriteMethod, writer, Expression.Convert(valueAccess, typeof(object)));
             }
             else if (!valueType.IsValueType)
@@ -688,7 +688,7 @@ namespace Fdp.Kernel.FlightRecorder
             Expression readKey;
             if (keyIsPolymorphic)
             {
-                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static);
+                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static)!;
                 readKey = Expression.Convert(Expression.Call(polyReadMethod, reader), keyType);
             }
             else if (!keyType.IsValueType)
@@ -712,7 +712,7 @@ namespace Fdp.Kernel.FlightRecorder
             Expression readValue;
             if (valueIsPolymorphic)
             {
-                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static);
+                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static)!;
                 readValue = Expression.Convert(Expression.Call(polyReadMethod, reader), valueType);
             }
             else if (!valueType.IsValueType)
@@ -758,8 +758,8 @@ namespace Fdp.Kernel.FlightRecorder
             var kvpType = typeof(KeyValuePair<,>).MakeGenericType(args);
             var enumerableType = typeof(IEnumerable<>).MakeGenericType(kvpType);
             var enumeratorInterfaceType = typeof(IEnumerator<>).MakeGenericType(kvpType);
-            var getEnumeratorMethod = enumerableType.GetMethod("GetEnumerator");
-            var moveNextMethod = typeof(System.Collections.IEnumerator).GetMethod("MoveNext");
+            var getEnumeratorMethod = enumerableType.GetMethod("GetEnumerator")!;
+            var moveNextMethod = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
             var currentProp = enumeratorInterfaceType.GetProperty("Current");
             var keyProp = kvpType.GetProperty("Key");
             var valueProp = kvpType.GetProperty("Value");
@@ -767,7 +767,7 @@ namespace Fdp.Kernel.FlightRecorder
             var enumerator = Expression.Variable(enumeratorInterfaceType, "enumerator");
             var kvp = Expression.Variable(kvpType, "kvp");
             var breakLabel = Expression.Label();
-            var countProp = dictType.GetProperty("Count");
+            var countProp = dictType.GetProperty("Count")!;
             
             var writeCount = CallWrite(writer, typeof(int), Expression.Property(dictAccess, countProp));
             
@@ -779,7 +779,7 @@ namespace Fdp.Kernel.FlightRecorder
             Expression writeKey;
             if (keyIsPolymorphic)
             {
-                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static);
+                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static)!;
                 writeKey = Expression.Call(polyWriteMethod, writer, Expression.Convert(keyAccess, typeof(object)));
             }
             else if (!args[0].IsValueType)
@@ -799,7 +799,7 @@ namespace Fdp.Kernel.FlightRecorder
             Expression writeValue;
             if (valueIsPolymorphic)
             {
-                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static);
+                var polyWriteMethod = typeof(FdpPolymorphicSerializer).GetMethod("Write", BindingFlags.Public | BindingFlags.Static)!;
                 writeValue = Expression.Call(polyWriteMethod, writer, Expression.Convert(valueAccess, typeof(object)));
             }
             else if (!args[1].IsValueType)
@@ -856,7 +856,7 @@ namespace Fdp.Kernel.FlightRecorder
             Expression readKey;
             if (keyIsPolymorphic)
             {
-                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static);
+                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static)!;
                 readKey = Expression.Convert(Expression.Call(polyReadMethod, reader), keyType);
             }
             else if (!keyType.IsValueType)
@@ -879,7 +879,7 @@ namespace Fdp.Kernel.FlightRecorder
             Expression readValue;
             if (valueIsPolymorphic)
             {
-                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static);
+                var polyReadMethod = typeof(FdpPolymorphicSerializer).GetMethod("Read", BindingFlags.Public | BindingFlags.Static)!;
                 readValue = Expression.Convert(Expression.Call(polyReadMethod, reader), valueType);
             }
             else if (!valueType.IsValueType)
@@ -925,10 +925,10 @@ namespace Fdp.Kernel.FlightRecorder
         private static Expression GenerateHashSetWrite(Type hashSetType, Expression hashSetAccess, ParameterExpression writer)
         {
             var itemType = hashSetType.GetGenericArguments()[0];
-            var countProp = hashSetType.GetProperty("Count");
-            var enumeratorMethod = hashSetType.GetMethod("GetEnumerator");
+            var countProp = hashSetType.GetProperty("Count")!;
+            var enumeratorMethod = hashSetType.GetMethod("GetEnumerator")!;
             var enumeratorType = enumeratorMethod.ReturnType;
-            var moveNextMethod = enumeratorType.GetMethod("MoveNext");
+            var moveNextMethod = enumeratorType.GetMethod("MoveNext")!;
             var currentProp = enumeratorType.GetProperty("Current");
             
             var enumerator = Expression.Variable(enumeratorType, "enumerator");
@@ -975,7 +975,7 @@ namespace Fdp.Kernel.FlightRecorder
             var index = Expression.Variable(typeof(int), "i");
             var breakLabel = Expression.Label();
             
-            var addMethod = hashSetType.GetMethod("Add");
+            var addMethod = hashSetType.GetMethod("Add")!;
             
             Expression readItem = GenerateReadExpression(itemType, reader);
             if (!itemType.IsValueType)
@@ -1032,13 +1032,13 @@ namespace Fdp.Kernel.FlightRecorder
         private static Expression GenerateEnumerableWrite(Type collectionType, Expression collectionAccess, ParameterExpression writer)
         {
             var itemType = collectionType.GetGenericArguments()[0];
-            var countProp = collectionType.GetProperty("Count");
+            var countProp = collectionType.GetProperty("Count")!;
             
             // Use IEnumerable<T> interface for compatibility with concurrent collections
             var enumerableType = typeof(IEnumerable<>).MakeGenericType(itemType);
             var enumeratorInterfaceType = typeof(IEnumerator<>).MakeGenericType(itemType);
-            var getEnumeratorMethod = enumerableType.GetMethod("GetEnumerator");
-            var moveNextMethod = typeof(System.Collections.IEnumerator).GetMethod("MoveNext");
+            var getEnumeratorMethod = enumerableType.GetMethod("GetEnumerator")!;
+            var moveNextMethod = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
             var currentProp = enumeratorInterfaceType.GetProperty("Current");
             
             var enumerator = Expression.Variable(enumeratorInterfaceType, "enumerator");
@@ -1131,8 +1131,8 @@ namespace Fdp.Kernel.FlightRecorder
             var breakLabel2 = Expression.Label();
             
             var pushMethod = stackType.GetMethod("Push");
-            var addMethod = tempList.Type.GetMethod("Add");
-            var indexerProp = tempList.Type.GetProperty("Item");
+            var addMethod = tempList.Type.GetMethod("Add")!;
+            var indexerProp = tempList.Type.GetProperty("Item")!;
             
             Expression readItem = GenerateReadExpression(itemType, reader);
             if (!itemType.IsValueType)
@@ -1191,7 +1191,7 @@ namespace Fdp.Kernel.FlightRecorder
             var index = Expression.Variable(typeof(int), "i");
             var breakLabel = Expression.Label();
             
-            var addMethod = bagType.GetMethod("Add");
+            var addMethod = bagType.GetMethod("Add")!;
             
             Expression readItem = GenerateReadExpression(itemType, reader);
             if (!itemType.IsValueType)
@@ -1259,7 +1259,7 @@ namespace Fdp.Kernel.FlightRecorder
             // MessagePack's KeyAttribute stores the key in a field, not a property
             var members = t.GetMembers(BindingFlags.Public | BindingFlags.Instance)
                 .Where(m => (m is PropertyInfo || m is FieldInfo) && m.GetCustomAttribute<KeyAttribute>() != null)
-                .Select(m => new { Member = m, Attr = m.GetCustomAttribute<KeyAttribute>() })
+                .Select(m => new { Member = m, Attr = m.GetCustomAttribute<KeyAttribute>()! })
                 .OrderBy(x => GetMessagePackKey(x.Attr))
                 .Select(x => x.Member)
                 .ToList();
@@ -1275,14 +1275,14 @@ namespace Fdp.Kernel.FlightRecorder
             var p = type.GetProperty("IntKey") ?? type.GetProperty("Key");
             if (p != null && p.CanRead && p.PropertyType == typeof(int))
             {
-                return (int)p.GetValue(attr);
+                return (int)p.GetValue(attr)!;
             }
 
             // 2. Try private field 'intKey' (legacy/internal MessagePack impl)
             var f = type.GetField("intKey", BindingFlags.NonPublic | BindingFlags.Instance);
             if (f != null && f.FieldType == typeof(int))
             {
-                return (int)f.GetValue(attr);
+                return (int)f.GetValue(attr)!;
             }
 
             return 0;

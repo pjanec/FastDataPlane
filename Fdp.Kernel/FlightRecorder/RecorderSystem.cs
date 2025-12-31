@@ -163,7 +163,7 @@ namespace Fdp.Kernel.FlightRecorder
                     if (!_managedRecorders.TryGetValue(componentType, out var recorder))
                     {
                         var method = typeof(RecorderSystem).GetMethod(nameof(RecordManagedTableAdapter), 
-                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
                             .MakeGenericMethod(componentType);
                         recorder = (ManagedRecorderDelegate)Delegate.CreateDelegate(typeof(ManagedRecorderDelegate), method);
                         _managedRecorders.TryAdd(componentType, recorder);
@@ -334,7 +334,7 @@ namespace Fdp.Kernel.FlightRecorder
                     if (!_managedRecorders.TryGetValue(componentType, out var recorder))
                     {
                         var method = typeof(RecorderSystem).GetMethod(nameof(RecordManagedTableAdapter), 
-                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)
+                            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
                             .MakeGenericMethod(componentType);
                         recorder = (ManagedRecorderDelegate)Delegate.CreateDelegate(typeof(ManagedRecorderDelegate), method);
                         _managedRecorders.TryAdd(componentType, recorder);
@@ -598,7 +598,7 @@ namespace Fdp.Kernel.FlightRecorder
                 long payloadStartPos = writer.BaseStream.Position;
 
                 // 4. Write Data (TypeName + Count + Events)
-                writer.Write(streamInfo.EventType.AssemblyQualifiedName);
+                writer.Write(streamInfo.EventType.AssemblyQualifiedName!);
                 writer.Write(streamInfo.PendingEvents.Count);
                 
                 // Get serializer for this type (cached reflection)

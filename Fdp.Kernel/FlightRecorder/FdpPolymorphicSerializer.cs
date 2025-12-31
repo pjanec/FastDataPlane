@@ -113,7 +113,7 @@ namespace Fdp.Kernel.FlightRecorder
         /// Returns the concrete instance or null.
         /// Zero-allocation after first call per type (warmup).
         /// </summary>
-        public static object Read(BinaryReader reader)
+        public static object? Read(BinaryReader reader)
         {
             byte typeId = reader.ReadByte();
             
@@ -122,7 +122,7 @@ namespace Fdp.Kernel.FlightRecorder
                 return null;
             }
             
-            if (!_idToType.TryGetValue(typeId, out Type type))
+            if (!_idToType.TryGetValue(typeId, out Type? type))
             {
                 throw new KeyNotFoundException(
                     $"TypeId {typeId} is not registered. The serialized data may be corrupted or from a different version.");
@@ -149,7 +149,7 @@ namespace Fdp.Kernel.FlightRecorder
             
             // Call FdpAutoSerializer.Serialize<T>(typedInstance, writer)
             var serializeMethod = typeof(FdpAutoSerializer)
-                .GetMethod("Serialize", BindingFlags.Public | BindingFlags.Static)
+                .GetMethod("Serialize", BindingFlags.Public | BindingFlags.Static)!
                 .MakeGenericMethod(type);
             
             var call = Expression.Call(serializeMethod, typedObj, writerParam);
@@ -168,7 +168,7 @@ namespace Fdp.Kernel.FlightRecorder
             
             // Call FdpAutoSerializer.Deserialize<T>(reader)
             var deserializeMethod = typeof(FdpAutoSerializer)
-                .GetMethod("Deserialize", BindingFlags.Public | BindingFlags.Static)
+                .GetMethod("Deserialize", BindingFlags.Public | BindingFlags.Static)!
                 .MakeGenericMethod(type);
             
             var call = Expression.Call(deserializeMethod, readerParam);
