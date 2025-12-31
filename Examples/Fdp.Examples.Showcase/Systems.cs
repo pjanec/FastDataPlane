@@ -1,8 +1,88 @@
 using Fdp.Kernel;
 using Fdp.Examples.Showcase.Components;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace Fdp.Examples.Showcase.Systems
 {
+    public class SpatialMap
+    {
+        private readonly Dictionary<int, List<Entity>> _buckets = new();
+        private const int CellSize = 10; // Bucket size (10x10 units)
+
+        public void Clear()
+        {
+            foreach (var list in _buckets.Values) list.Clear();
+        }
+
+        public void Add(Entity entity, Position pos)
+        {
+            int key = GetKey(pos.X, pos.Y);
+            if (!_buckets.TryGetValue(key, out var list))
+            {
+                list = new List<Entity>(32); // Pre-allocate
+                _buckets[key] = list;
+            }
+            list.Add(entity);
+        }
+
+        public void Query(Position pos, float radius, List<Entity> results)
+        {
+            results.Clear();
+            int minX = (int)(pos.X - radius) / CellSize;
+            int maxX = (int)(pos.X + radius) / CellSize;
+            int minY = (int)(pos.Y - radius) / CellSize;
+            int maxY = (int)(pos.Y + radius) / CellSize;
+
+            for (int x = minX; x <= maxX; x++)
+            {
+                for (int y = minY; y <= maxY; y++)
+                {
+                    int key = (x * 73856093) ^ (y * 19349663); // Simple spatial hash
+                    if (_buckets.TryGetValue(key, out var list))
+                    {
+                        results.AddRange(list);
+                    }
+                }
+            }
+        }
+
+        private int GetKey(float x, float y)
+        {
+            int cellX = (int)x / CellSize;
+            int cellY = (int)y / CellSize;
+            return (cellX * 73856093) ^ (cellY * 19349663);
+        }
+    }
+
+    public class SpatialSystem : ComponentSystem
+    {
+        public SpatialMap Map { get; } = new SpatialMap();
+        private EntityQuery _query = null!;
+
+        public SpatialSystem(EntityRepository repo)
+        {
+            Create(repo);
+        }
+
+        protected override void OnCreate()
+        {
+            // Only map things that can collide or be shot (Position + UnitStats)
+            _query = World.Query().With<Position>().With<UnitStats>().Build();
+        }
+
+        protected override void OnUpdate()
+        {
+            Map.Clear();
+            // This can't be parallelized easily without concurrent collections (slow)
+            _query.ForEach(e => 
+            {
+                ref readonly var pos = ref World.GetComponentRO<Position>(e);
+                Map.Add(e, pos);
+            });
+        }
+    }
+
     public class MovementSystem : ComponentSystem
     {
         private EntityQuery _query = null!;
@@ -25,7 +105,7 @@ namespace Fdp.Examples.Showcase.Systems
             ref var time = ref World.GetSingletonUnmanaged<GlobalTime>();
             float dt = time.DeltaTime * time.TimeScale;
 
-            _query.ForEach(entity =>
+            _query.ForEachParallel(entity =>
             {
                 ref var pos = ref World.GetComponentRW<Position>(entity);
                 ref var vel = ref World.GetComponentRW<Velocity>(entity);
@@ -61,7 +141,7 @@ namespace Fdp.Examples.Showcase.Systems
 
         protected override void OnUpdate()
         {
-             _query.ForEach(entity =>
+             _query.ForEachParallel(entity =>
              {
                  ref var pos = ref World.GetComponentRW<Position>(entity);
                  ref var vel = ref World.GetComponentRW<Velocity>(entity);
@@ -78,9 +158,12 @@ namespace Fdp.Examples.Showcase.Systems
         private const float CollisionRadius = 2.0f;
         private EntityQuery _query = null!;
         private FdpEventBus _eventBus = null!;
+        private SpatialSystem _spatial;
+        private List<Entity> _nearbyCache = new List<Entity>(64);
 
-        public CollisionSystem(EntityRepository repo, FdpEventBus eventBus)
+        public CollisionSystem(EntityRepository repo, FdpEventBus eventBus, SpatialSystem spatial)
         {
+            _spatial = spatial;
             _eventBus = eventBus;
             Create(repo);
         }
@@ -95,47 +178,51 @@ namespace Fdp.Examples.Showcase.Systems
 
         protected override void OnUpdate()
         {
-            var entities = new System.Collections.Generic.List<Entity>();
-            _query.ForEach(e => entities.Add(e));
+            // _spatial.Map has been updated by SpatialSystem just before this system runs
 
-            // Simple O(n²) collision detection for demo
-            for (int i = 0; i < entities.Count; i++)
+            _query.ForEach(entityA =>
             {
-                for (int j = i + 1; j < entities.Count; j++)
+                ref readonly var posA = ref World.GetComponentRO<Position>(entityA);
+                
+                // Use Spatial Map to get candidates
+                _spatial.Map.Query(posA, CollisionRadius, _nearbyCache);
+
+                foreach (var entityB in _nearbyCache)
                 {
-                    Entity a = entities[i];
-                    Entity b = entities[j];
-                    
-                    ref readonly var posA = ref World.GetComponentRO<Position>(a);
-                    ref readonly var posB = ref World.GetComponentRO<Position>(b);
-                    
+                    if (entityA == entityB) continue;
+
+                    ref readonly var posB = ref World.GetComponentRO<Position>(entityB);
+
                     float dx = posA.X - posB.X;
                     float dy = posA.Y - posB.Y;
                     float distSq = dx * dx + dy * dy;
-                    
+
                     if (distSq < CollisionRadius * CollisionRadius)
                     {
-                        // Collision detected! Fire event
+                         // Collision detected! Fire event
                         _eventBus.Publish(new CollisionEvent 
                         { 
-                            EntityA = a, 
-                            EntityB = b, 
+                            EntityA = entityA, 
+                            EntityB = entityB, 
                             ImpactForce = (float)System.Math.Sqrt(distSq) 
                         });
                         
                         // Simple elastic collision response
-                        ref var velA = ref World.GetComponentRW<Velocity>(a);
-                        ref var velB = ref World.GetComponentRW<Velocity>(b);
-                        
-                        float tempX = velA.X;
-                        float tempY = velA.Y;
-                        velA.X = velB.X;
-                        velA.Y = velB.Y;
-                        velB.X = tempX;
-                        velB.Y = tempY;
+                        if (World.HasComponent<Velocity>(entityA) && World.HasComponent<Velocity>(entityB))
+                        {
+                            ref var velA = ref World.GetComponentRW<Velocity>(entityA);
+                            ref var velB = ref World.GetComponentRW<Velocity>(entityB);
+                            
+                            float tempX = velA.X;
+                            float tempY = velA.Y;
+                            velA.X = velB.X;
+                            velA.Y = velB.Y;
+                            velB.X = tempX;
+                            velB.Y = tempY;
+                        }
                     }
                 }
-            }
+            });
         }
     }
     
@@ -146,9 +233,12 @@ namespace Fdp.Examples.Showcase.Systems
         private EntityQuery _query = null!;
         private System.Collections.Generic.Dictionary<Entity, double> _lastAttackTime = new();
         private FdpEventBus _eventBus = null!;
+        private SpatialSystem _spatial;
+        private List<Entity> _nearbyCache = new List<Entity>(64);
 
-        public CombatSystem(EntityRepository repo, FdpEventBus eventBus)
+        public CombatSystem(EntityRepository repo, FdpEventBus eventBus, SpatialSystem spatial)
         {
+            _spatial = spatial;
             _eventBus = eventBus;
             Create(repo);
         }
@@ -183,12 +273,13 @@ namespace Fdp.Examples.Showcase.Systems
                 
                 ref readonly var shooterPos = ref World.GetComponentRO<Position>(shooter);
                 
-                // Find targets in range
-                for (int j = 0; j < entities.Count; j++)
+                // Find targets in range using Spatial Map
+                _spatial.Map.Query(shooterPos, CombatRange, _nearbyCache);
+
+                foreach (var target in _nearbyCache)
                 {
-                    if (i == j) continue;
-                    
-                    Entity target = entities[j];
+                    if (shooter == target) continue;
+
                     ref var targetStats = ref World.GetComponentRW<UnitStats>(target);
                     
                     // Skip dead or same type
@@ -272,12 +363,14 @@ namespace Fdp.Examples.Showcase.Systems
     {
         private const float HitRadius = 1.5f;
         private EntityQuery _projectileQuery = null!;
-        private EntityQuery _unitQuery = null!;
         private FdpEventBus _eventBus = null!;
-       private LifecycleSystem _lifecycle = null!;
+        private LifecycleSystem _lifecycle = null!;
+        private SpatialSystem _spatial;
+        private List<Entity> _nearbyCache = new List<Entity>(64);
 
-        public ProjectileSystem(EntityRepository repo, FdpEventBus eventBus, LifecycleSystem lifecycle)
+        public ProjectileSystem(EntityRepository repo, FdpEventBus eventBus, LifecycleSystem lifecycle, SpatialSystem spatial)
         {
+            _spatial = spatial;
             _eventBus = eventBus;
             _lifecycle = lifecycle;
             Create(repo);
@@ -289,11 +382,6 @@ namespace Fdp.Examples.Showcase.Systems
                 .With<Position>()
                 .With<Projectile>()
                 .Build();
-                
-            _unitQuery = World.Query()
-                .With<Position>()
-                .With<UnitStats>()
-                .Build();
         }
 
         protected override void OnUpdate()
@@ -303,12 +391,9 @@ namespace Fdp.Examples.Showcase.Systems
             
             var toDestroy = new System.Collections.Generic.List<Entity>();
             
-            // Collect all projectiles and units
+            // Collect all projectiles
             var projectiles = new System.Collections.Generic.List<Entity>();
             _projectileQuery.ForEach(e => projectiles.Add(e));
-            
-            var units = new System.Collections.Generic.List<Entity>();
-            _unitQuery.ForEach(e => units.Add(e));
             
             // Update all projectiles
             foreach (var proj in projectiles)
@@ -329,8 +414,10 @@ namespace Fdp.Examples.Showcase.Systems
                     continue;
                 }
                 
-                // Check for hits against units
-                foreach (var unit in units)
+                // Check for hits against units using Spatial Map
+                _spatial.Map.Query(projPos, HitRadius, _nearbyCache);
+
+                foreach (var unit in _nearbyCache)
                 {
                     if (unit == owner) continue; // Can't hit self
                     
@@ -444,9 +531,9 @@ namespace Fdp.Examples.Showcase.Systems
             ref var time = ref World.GetSingletonUnmanaged<GlobalTime>();
             float dt = time.DeltaTime;
             
-            var toRemove = new System.Collections.Generic.List<Entity>();
+            var toRemoveQueue = new ConcurrentQueue<Entity>();
             
-            _query.ForEach(entity =>
+            _query.ForEachParallel(entity =>
             {
                 ref var flash = ref World.GetComponentRW<HitFlash>(entity);
                 ref var render = ref World.GetComponentRW<RenderSymbol>(entity);
@@ -461,14 +548,14 @@ namespace Fdp.Examples.Showcase.Systems
                 }
                 else
                 {
-                    // Restore original color and remove component
+                    // Restore original color
                     render.Color = flash.OriginalColor;
-                    toRemove.Add(entity);
+                    toRemoveQueue.Enqueue(entity);
                 }
             });
             
             // Remove expired flash components
-            foreach (var entity in toRemove)
+            while (toRemoveQueue.TryDequeue(out var entity))
             {
                 if (World.HasComponent<HitFlash>(entity))
                 {

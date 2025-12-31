@@ -20,6 +20,7 @@ namespace Fdp.Examples.Showcase
 
         // Systems
         private static MovementSystem _movement = null!;
+        private static SpatialSystem _spatial = null!;
         private static PatrolSystem _combat = null!;
         private static CollisionSystem _collision = null!;
         private static CombatSystem _combatSystem = null!;
@@ -100,9 +101,10 @@ namespace Fdp.Examples.Showcase
             // Create Systems - pass lifecycle to systems that need to destroy entities
             _movement = new MovementSystem(_repo);
             _combat = new PatrolSystem(_repo);
-            _collision = new CollisionSystem(_repo, _eventBus);
-            _combatSystem = new CombatSystem(_repo, _eventBus);
-            _projectileSystem = new ProjectileSystem(_repo, _eventBus, _lifecycle);
+            _spatial = new SpatialSystem(_repo);
+            _collision = new CollisionSystem(_repo, _eventBus, _spatial);
+            _combatSystem = new CombatSystem(_repo, _eventBus, _spatial);
+            _projectileSystem = new ProjectileSystem(_repo, _eventBus, _lifecycle, _spatial);
             _hitFlashSystem = new HitFlashSystem(_repo);
             _particleSystem = new ParticleSystem(_repo, _eventBus, _lifecycle);
             
@@ -204,6 +206,7 @@ namespace Fdp.Examples.Showcase
                 // All systems see the SAME world state during this phase
                 _combat.Run();          // Patrol/boundaries
                 _movement.Run();        // Move entities
+                _spatial.Run();         // Rebuild spatial map
                 _collision.Run();       // Detect collisions
                 _combatSystem.Run();    // Process combat
                 _projectileSystem.Run(); // Update projectiles (queues destruction to lifecycle ECB)
@@ -218,7 +221,7 @@ namespace Fdp.Examples.Showcase
                 _eventBus.SwapBuffers();
                 
                 // RECORDING - Async disk recording to prevent memory growth
-                if (_isRecording && !_isPaused)
+                if (_isRecording && !_isPaused && _diskRecorder != null)
                 {
                     // Record keyframe every 60 frames, delta frames otherwise
                     bool isKeyframe = (_totalRecordedFrames % 60 == 0);
