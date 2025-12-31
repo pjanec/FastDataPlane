@@ -108,22 +108,27 @@ namespace Fdp.Kernel.Serialization
             repo.Clear();
 
             // 1. Restore Entities (Headers)
-            foreach(var e in root.Entities)
+            if (root.Entities != null)
             {
-                // We pass 'default' for mask because components will update it as they load
-                // We pass the persisted DisType (casted back to struct)
-                var disType = new DISEntityType { Value = e.DisType };
-                repo.RestoreEntity(e.Id, e.IsActive, e.Generation, default, disType); 
+                foreach(var e in root.Entities)
+                {
+                    // We pass 'default' for mask because components will update it as they load
+                    // We pass the persisted DisType (casted back to struct)
+                    var disType = new DISEntityType { Value = e.DisType };
+                    repo.RestoreEntity(e.Id, e.IsActive, e.Generation, default, disType);
+                }
             }
             
             // Rebuild free list (finds gaps in restored entities)
             repo.RebuildFreeList();
 
             // 2. Restore Components
-            foreach(var kvp in root.ComponentBlobs)
+            if (root.ComponentBlobs != null)
             {
-                string typeName = kvp.Key;
-                byte[] blob = kvp.Value;
+                foreach(var kvp in root.ComponentBlobs)
+                {
+                    string typeName = kvp.Key;
+                    byte[] blob = kvp.Value;
 
                 // Robust Type Resolution
                 Type? type = Type.GetType(typeName);
@@ -179,6 +184,7 @@ namespace Fdp.Kernel.Serialization
                         table.Deserialize(repo, blob, options);
                     }
                 }
+            }
             }
         }
     }

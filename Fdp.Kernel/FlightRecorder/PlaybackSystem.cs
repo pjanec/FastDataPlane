@@ -339,7 +339,7 @@ namespace Fdp.Kernel.FlightRecorder
                 {
                     // This will init the unmanaged table
                     var method = typeof(EntityRepository).GetMethod(nameof(EntityRepository.SetSingletonUnmanaged))!.MakeGenericMethod(type);
-                    method.Invoke(repo, new object[] { Activator.CreateInstance(type) });
+                    method.Invoke(repo, new object[] { Activator.CreateInstance(type)! });
                 }
                 else
                 {

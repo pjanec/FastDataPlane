@@ -679,7 +679,7 @@ namespace Fdp.Kernel.FlightRecorder
             var index = Expression.Variable(typeof(int), "i");
             var breakLabel = Expression.Label();
             
-            var addMethod = dictType.GetMethod("Add", new[] { keyType, valueType });
+            var addMethod = dictType.GetMethod("Add", new[] { keyType, valueType })!;
             
             // Check if key type is polymorphic
             bool keyIsPolymorphic = (keyType.IsInterface || keyType.IsAbstract) && 
@@ -760,9 +760,9 @@ namespace Fdp.Kernel.FlightRecorder
             var enumeratorInterfaceType = typeof(IEnumerator<>).MakeGenericType(kvpType);
             var getEnumeratorMethod = enumerableType.GetMethod("GetEnumerator")!;
             var moveNextMethod = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
-            var currentProp = enumeratorInterfaceType.GetProperty("Current");
-            var keyProp = kvpType.GetProperty("Key");
-            var valueProp = kvpType.GetProperty("Value");
+            var currentProp = enumeratorInterfaceType.GetProperty("Current")!;
+            var keyProp = kvpType.GetProperty("Key")!;
+            var valueProp = kvpType.GetProperty("Value")!;
             
             var enumerator = Expression.Variable(enumeratorInterfaceType, "enumerator");
             var kvp = Expression.Variable(kvpType, "kvp");
@@ -848,7 +848,7 @@ namespace Fdp.Kernel.FlightRecorder
             var breakLabel = Expression.Label();
             
             // ConcurrentDictionary uses TryAdd, not Add
-            var tryAddMethod = dictType.GetMethod("TryAdd", new[] { keyType, valueType });
+            var tryAddMethod = dictType.GetMethod("TryAdd", new[] { keyType, valueType })!;
             
             // Check if key type is polymorphic
             bool keyIsPolymorphic = (keyType.IsInterface || keyType.IsAbstract) && FdpPolymorphicSerializer.IsTypeRegistered(keyType);
@@ -929,7 +929,7 @@ namespace Fdp.Kernel.FlightRecorder
             var enumeratorMethod = hashSetType.GetMethod("GetEnumerator")!;
             var enumeratorType = enumeratorMethod.ReturnType;
             var moveNextMethod = enumeratorType.GetMethod("MoveNext")!;
-            var currentProp = enumeratorType.GetProperty("Current");
+            var currentProp = enumeratorType.GetProperty("Current")!;
             
             var enumerator = Expression.Variable(enumeratorType, "enumerator");
             var item = Expression.Variable(itemType, "item");
@@ -1039,7 +1039,7 @@ namespace Fdp.Kernel.FlightRecorder
             var enumeratorInterfaceType = typeof(IEnumerator<>).MakeGenericType(itemType);
             var getEnumeratorMethod = enumerableType.GetMethod("GetEnumerator")!;
             var moveNextMethod = typeof(System.Collections.IEnumerator).GetMethod("MoveNext")!;
-            var currentProp = enumeratorInterfaceType.GetProperty("Current");
+            var currentProp = enumeratorInterfaceType.GetProperty("Current")!;
             
             var enumerator = Expression.Variable(enumeratorInterfaceType, "enumerator");
             var item = Expression.Variable(itemType, "item");
@@ -1085,7 +1085,7 @@ namespace Fdp.Kernel.FlightRecorder
             var index = Expression.Variable(typeof(int), "i");
             var breakLabel = Expression.Label();
             
-            var enqueueMethod = queueType.GetMethod("Enqueue");
+            var enqueueMethod = queueType.GetMethod("Enqueue")!;
             
             Expression readItem = GenerateReadExpression(itemType, reader);
             if (!itemType.IsValueType)
@@ -1130,7 +1130,7 @@ namespace Fdp.Kernel.FlightRecorder
             var breakLabel = Expression.Label();
             var breakLabel2 = Expression.Label();
             
-            var pushMethod = stackType.GetMethod("Push");
+            var pushMethod = stackType.GetMethod("Push")!;
             var addMethod = tempList.Type.GetMethod("Add")!;
             var indexerProp = tempList.Type.GetProperty("Item")!;
             
@@ -1232,7 +1232,7 @@ namespace Fdp.Kernel.FlightRecorder
         
         private static MethodCallExpression CallWrite(Expression writer, Type t, Expression value)
         {
-            var m = typeof(BinaryWriter).GetMethod("Write", new[] { t });
+            var m = typeof(BinaryWriter).GetMethod("Write", new[] { t })!;
             return Expression.Call(writer, m, value);
         }
         
@@ -1240,11 +1240,11 @@ namespace Fdp.Kernel.FlightRecorder
         {
             if (t == typeof(string))
             {
-                return Expression.Call(reader, typeof(BinaryReader).GetMethod("ReadString"));
+                return Expression.Call(reader, typeof(BinaryReader).GetMethod("ReadString")!);
             }
             
             var methodName = $"Read{t.Name}";
-            var method = typeof(BinaryReader).GetMethod(methodName);
+            var method = typeof(BinaryReader).GetMethod(methodName)!;
             if (method != null)
             {
                 return Expression.Call(reader, method);

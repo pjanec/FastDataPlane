@@ -29,27 +29,26 @@ namespace Fdp.Kernel
                 var typeId = (int)kvp.Key;
                 var streamObj = kvp.Value;
                 
+                if (streamObj == null) continue;
+                
                 // Use reflection to get stream type and pending events
                 var streamType = streamObj.GetType();
                 var getPendingMethod = streamType.GetMethod(nameof(ManagedEventStream<object>.GetPendingList))!;
                 
-                if (getPendingMethod != null)
+                var pendingList = getPendingMethod.Invoke(streamObj, null) as System.Collections.IList;
+                if (pendingList != null && pendingList.Count > 0)
                 {
-                    var pendingList = getPendingMethod.Invoke(streamObj, null) as System.Collections.IList;
-                    if (pendingList != null && pendingList.Count > 0)
+                    // Get generic type T from ManagedEventStream<T>
+                    var eventType = streamType.GetGenericArguments()[0];
+                    
+                    yield return new ManagedEventStreamInfo
                     {
-                        // Get generic type T from ManagedEventStream<T>
-                        var eventType = streamType.GetGenericArguments()[0];
-                        
-                        yield return new ManagedEventStreamInfo
-                        {
-                            TypeId = typeId,
-                            EventType = eventType,
-                            PendingEvents = pendingList
-                        };
-                    }
+                        TypeId = typeId,
+                        EventType = eventType,
+                        PendingEvents = pendingList
+                    };
                 }
-           }
+            }
         }
 
         /// <summary>
