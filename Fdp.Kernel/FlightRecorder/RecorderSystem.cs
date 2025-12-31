@@ -603,9 +603,19 @@ namespace Fdp.Kernel.FlightRecorder
                 writer.Write(streamInfo.EventType.AssemblyQualifiedName);
                 writer.Write(streamInfo.PendingEvents.Count);
                 
+                // Get serializer for this type (cached reflection)
+                var serializerMethod = typeof(FdpAutoSerializer)
+                    .GetMethod(nameof(FdpAutoSerializer.Serialize), System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)!
+                    .MakeGenericMethod(streamInfo.EventType);
+                
+                var args = new object[2];
+                args[1] = writer;
+
                 foreach (var evt in streamInfo.PendingEvents)
                 {
-                    FdpAutoSerializer.Serialize(evt, writer);
+                    // FdpAutoSerializer.Serialize<T>(evt, writer);
+                    args[0] = evt;
+                    serializerMethod.Invoke(null, args);
                 }
                 
                 // 5. Calculate Size

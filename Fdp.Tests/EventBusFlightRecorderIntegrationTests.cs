@@ -314,5 +314,76 @@ namespace Fdp.Tests
             
             _output.WriteLine("✅ ClearCurrentBuffers prevents event mixing");
         }
+
+    [MessagePack.MessagePackObject]
+    public class TestManagedEvent
+    {
+        [MessagePack.Key(0)]
+        public string Message { get; set; } = "";
+        
+        [MessagePack.Key(1)]
+        public int Priority { get; set; }
+        
+        [MessagePack.Key(2)]
+        public System.Collections.Generic.List<string> Tags { get; set; } = new();
+    }
+
+        [Fact]
+        public void ManagedEvents_RecordAndReplay_Correctly()
+        {
+            _output.WriteLine("=== Managed Events Integration Test ===");
+            
+            // Record
+            using (var fs = File.Create(_testFilePath))
+            using (var writer = new BinaryWriter(fs))
+            using (var repo = new EntityRepository())
+            using (var eventBus = new FdpEventBus())
+            {
+                var recorder = new RecorderSystem();
+                
+                writer.Write((uint)1); // Version
+                writer.Write((ulong)0); // StartTick
+                
+                repo.Tick(); // Tick 1
+                
+                // Publish managed event
+                eventBus.PublishManaged(new TestManagedEvent 
+                { 
+                    Message = "Hello World", 
+                    Priority = 1,
+                    Tags = new System.Collections.Generic.List<string> { "tag1", "tag2" }
+                });
+                
+                // Record
+                recorder.RecordDeltaFrame(repo, 0, writer, eventBus);
+                eventBus.SwapBuffers();
+            }
+            
+            // Replay
+            using (var fs = File.OpenRead(_testFilePath))
+            using (var reader = new BinaryReader(fs))
+            using (var repo = new EntityRepository())
+            using (var eventBus = new FdpEventBus())
+            {
+                var playback = new PlaybackSystem();
+                
+                // Skip header
+                reader.ReadUInt32(); 
+                reader.ReadUInt64();
+                
+                // Apply frame
+                playback.ApplyFrame(repo, reader, eventBus);
+                
+                // Verify
+                var events = eventBus.ConsumeManaged<TestManagedEvent>();
+                Assert.Equal(1, events.Count);
+                Assert.Equal("Hello World", events[0].Message);
+                Assert.Equal(1, events[0].Priority);
+                Assert.Equal(2, events[0].Tags.Count);
+                Assert.Equal("tag1", events[0].Tags[0]);
+                
+                _output.WriteLine("✅ Managed event recorded and replayed successfully");
+            }
+        }
     }
 }
