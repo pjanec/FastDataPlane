@@ -63,7 +63,7 @@ namespace Fdp.Tests
     public class TrackingSystem : Fdp.Kernel.ComponentSystem
     {
         public static List<string> ExecutionOrder = new List<string>();
-        public string Name { get; set; }
+        public string? Name { get; set; } = null!;
         
         protected override void OnUpdate()
         {

@@ -53,10 +53,10 @@ namespace Fdp.Tests
             public int CommandId { get; set; }
             
             [Key(1)]
-            public string FormationType { get; set; }
+            public string? FormationType { get; set; }
             
             [Key(2)]
-            public int[] UnitIds { get; set; }
+            public int[]? UnitIds { get; set; }
         }
         
         #endregion
@@ -394,22 +394,22 @@ namespace Fdp.Tests
             public int CommandId { get; set; }
             
             [Key(1)]
-            public string Name { get; set; } // Can be null
+            public string? Name { get; set; } // Can be null
             
             [Key(2)]
-            public List<string> Tags { get; set; } // List with nulls
+            public List<string>? Tags { get; set; } // List with nulls
             
             [Key(3)]
-            public ICommand[] NestedCommands { get; set; } // Polymorphic array with nulls
+            public ICommand[]? NestedCommands { get; set; } // Polymorphic array with nulls
             
             [Key(4)]
-            public List<List<int>> Matrix { get; set; } // Nested lists
+            public List<List<int>>? Matrix { get; set; } // Nested lists
             
             [Key(5)]
-            public MoveCommand[][] JaggedMoves { get; set; } // Arrays of arrays with nulls
+            public MoveCommand[][]? JaggedMoves { get; set; } // Arrays of arrays with nulls
             
             [Key(6)]
-            public List<ICommand>[] ArrayOfPolymorphicLists { get; set; } // Array of lists of polymorphic
+            public List<ICommand>[]? ArrayOfPolymorphicLists { get; set; } // Array of lists of polymorphic
         }
         
         [Fact]

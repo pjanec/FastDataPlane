@@ -14,14 +14,14 @@ namespace Fdp.Tests
         public int Id { get; set; }
         
         [Key(1)]
-        public string Name { get; set; }
+        public string? Name { get; set; }
     }
 
     [MessagePackObject]
     public class TestListObject
     {
         [Key(0)]
-        public List<int> Numbers { get; set; }
+        public List<int>? Numbers { get; set; }
     }
 
     public class FdpAutoSerializerTests
@@ -210,7 +210,7 @@ namespace Fdp.Tests
         public class TestNestedObject
         {
             [Key(0)]
-            public TestSimpleObject Inner { get; set; }
+            public TestSimpleObject? Inner { get; set; }
             
             [Key(1)]
             public int OuterId { get; set; }
@@ -274,7 +274,7 @@ namespace Fdp.Tests
         public class TestArrayObject
         {
             [Key(0)]
-            public int[] Values { get; set; }
+            public int[]? Values { get; set; }
         }
         
         [Fact]
@@ -382,16 +382,16 @@ namespace Fdp.Tests
             public int Id { get; set; }
             
             [Key(1)]
-            public string Name { get; set; }
+            public string? Name { get; set; }
             
             [Key(2)]
-            public List<string> Tags { get; set; }
+            public List<string>? Tags { get; set; }
             
             [Key(3)]
-            public TestSimpleObject Metadata { get; set; }
+            public TestSimpleObject? Metadata { get; set; }
             
             [Key(4)]
-            public float[] Coordinates { get; set; }
+            public float[]? Coordinates { get; set; }
         }
         
         [Fact]
@@ -511,7 +511,7 @@ namespace Fdp.Tests
         public class TestListOfListsObject
         {
             [Key(0)]
-            public List<List<int>> Matrix { get; set; }
+            public List<List<int>>? Matrix { get; set; }
         }
         
         [Fact]
@@ -556,7 +556,7 @@ namespace Fdp.Tests
         public class TestArrayOfArraysObject
         {
             [Key(0)]
-            public int[][] JaggedArray { get; set; }
+            public int[][]? JaggedArray { get; set; }
         }
         
         [Fact]
@@ -602,10 +602,10 @@ namespace Fdp.Tests
         public class TestMixedNestedCollections
         {
             [Key(0)]
-            public List<int[]> ListOfArrays { get; set; }
+            public List<int[]>? ListOfArrays { get; set; }
             
             [Key(1)]
-            public List<TestSimpleObject>[] ArrayOfLists { get; set; }
+            public List<TestSimpleObject>[]? ArrayOfLists { get; set; }
         }
         
         [Fact]
@@ -660,7 +660,7 @@ namespace Fdp.Tests
         public class TestFloatArrayObject
         {
             [Key(0)]
-            public float[] Coordinates { get; set; }
+            public float[]? Coordinates { get; set; }
         }
         
         [Fact]
@@ -729,7 +729,7 @@ namespace Fdp.Tests
         public class TestPolymorphicHolder
         {
             [Key(0)]
-            public MoveCommand SpecificCommand { get; set; }
+            public MoveCommand? SpecificCommand { get; set; }
             
             // Note: Polymorph ic lists would use FdpPolymorphicSerializer
             // [Key(1)]
@@ -777,7 +777,7 @@ namespace Fdp.Tests
         public class TestStringArrayObject
         {
             [Key(0)]
-            public string[] Names { get; set; }
+            public string[]? Names { get; set; }
         }
         
         [Fact]
@@ -812,7 +812,7 @@ namespace Fdp.Tests
         public class TestListOfStringsObject
         {
             [Key(0)]
-            public List<string> Tags { get; set; }
+            public List<string>? Tags { get; set; }
         }
         
         [Fact]
@@ -854,7 +854,7 @@ namespace Fdp.Tests
             public int Level { get; set; }
             
             [Key(1)]
-            public TestDeeplyNestedObject Child { get; set; }
+            public TestDeeplyNestedObject? Child { get; set; }
         }
         
         [Fact]

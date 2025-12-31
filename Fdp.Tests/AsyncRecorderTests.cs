@@ -65,7 +65,7 @@ namespace Fdp.Tests
                 // mechanism to increment DroppedFrames.
                 
                 // Alternatively, we use reflection to set _workerTask to a never-ending task
-                var field = typeof(AsyncRecorder).GetField("_workerTask", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                var field = typeof(AsyncRecorder).GetField("_workerTask", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
                 
                 // Create a "fake busy" task that blocks
                 var busySource = new TaskCompletionSource<bool>();

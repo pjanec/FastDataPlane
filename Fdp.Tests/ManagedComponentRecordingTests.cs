@@ -26,7 +26,7 @@ namespace Fdp.Tests
         public class SquadName
         {
             [Key(0)]
-            public string Name { get; set; }
+            public string? Name { get; set; }
         }
 
         [Fact]

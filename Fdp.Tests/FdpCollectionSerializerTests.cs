@@ -23,7 +23,7 @@ namespace Fdp.Tests
             public int Id { get; set; }
             
             [Key(1)]
-            public string Name { get; set; }
+            public string? Name { get; set; }
             
             [Key(2)]
             public float Score { get; set; }
@@ -37,7 +37,7 @@ namespace Fdp.Tests
         public class TestDictObject
         {
             [Key(0)]
-            public Dictionary<string, int> Scores { get; set; }
+            public Dictionary<string, int>? Scores { get; set; }
         }
         
         [Fact]
@@ -114,7 +114,7 @@ namespace Fdp.Tests
         public class TestEmptyDictObject
         {
             [Key(0)]
-            public Dictionary<string, string> Data { get; set; }
+            public Dictionary<string, string>? Data { get; set; }
         }
         
         [Fact]
@@ -149,7 +149,7 @@ namespace Fdp.Tests
         public class TestHashSetObject
         {
             [Key(0)]
-            public HashSet<string> Tags { get; set; }
+            public HashSet<string>? Tags { get; set; }
         }
         
         [Fact]
@@ -183,7 +183,7 @@ namespace Fdp.Tests
         public class TestHashSetCustomObject
         {
             [Key(0)]
-            public HashSet<Player> UniquePlayers { get; set; }
+            public HashSet<Player>? UniquePlayers { get; set; }
         }
         
         [Fact]
@@ -223,7 +223,7 @@ namespace Fdp.Tests
         public class TestQueueObject
         {
             [Key(0)]
-            public Queue<int> Commands { get; set; }
+            public Queue<int>? Commands { get; set; }
         }
         
         [Fact]
@@ -258,7 +258,7 @@ namespace Fdp.Tests
         public class TestQueueCustomObject
         {
             [Key(0)]
-            public Queue<Player> PlayerQueue { get; set; }
+            public Queue<Player>? PlayerQueue { get; set; }
         }
         
         [Fact]
@@ -303,7 +303,7 @@ namespace Fdp.Tests
         public class TestStackObject
         {
             [Key(0)]
-            public Stack<string> UndoStack { get; set; }
+            public Stack<string>? UndoStack { get; set; }
         }
         
         [Fact]
@@ -340,7 +340,7 @@ namespace Fdp.Tests
         public class TestConcurrentDictObject
         {
             [Key(0)]
-            public ConcurrentDictionary<int, string> ThreadSafeData { get; set; }
+            public ConcurrentDictionary<int, string>? ThreadSafeData { get; set; }
         }
         
         [Fact]
@@ -380,7 +380,7 @@ namespace Fdp.Tests
         public class TestConcurrentBagObject
         {
             [Key(0)]
-            public ConcurrentBag<int> Numbers { get; set; }
+            public ConcurrentBag<int>? Numbers { get; set; }
         }
         
         [Fact]
@@ -417,13 +417,13 @@ namespace Fdp.Tests
         public class TestComplexCollections
         {
             [Key(0)]
-            public Dictionary<string, List<int>> GroupedData { get; set; }
+            public Dictionary<string, List<int>>? GroupedData { get; set; }
             
             [Key(1)]
-            public List<Dictionary<int, string>> ListOfDicts { get; set; }
+            public List<Dictionary<int, string>>? ListOfDicts { get; set; }
             
             [Key(2)]
-            public HashSet<Queue<string>> SetOfQueues { get; set; }
+            public HashSet<Queue<string>>? SetOfQueues { get; set; }
         }
         
         [Fact]

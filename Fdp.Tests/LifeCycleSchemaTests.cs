@@ -26,15 +26,15 @@ namespace Fdp.Tests
         public class CompA
         {
             [Key(0)] public int Value { get; set; }
-            public override bool Equals(object obj) => obj is CompA other && Value == other.Value;
+            public override bool Equals(object? obj) => obj is CompA other && Value == other.Value;
             public override int GetHashCode() => Value;
         }
 
         [MessagePackObject]
         public class CompB
         {
-            [Key(0)] public string Name { get; set; }
-            public override bool Equals(object obj) => obj is CompB other && Name == other.Name;
+            [Key(0)] public string? Name { get; set; }
+            public override bool Equals(object? obj) => obj is CompB other && Name == other.Name;
             public override int GetHashCode() => Name?.GetHashCode() ?? 0;
         }
 
@@ -62,7 +62,7 @@ namespace Fdp.Tests
             public UnmanagedA ValUA;
             public UnmanagedB ValUB;
             public int ValMA_Value;
-            public string ValMB_Name;
+            public string? ValMB_Name;
         }
 
         [Fact]
