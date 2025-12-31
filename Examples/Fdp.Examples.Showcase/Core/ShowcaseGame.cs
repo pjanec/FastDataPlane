@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using Spectre.Console;
 using Fdp.Kernel;
@@ -17,6 +18,10 @@ namespace Fdp.Examples.Showcase.Core
         private TimeSystem _timeSystem = null!;
         private PlaybackSystem _playback = null!;
 
+        // Performance Metrics
+        public Dictionary<string, double> PhaseTimings { get; private set; } = new();
+        public double TotalFrameTime { get; private set; }
+        
         // Systems
         private MovementSystem _movement = null!;
         private SpatialSystem _spatial = null!;
@@ -142,8 +147,12 @@ namespace Fdp.Examples.Showcase.Core
 
         private void UpdateLoop(LiveDisplayContext? ctx)
         {
+            long frameStart = Stopwatch.GetTimestamp();
+            
             // 1. Input
+            long phaseStart = Stopwatch.GetTimestamp();
             _input.HandleInput();
+            RecordPhaseTime("1. Input", phaseStart);
             
             // 2. Logic Step
             bool shouldExecuteLogic = !IsReplaying && (!IsPaused || SingleStep);
@@ -153,25 +162,57 @@ namespace Fdp.Examples.Showcase.Core
                 if (SingleStep)
                     SingleStep = false;
                 
+                phaseStart = Stopwatch.GetTimestamp();
                 Repo.Tick();
+                RecordPhaseTime("2. Repo.Tick", phaseStart);
                 
+                phaseStart = Stopwatch.GetTimestamp();
                 _timeSystem.Update();
+                RecordPhaseTime("3. TimeSystem", phaseStart);
                 
+                phaseStart = Stopwatch.GetTimestamp();
                 _combat.Run();
+                RecordPhaseTime("4. PatrolSystem", phaseStart);
+                
+                phaseStart = Stopwatch.GetTimestamp();
                 _movement.Run();
+                RecordPhaseTime("5. MovementSystem", phaseStart);
+                
+                phaseStart = Stopwatch.GetTimestamp();
                 _spatial.Run();
+                RecordPhaseTime("6. SpatialSystem", phaseStart);
+                
+                phaseStart = Stopwatch.GetTimestamp();
                 _collision.Run();
+                RecordPhaseTime("7. CollisionSystem", phaseStart);
+                
+                phaseStart = Stopwatch.GetTimestamp();
                 _combatSystem.Run();
+                RecordPhaseTime("8. CombatSystem", phaseStart);
+                
+                phaseStart = Stopwatch.GetTimestamp();
                 _projectileSystem.Run();
+                RecordPhaseTime("9. ProjectileSystem", phaseStart);
+                
+                phaseStart = Stopwatch.GetTimestamp();
                 _hitFlashSystem.Run();
+                RecordPhaseTime("10. HitFlashSystem", phaseStart);
+                
+                phaseStart = Stopwatch.GetTimestamp();
                 _particleSystem.Run();
+                RecordPhaseTime("11. ParticleSystem", phaseStart);
                 
+                phaseStart = Stopwatch.GetTimestamp();
                 _lifecycle.Run();
+                RecordPhaseTime("12. LifecycleSystem", phaseStart);
                 
+                phaseStart = Stopwatch.GetTimestamp();
                 _eventBus.SwapBuffers();
+                RecordPhaseTime("13. EventBus.Swap", phaseStart);
                 
                 if (IsRecording && !IsPaused && DiskRecorder != null)
                 {
+                    phaseStart = Stopwatch.GetTimestamp();
                     bool isKeyframe = (_totalRecordedFrames % 60 == 0);
                     
                     if (isKeyframe)
@@ -182,6 +223,7 @@ namespace Fdp.Examples.Showcase.Core
                     {
                         DiskRecorder.CaptureFrame(Repo, _previousTick, blocking: false);
                     }
+                    RecordPhaseTime("14. Recorder", phaseStart);
                     
                     _totalRecordedFrames++;
                     _previousTick = Repo.GlobalVersion;
@@ -191,18 +233,32 @@ namespace Fdp.Examples.Showcase.Core
             {
                 if (!IsPaused)
                 {
+                    phaseStart = Stopwatch.GetTimestamp();
                     if (!PlaybackController.StepForward(Repo))
                     {
                         IsPaused = true;
                     }
+                    RecordPhaseTime("Playback.Step", phaseStart);
                 }
             }
 
             // 3. Render
             if (ctx != null)
             {
+                phaseStart = Stopwatch.GetTimestamp();
                 _renderer.Render(ctx);
+                RecordPhaseTime("15. Render", phaseStart);
             }
+            
+            // Record total frame time
+            TotalFrameTime = (Stopwatch.GetTimestamp() - frameStart) * 1000.0 / Stopwatch.Frequency;
+        }
+        
+        private void RecordPhaseTime(string phaseName, long startTicks)
+        {
+            long elapsed = Stopwatch.GetTimestamp() - startTicks;
+            double ms = elapsed * 1000.0 / Stopwatch.Frequency;
+            PhaseTimings[phaseName] = ms;
         }
 
         public void Cleanup()
