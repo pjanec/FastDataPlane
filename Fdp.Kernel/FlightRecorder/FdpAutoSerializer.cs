@@ -1295,7 +1295,7 @@ namespace Fdp.Kernel.FlightRecorder
     [AttributeUsage(AttributeTargets.Class)]
     public class FdpPolymorphicTypeAttribute : Attribute
     {
-        public byte TypeId { get; }
+        public new byte TypeId { get; }
         
         public FdpPolymorphicTypeAttribute(byte typeId)
         {

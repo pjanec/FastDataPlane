@@ -191,7 +191,6 @@ namespace Fdp.Kernel.FlightRecorder
                     if (eventType == null)
                     {
                         // Fallback: Skip if type unknown (thanks to BlockSize!)
-                        long payloadSoFar = 0; // Requires tracking how many bytes read for name+count? 
                         // Actually, implementing accurate partial skip inside "else" is tricky without knowing start.
                         // But since we have BlockSize, we can verify stream position after reading.
                         

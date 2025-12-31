@@ -383,7 +383,7 @@ namespace Fdp.Kernel
             int size = Unsafe.SizeOf<T>();
             fixed (byte* dst = &_buffer[_position])
             {
-                Unsafe.Copy(dst, ref Unsafe.AsRef(component));
+                Unsafe.Copy(dst, ref Unsafe.AsRef(in component));
             }
             _position += size;
         }

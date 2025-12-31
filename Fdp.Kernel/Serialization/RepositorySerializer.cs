@@ -187,8 +187,8 @@ namespace Fdp.Kernel.Serialization
     public class SaveFileRoot
     {
         [Key(0)] public int FileVersion;
-        [Key(1)] public List<EntitySaveData> Entities; 
-        [Key(2)] public Dictionary<string, byte[]> ComponentBlobs;
+        [Key(1)] public List<EntitySaveData>? Entities; 
+        [Key(2)] public Dictionary<string, byte[]>? ComponentBlobs;
     }
 
     [MessagePackObject]

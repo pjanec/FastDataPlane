@@ -8,8 +8,7 @@ namespace Fdp.Kernel.Systems
     /// </summary>
     public class EntityValidationSystem : ComponentSystem
     {
-        private EntityQuery _pendingEntities;
-        private EntityQuery _zombies;
+        private EntityQuery _pendingEntities = null!;
         private int _frameCount;
 
         // Timeout in Seconds

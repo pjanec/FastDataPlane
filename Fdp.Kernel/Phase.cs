@@ -84,8 +84,8 @@ namespace Fdp.Kernel
         
         // HOT PATH: Use integer comparison
         public override int GetHashCode() => Id;
-        public override bool Equals(object obj) => obj is Phase other && Equals(other);
-        public bool Equals(Phase other) => other != null && Id == other.Id;
+        public override bool Equals(object? obj) => obj is Phase other && Equals(other);
+        public bool Equals(Phase? other) => other != null && Id == other.Id;
         
         // HOT PATH: Integer comparison, not string
         public static bool operator ==(Phase left, Phase right)
@@ -128,10 +128,10 @@ namespace Fdp.Kernel
             = new System.Collections.Generic.Dictionary<string, PhasePermission>();
         
         // Internal cache: Phase ID -> Permission (for hot path)
-        private System.Collections.Generic.Dictionary<int, PhasePermission> _idToPermissionCache;
+        private System.Collections.Generic.Dictionary<int, PhasePermission>? _idToPermissionCache;
         
         // Internal cache: Phase ID -> Allowed destination IDs (for hot path)
-        private System.Collections.Generic.Dictionary<int, System.Collections.Generic.HashSet<int>> _idTransitionsCache;
+        private System.Collections.Generic.Dictionary<int, System.Collections.Generic.HashSet<int>>? _idTransitionsCache;
         
         /// <summary>
         /// Returns the default strict configuration.

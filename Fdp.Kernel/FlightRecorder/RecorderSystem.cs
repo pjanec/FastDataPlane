@@ -491,7 +491,6 @@ namespace Fdp.Kernel.FlightRecorder
                 
                 // Serialize the chunk (T?[])
                 T?[] chunkData = new T?[chunkSize];
-                bool hasData = false;
                 for (int i = 0; i < chunkSize; i++)
                 {
                     int entityId = startId + i;
@@ -501,7 +500,6 @@ namespace Fdp.Kernel.FlightRecorder
                     if (header.IsActive && header.ComponentMask.IsSet(table.ComponentTypeId))
                     {
                          chunkData[i] = table.GetRO(entityId);
-                         if (chunkData[i] != null) hasData = true;
                     }
                     else
                     {

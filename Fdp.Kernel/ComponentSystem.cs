@@ -12,7 +12,7 @@ namespace Fdp.Kernel
         /// Reference to the EntityRepository (World).
         /// Set automatically by the system group when the system is added.
         /// </summary>
-        public EntityRepository World { get; internal set; }
+        public EntityRepository World { get; internal set; } = null!;
         
         /// <summary>
         /// Shortcut to get the current DeltaTime from the World singleton.
