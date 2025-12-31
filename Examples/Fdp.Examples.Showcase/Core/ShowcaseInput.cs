@@ -74,6 +74,7 @@ namespace Fdp.Examples.Showcase.Core
                 try
                 {
                     _game.PlaybackController = new PlaybackController(_game.RecordingFilePath);
+                    _game.PlaybackController.EventBus = _game.EventBus;
                     _game.IsReplaying = true;
                     
                     if (_game.PlaybackController.TotalFrames > 0)

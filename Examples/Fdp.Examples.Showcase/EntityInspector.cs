@@ -253,7 +253,7 @@ namespace Fdp.Examples.Showcase
         {
             var result = new List<ComponentInfo>();
             
-            // Check all known component types
+            // Check all known unmanaged component types
             CheckComponent<Position>(entity, result);
             CheckComponent<Velocity>(entity, result);
             CheckComponent<RenderSymbol>(entity, result);
@@ -262,6 +262,9 @@ namespace Fdp.Examples.Showcase
             CheckComponent<Particle>(entity, result);
             CheckComponent<HitFlash>(entity, result);
             CheckComponent<Corpse>(entity, result);
+            
+            // Check managed component types
+            CheckManagedComponent<CombatHistory>(entity, result);
             
             return result;
         }
@@ -281,6 +284,21 @@ namespace Fdp.Examples.Showcase
             }
         }
         
+        private void CheckManagedComponent<T>(Entity entity, List<ComponentInfo> list) where T : class
+        {
+            if (_repo.HasComponent<T>(entity))
+            {
+                var comp = _repo.GetComponentRO<T>(entity);
+                var info = new ComponentInfo
+                {
+                    TypeName = typeof(T).Name + " (Managed)",
+                    Summary = GetManagedComponentSummary(comp),
+                    Properties = GetManagedComponentProperties(comp)
+                };
+                list.Add(info);
+            }
+        }
+        
         private string GetComponentSummary<T>(in T component)
         {
             return component switch
@@ -288,12 +306,21 @@ namespace Fdp.Examples.Showcase
                 Position pos => $"({pos.X:F1}, {pos.Y:F1})",
                 Velocity vel => $"({vel.X:F1}, {vel.Y:F1})",
                 RenderSymbol sym => $"{sym.Shape} RGB({sym.R},{sym.G},{sym.B})",
-                UnitStats stats => $"{stats.Type} HP:{stats.Health:F0}",
+                UnitStats stats => $"{stats.Type} HP:{stats.Health:F0}/{stats.MaxHealth:F0}",
                 Projectile proj => $"Life:{proj.Lifetime:F1}s",
                 Particle part => $"Life:{part.LifeRemaining:F1}s",
                 HitFlash flash => $"Remaining:{flash.Remaining:F2}",
                 Corpse corpse => $"Ttl:{corpse.TimeRemaining:F1}s",
                 _ => ""
+            };
+        }
+        
+        private string GetManagedComponentSummary<T>(T component) where T : class
+        {
+            return component switch
+            {
+                CombatHistory history => $"Dmg: {history.TotalDamageTaken}/{history.TotalDamageDealt}, Kills: {history.Kills}",
+                _ => component?.ToString() ?? "null"
             };
         }
         
@@ -306,6 +333,42 @@ namespace Fdp.Examples.Showcase
             {
                 var value = field.GetValue(component);
                 props[field.Name] = value?.ToString() ?? "null";
+            }
+            
+            return props;
+        }
+        
+        private Dictionary<string, string> GetManagedComponentProperties<T>(T component) where T : class
+        {
+            var props = new Dictionary<string, string>();
+            if (component == null) return props;
+            
+            var type = typeof(T);
+            
+            foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                try
+                {
+                    var value = prop.GetValue(component);
+                    if (value is System.Collections.IEnumerable enumerable && !(value is string))
+                    {
+                        var items = new List<string>();
+                        foreach (var item in enumerable)
+                        {
+                            items.Add(item?.ToString() ?? "null");
+                            if (items.Count >= 10) break; // Limit to 10 items
+                        }
+                        props[prop.Name] = $"[{string.Join(", ", items)}]";
+                    }
+                    else
+                    {
+                        props[prop.Name] = value?.ToString() ?? "null";
+                    }
+                }
+                catch
+                {
+                    props[prop.Name] = "<error>";
+                }
             }
             
             return props;

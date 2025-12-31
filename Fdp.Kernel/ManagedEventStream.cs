@@ -9,7 +9,7 @@ namespace Fdp.Kernel
     /// Suitable for low-volume events (< 100/frame).
     /// </summary>
     /// <typeparam name="T">Managed event type (class)</typeparam>
-    public class ManagedEventStream<T> : IManagedEventStreamInfo where T : class
+    public class ManagedEventStream<T> : IManagedEventStreamInfo, IEventStreamInspector where T : class
     {
         // Double buffers: front for reading, back for writing
         private List<T> _front = new List<T>();
@@ -20,6 +20,30 @@ namespace Fdp.Kernel
         // IManagedEventStreamInfo implementation
         public int TypeId => typeof(T).FullName!.GetHashCode() & 0x7FFFFFFF;
         public Type EventType => typeof(T);
+        
+        // IEventStreamInspector implementation
+        public int EventTypeId => TypeId;
+        
+        // Note: The public Count property returns the BACK (Write) buffer count for historical reasons.
+        // The interface requires the READ buffer count.
+        int IEventStreamInspector.Count => _front.Count;
+
+        public IEnumerable<object> InspectReadBuffer()
+        {
+            foreach (var item in _front)
+            {
+                yield return item;
+            }
+        }
+
+        public IEnumerable<object> InspectWriteBuffer()
+        {
+            lock (_lock)
+            {
+                // Return a copy to avoid concurrency issues during enumeration
+                return new List<object>(_back);
+            }
+        }
 
         // Zero-Alloc access to pending events.
         // WARNING: Not thread-safe if concurrent writes occur. Assumes recording happens in safe phase.
@@ -71,6 +95,15 @@ namespace Fdp.Kernel
         public void InjectIntoCurrent(IEnumerable<T> events)
         {
             _front.AddRange(events);
+        }
+
+        /// <summary>
+        /// Clears the current (read) buffer.
+        /// Used by Flight Recorder during replay to clear state before injection.
+        /// </summary>
+        public void ClearCurrent()
+        {
+            _front.Clear();
         }
 
         /// <summary>

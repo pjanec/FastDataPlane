@@ -282,9 +282,14 @@ namespace Fdp.Kernel.FlightRecorder
             using (var ms = new MemoryStream(rawFrame))
             using (var frameReader = new BinaryReader(ms))
             {
-                _playback.ApplyFrame(repo, frameReader);
+                _playback.ApplyFrame(repo, frameReader, EventBus);
             }
         }
+        
+        /// <summary>
+        /// Optional EventBus to restore events into during playback.
+        /// </summary>
+        public FdpEventBus? EventBus { get; set; }
         
         public void Dispose()
         {

@@ -139,14 +139,43 @@ namespace Fdp.Kernel
         }
 
         /// <summary>
+        /// Gets debug inspectors for all active event streams.
+        /// Use this to populate an Event Inspector UI.
+        /// </summary>
+        public IEnumerable<IEventStreamInspector> GetDebugInspectors()
+        {
+            // 1. Native Streams
+            foreach (var stream in _nativeStreams.Values)
+            {
+                if (stream is IEventStreamInspector inspector)
+                    yield return inspector;
+            }
+
+            // 2. Managed Streams
+            foreach (var stream in _managedStreams.Values)
+            {
+                if (stream is IEventStreamInspector inspector)
+                    yield return inspector;
+            }
+        }
+
+        /// <summary>
         /// Clears all Current (read) buffers.
         /// Must be called before injecting replay data to prevent mixing old/new events.
         /// </summary>
         public void ClearCurrentBuffers()
         {
+            // Clear native streams
             foreach (var stream in _nativeStreams.Values)
             {
                 stream.ClearCurrent();
+            }
+            
+            // Clear managed streams
+            foreach (var streamObj in _managedStreams.Values)
+            {
+                var method = streamObj.GetType().GetMethod(nameof(ManagedEventStream<object>.ClearCurrent));
+                method?.Invoke(streamObj, null);
             }
         }
 

@@ -10,7 +10,7 @@ namespace Fdp.Kernel
     /// Thread-safe for concurrent writes via atomic reservation.
     /// </summary>
     /// <typeparam name="T">Unmanaged event type with [EventId] attribute</typeparam>
-    public unsafe class NativeEventStream<T> : INativeEventStream, IDisposable where T : unmanaged
+    public unsafe class NativeEventStream<T> : INativeEventStream, IEventStreamInspector, IDisposable where T : unmanaged
     {
         // Double buffers
         private Buffer _readBuffer;
@@ -18,6 +18,34 @@ namespace Fdp.Kernel
         
         // Lock used ONLY during swap and resize
         private readonly object _lock = new object();
+        
+        // IEventStreamInspector Implementation
+        public Type EventType => typeof(T);
+        public int Count => _readBuffer.Count;
+
+        public IEnumerable<object> InspectReadBuffer()
+        {
+            // Read buffer is stable (only modified during Swap which is single-threaded usually)
+            var list = new List<object>(_readBuffer.Count);
+            for (int i = 0; i < _readBuffer.Count; i++)
+            {
+                list.Add(_readBuffer.Data[i]);
+            }
+            return list;
+        }
+
+        public IEnumerable<object> InspectWriteBuffer()
+        {
+            // Write buffer might be changing if simulation is running
+            // Use snapshot of current count limited by capacity
+            int count = Math.Min(_writeBuffer.Count, _writeBuffer.Capacity);
+            var list = new List<object>(count);
+            for (int i = 0; i < count; i++)
+            {
+                list.Add(_writeBuffer.Data[i]);
+            }
+            return list;
+        }
 
         private bool _disposed;
 

@@ -34,6 +34,7 @@ namespace Fdp.Examples.Showcase.Core
         
         // Event Bus
         private FdpEventBus _eventBus = null!;
+        public FdpEventBus EventBus => _eventBus;
         
         // Flight Recorder
         public AsyncRecorder? DiskRecorder { get; set; } = null;
@@ -53,6 +54,9 @@ namespace Fdp.Examples.Showcase.Core
         
         // Entity Inspector
         public EntityInspector Inspector { get; private set; } = null!;
+        
+        // Event Inspector
+        public EventInspector EventInspector { get; private set; } = null!;
         
         // Frame tracking
         private int _totalRecordedFrames = 0;
@@ -99,6 +103,9 @@ namespace Fdp.Examples.Showcase.Core
             
             // Entity Inspector
             Inspector = new EntityInspector(Repo);
+            
+            // Event Inspector
+            EventInspector = new EventInspector(_eventBus);
 
             // Spawn Initial Entities
             SpawnUnit(UnitType.Tank, 10, 10, 5, 0);
@@ -137,9 +144,13 @@ namespace Fdp.Examples.Showcase.Core
         {
             long frameStart = Stopwatch.GetTimestamp();
             
+            // Track if we need to process events
+            bool stateUpdated = false;
+            int replayFrameBefore = (IsReplaying && PlaybackController != null) ? PlaybackController.CurrentFrame : -1;
+
             // 1. Input - handled by Raylib keyboard checking
             long phaseStart = Stopwatch.GetTimestamp();
-            _input.HandleRaylibInput();
+            _input.HandleRaylibInput(); // This might cause seeking in playback!
             RecordPhaseTime("1. Input", phaseStart);
             
             // 2. Logic Step
@@ -194,10 +205,6 @@ namespace Fdp.Examples.Showcase.Core
                 _lifecycle.Run();
                 RecordPhaseTime("12. LifecycleSystem", phaseStart);
                 
-                phaseStart = Stopwatch.GetTimestamp();
-                _eventBus.SwapBuffers();
-                RecordPhaseTime("13. EventBus.Swap", phaseStart);
-                
                 if (IsRecording && !IsPaused && DiskRecorder != null)
                 {
                     phaseStart = Stopwatch.GetTimestamp();
@@ -205,17 +212,19 @@ namespace Fdp.Examples.Showcase.Core
                     
                     if (isKeyframe)
                     {
-                        DiskRecorder.CaptureKeyframe(Repo, blocking: false);
+                        DiskRecorder.CaptureKeyframe(Repo, blocking: false, eventBus: _eventBus);
                     }
                     else
                     {
-                        DiskRecorder.CaptureFrame(Repo, _previousTick, blocking: false);
+                        DiskRecorder.CaptureFrame(Repo, _previousTick, blocking: false, eventBus: _eventBus);
                     }
                     RecordPhaseTime("14. Recorder", phaseStart);
                     
                     _totalRecordedFrames++;
                     _previousTick = Repo.GlobalVersion;
                 }
+                
+                stateUpdated = true;
             }
             else if (IsReplaying && PlaybackController != null)
             {
@@ -228,6 +237,28 @@ namespace Fdp.Examples.Showcase.Core
                     }
                     RecordPhaseTime("Playback.Step", phaseStart);
                 }
+            }
+            
+            // Check if replay frame changed (due to stepping OR seeking in Input)
+            if (IsReplaying && PlaybackController != null && PlaybackController.CurrentFrame != replayFrameBefore)
+            {
+                stateUpdated = true;
+            }
+            
+            // Handle Events if state updated
+            if (stateUpdated)
+            {
+                // Only swap buffers if we executed logic (Live/Recording) where events were Published to Write buffer.
+                // If we Replayed, events were Injected into Read buffer directly, so we must NOT swap.
+                if (shouldExecuteLogic)
+                {
+                    phaseStart = Stopwatch.GetTimestamp();
+                    _eventBus.SwapBuffers();
+                    RecordPhaseTime("13. EventBus.Swap", phaseStart);
+                }
+                
+                // Capture events for Event Inspector (after swap or injection, so we see current frame's events)
+                EventInspector.CaptureFrameEvents();
             }
             
             // Record total frame time
@@ -275,7 +306,11 @@ namespace Fdp.Examples.Showcase.Core
                 B = b,
                 Size = size
             });
+            
             Repo.AddComponent(e, new UnitStats { Type = type, Health = 100, MaxHealth = 100 });
+            
+            // Add managed CombatHistory component for testing managed component recording/playback
+            Repo.AddComponent(e, new CombatHistory());
         }
         
         public void SpawnRandomUnit(UnitType type)

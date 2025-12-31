@@ -78,7 +78,26 @@ namespace Fdp.Examples.Showcase.Systems
                     if (distSq < HitRadius * HitRadius)
                     {
                         // HIT!
+                        float healthBefore = unitStats.Health;
                         unitStats.Health -= damage;
+                        bool wasKilled = unitStats.Health <= 0 && healthBefore > 0;
+                        if (wasKilled) unitStats.Health = 0;
+                        
+                        // Update managed CombatHistory if present (for testing managed components)
+                        if (World.HasComponent<CombatHistory>(unit))
+                        {
+                            var history = World.GetComponentRW<CombatHistory>(unit);
+                            var ownerType = World.HasComponent<UnitStats>(owner)
+                                ? World.GetComponentRO<UnitStats>(owner).Type
+                                : UnitType.Infantry;
+                            history.RecordDamageTaken(damage, ownerType.ToString());
+                        }
+                        
+                        if (World.HasComponent<CombatHistory>(owner))
+                        {
+                            var history = World.GetComponentRW<CombatHistory>(owner);
+                            history.RecordDamageDealt(damage, unitStats.Type.ToString());
+                        }
                         
                         // Add hit flash effect
                         World.AddComponent(unit, new HitFlash
@@ -86,7 +105,7 @@ namespace Fdp.Examples.Showcase.Systems
                             Remaining = 0.3f
                         });
                         
-                        // Fire events
+                        // Fire unmanaged events (for backward compatibility)
                         _eventBus.Publish(new ProjectileHitEvent
                         {
                             Projectile = proj,
@@ -104,14 +123,65 @@ namespace Fdp.Examples.Showcase.Systems
                                 : UnitType.Infantry
                         });
                         
-                        // Check for death
-                        if (unitStats.Health <= 0)
+                        // Fire MANAGED damage event (for testing managed event recording/playback)
+                        var ownerTypeName = World.HasComponent<UnitStats>(owner) 
+                            ? World.GetComponentRO<UnitStats>(owner).Type.ToString()
+                            : "Unknown";
+                        var targetTypeName = unitStats.Type.ToString();
+                            
+                        _eventBus.PublishManaged(new EntityDamagedEvent
                         {
-                            unitStats.Health = 0;
+                            AttackerIndex = owner.Index,
+                            AttackerGeneration = owner.Generation,
+                            TargetIndex = unit.Index,
+                            TargetGeneration = unit.Generation,
+                            DamageAmount = damage,
+                            DamageType = "Projectile",
+                            AttackerTypeName = ownerTypeName,
+                            TargetTypeName = targetTypeName,
+                            WasKillingBlow = wasKilled,
+                            TargetHealthRemaining = unitStats.Health
+                        });
+                        
+                        // Check for death
+                        if (wasKilled)
+                        {
+                            // Update combat history for killer
+                            if (World.HasComponent<CombatHistory>(owner))
+                            {
+                                var history = World.GetComponentRW<CombatHistory>(owner);
+                                history.RecordKill(targetTypeName);
+                            }
+                            
+                            // Fire unmanaged death event
                             _eventBus.Publish(new DeathEvent
                             {
                                 Entity = unit,
                                 Type = unitStats.Type
+                            });
+                            
+                            // Fire MANAGED death event (for testing)
+                            int totalDamage = 0;
+                            int timesHit = 0;
+                            if (World.HasComponent<CombatHistory>(unit))
+                            {
+                                var history = World.GetComponentRO<CombatHistory>(unit);
+                                totalDamage = history.TotalDamageTaken;
+                                timesHit = history.TimesHit;
+                            }
+                            
+                            _eventBus.PublishManaged(new EntityDeathEvent
+                            {
+                                EntityIndex = unit.Index,
+                                EntityGeneration = unit.Generation,
+                                EntityTypeName = targetTypeName,
+                                KillerIndex = owner.Index,
+                                KillerGeneration = owner.Generation,
+                                KillerTypeName = ownerTypeName,
+                                TotalDamageTaken = totalDamage,
+                                TimesHit = timesHit,
+                                PositionX = unitPos.X,
+                                PositionY = unitPos.Y
                             });
                             
                             // Stop the entity from moving (remove velocity)

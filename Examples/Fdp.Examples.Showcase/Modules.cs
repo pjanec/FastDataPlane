@@ -25,6 +25,7 @@ namespace Fdp.Examples.Showcase.Modules
         public void Load(EntityRepository repo)
         {
             repo.RegisterComponent<UnitStats>();
+            repo.RegisterComponent<CombatHistory>(); // Managed component for testing
             repo.RegisterComponent<CombatState>();
             repo.RegisterComponent<Corpse>();
         }

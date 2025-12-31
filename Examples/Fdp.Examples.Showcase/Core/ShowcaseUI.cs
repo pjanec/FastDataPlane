@@ -24,10 +24,11 @@ namespace Fdp.Examples.Showcase.Core
             DrawPerformancePanel();
             DrawControlsPanel();
             
-            // Inspector is drawn separately since it has 3 parts
+            // Inspectors are drawn separately
             if (_game.ShowInspector)
             {
                 _game.Inspector.DrawImGui();
+                _game.EventInspector.DrawImGui();
             }
         }
 
