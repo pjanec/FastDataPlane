@@ -106,7 +106,7 @@ namespace Fdp.Kernel
             foreach (var streamObj in _managedStreams.Values)
             {
                 // Dynamic dispatch (we don't know T at compile time)
-                var swapMethod = streamObj.GetType().GetMethod("Swap");
+                var swapMethod = streamObj.GetType().GetMethod(nameof(ManagedEventStream<object>.Swap));
                 swapMethod?.Invoke(streamObj, null);
             }
         }

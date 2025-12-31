@@ -167,7 +167,7 @@ namespace Fdp.Kernel.Serialization
                          // Register it to create the table
                          // Check if unmanaged or managed?
                          // `ComponentTypeRegistry` might help.
-                         var method = typeof(EntityRepository).GetMethod("RegisterComponent").MakeGenericMethod(type);
+                         var method = typeof(EntityRepository).GetMethod(nameof(EntityRepository.RegisterComponent)).MakeGenericMethod(type);
                          method.Invoke(repo, null);
                          
                          // Now we should have it
