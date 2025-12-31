@@ -75,28 +75,28 @@ namespace Fdp.Kernel.FlightRecorder
                 try
                 {
                     long frameStart = _fileStream.Position;
-                    int frameSize = _reader.ReadInt32();
-                    
-                    if (frameSize <= 0 || frameSize > 32 * 1024 * 1024)
-                    {
-                        break; // Invalid or end of file
-                    }
-                    
-                    // Peek at frame metadata without reading the whole frame
-                    long dataStart = _fileStream.Position;
+                    if (_fileStream.Position + 17 > _fileStream.Length) break; // Incomplete header
+
+                    // Read Header
+                    int compSize = _reader.ReadInt32();
+                    int uncompSize = _reader.ReadInt32(); // Unused for index, but part of format
                     ulong tick = _reader.ReadUInt64();
                     byte frameType = _reader.ReadByte();
+                    
+                    if (compSize <= 0) break;
                     
                     _frameIndex.Add(new FrameMetadata
                     {
                         FilePosition = frameStart,
-                        FrameSize = frameSize,
+                        CompressedSize = compSize,
+                        UncompressedSize = uncompSize,
                         Tick = tick,
                         FrameType = (FrameType)frameType
                     });
                     
-                    // Skip to next frame
-                    _fileStream.Position = dataStart + frameSize;
+                    // Skip compressed payload
+                    if (_fileStream.Position + compSize > _fileStream.Length) break; // Incomplete payload
+                    _fileStream.Position += compSize;
                 }
                 catch (EndOfStreamException)
                 {
@@ -266,14 +266,20 @@ namespace Fdp.Kernel.FlightRecorder
             // Seek to frame position
             _fileStream.Position = metadata.FilePosition;
             
-            // Read frame size (already in metadata, but need to advance stream)
-            _reader.ReadInt32();
+            // Read Header (17 bytes)
+            int compSize = _reader.ReadInt32();
+            int uncompSize = _reader.ReadInt32();
+            _fileStream.Position += 9; // Skip Tick(8) + Type(1)
             
-            // Read frame data
-            byte[] frameData = _reader.ReadBytes(metadata.FrameSize);
+            // Read compressed data
+            byte[] compressedData = _reader.ReadBytes(compSize);
+            
+            // Decompress
+            byte[] rawFrame = new byte[uncompSize];
+            K4os.Compression.LZ4.LZ4Codec.Decode(compressedData, 0, compSize, rawFrame, 0, uncompSize);
             
             // Apply frame
-            using (var ms = new MemoryStream(frameData))
+            using (var ms = new MemoryStream(rawFrame))
             using (var frameReader = new BinaryReader(ms))
             {
                 _playback.ApplyFrame(repo, frameReader);
@@ -293,7 +299,8 @@ namespace Fdp.Kernel.FlightRecorder
     public struct FrameMetadata
     {
         public long FilePosition;
-        public int FrameSize;
+        public int CompressedSize;
+        public int UncompressedSize;
         public ulong Tick;
         public FrameType FrameType;
     }

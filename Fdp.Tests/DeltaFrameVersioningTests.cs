@@ -145,8 +145,8 @@ namespace Fdp.Tests
             // Header: Tick(8) + Type(1) + DestroyCount(4) + ChunkCount(4) = 17 bytes
             // With data: Should include chunk data (at least 64KB of component data)
             
-            Assert.True(deltaMetadata.FrameSize > 100, 
-                $"Delta frame size {deltaMetadata.FrameSize} is too small - likely contains no component data");
+            Assert.True(deltaMetadata.CompressedSize > 100, 
+                $"Delta frame size {deltaMetadata.CompressedSize} is too small - likely contains no component data");
                 
             // Verify the delta actually applied the change
             using var targetRepo = new EntityRepository();

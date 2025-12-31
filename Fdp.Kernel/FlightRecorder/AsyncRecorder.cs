@@ -39,6 +39,11 @@ namespace Fdp.Kernel.FlightRecorder
             _frontBuffer = new byte[BUFFER_SIZE];
             _backBuffer = new byte[BUFFER_SIZE];
             _writeBuffer = new byte[BUFFER_SIZE + 4]; // Pre-allocate for length prefix
+            
+            // Allocate compression buffer (Worst case size)
+            int maxOutput = K4os.Compression.LZ4.LZ4Codec.MaximumOutputSize(BUFFER_SIZE);
+            _compressedBuffer = new byte[maxOutput];
+            
             _recorderSystem = new RecorderSystem();
             
             // Open file for async I/O
@@ -53,13 +58,26 @@ namespace Fdp.Kernel.FlightRecorder
             // Write Global Header immediately (See DES-002)
             WriteGlobalHeader();
         }
-        
+
+        private byte[] _compressedBuffer;
+
+        // Flag to force keyframe on next capture if a frame was dropped
+        private bool _forceKeyframeNext;
+
         /// <summary>
         /// Call this at End-Of-Frame (Phase: PostSimulation).
         /// </summary>
         /// <param name="blocking">If true, waits for previous write to complete instead of dropping frame.</param>
         public void CaptureFrame(EntityRepository repo, uint prevTick, bool blocking = false)
         {
+            // Auto-Recovery: If we dropped a frame previously, force a Keyframe now to restore state.
+            if (_forceKeyframeNext)
+            {
+                CaptureKeyframe(repo, blocking);
+                _forceKeyframeNext = false;
+                return;
+            }
+
             // 1. SAFETY CHECK
             // If the worker is still busy compressing the LAST frame, we are generating data faster than disk can write.
             if (_workerTask != null && !_workerTask.IsCompleted)
@@ -74,6 +92,7 @@ namespace Fdp.Kernel.FlightRecorder
                     // A) Block (Stutter game)
                     // B) Drop Frame (Gaps in replay) -> Preferred for Recorder
                     DroppedFrames++;
+                    _forceKeyframeNext = true; // Recover on next frame
                     return;
                 }
             }
@@ -143,27 +162,45 @@ namespace Fdp.Kernel.FlightRecorder
             
             RecordedFrames++;
         }
-        
+
         /// <summary>
-        /// Runs on ThreadPool - ZERO ALLOCATION (uses pre-allocated _writeBuffer)
+        /// Runs on ThreadPool - ZERO ALLOCATION (uses pre-allocated buffers)
         /// </summary>
         private void ProcessBuffer(byte[] rawData, int length)
         {
             try
             {
-                // Zero-allocation: Use pre-allocated _writeBuffer
-                // Format: [TotalLength: int] [Bytes...]
-                
+                // 1. Extract Metadata for Indexing (Duplicated in header to avoid decompression during scan)
+                // Format ensures [Tick: 8 bytes] [Type: 1 byte] are at start
+                ulong tick = BitConverter.ToUInt64(rawData, 0);
+                byte type = rawData[8];
+
+                // 2. COMPRESS
+                // Compress the ENTIRE frame (including Tick/Type because PlaybackSystem expects them)
+                int encodedLength = K4os.Compression.LZ4.LZ4Codec.Encode(
+                    rawData, 0, length, 
+                    _compressedBuffer, 0, _compressedBuffer.Length);
+
                 lock (_outputStream)
                 {
-                    // Copy length prefix (4 bytes)
-                    BitConverter.TryWriteBytes(new Span<byte>(_writeBuffer, 0, 4), length);
+                    // 3. WRITE HEADER
+                    // New Format: [CompLen: 4][UncompLen: 4][Tick: 8][Type: 1][CompressedData...]
                     
-                    // Copy payload
-                    Array.Copy(rawData, 0, _writeBuffer, 4, length);
+                    Span<byte> header = stackalloc byte[17]; // 4 + 4 + 8 + 1
                     
-                    // Single write operation
-                    _outputStream.Write(_writeBuffer, 0, length + 4);
+                    // Compressed Length
+                    System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(header.Slice(0, 4), encodedLength);
+                    // Uncompressed Length
+                    System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(header.Slice(4, 4), length);
+                    // Tick
+                    System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(header.Slice(8, 8), tick);
+                    // Type
+                    header[16] = type;
+                    
+                    _outputStream.Write(header);
+                    
+                    // 4. WRITE PAYLOAD
+                    _outputStream.Write(_compressedBuffer, 0, encodedLength);
                     _outputStream.Flush();
                 }
             }

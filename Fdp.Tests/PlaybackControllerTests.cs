@@ -116,8 +116,8 @@ namespace Fdp.Tests
             // Assert
             Assert.Equal(FrameType.Keyframe, frame0.FrameType);
             Assert.Equal(FrameType.Keyframe, frame5.FrameType);
-            Assert.True(frame0.FrameSize > 0);
-            Assert.True(frame5.FrameSize > 0);
+            Assert.True(frame0.CompressedSize > 0);
+            Assert.True(frame5.CompressedSize > 0);
         }
         
         // ================================================

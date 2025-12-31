@@ -159,7 +159,7 @@ namespace Fdp.Tests
                     Index = i,
                     Tick = metadata.Tick,
                     FrameType = metadata.FrameType,
-                    Size = metadata.FrameSize
+                    Size = metadata.CompressedSize
                 };
                 
                 if (metadata.FrameType == FrameType.Keyframe)

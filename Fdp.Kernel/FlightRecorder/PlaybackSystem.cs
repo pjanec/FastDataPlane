@@ -480,19 +480,45 @@ namespace Fdp.Kernel.FlightRecorder
         {
             try
             {
-                // Read frame size
-                int frameSize = _reader.ReadInt32();
+                // Read compressed size
+                // Format: [CompLen: 4][UncompLen: 4][Tick: 8][Type: 1][CompressedData...]
+                if (_fileStream.Position >= _fileStream.Length) return false;
                 
-                if (frameSize <= 0 || frameSize > 32 * 1024 * 1024)
+                int compSize = _reader.ReadInt32();
+                
+                if (compSize <= 0)
                 {
                     return false; // Invalid or end of file
                 }
                 
-                // Read frame data
-                byte[] frameData = _reader.ReadBytes(frameSize);
+                int uncompSize = _reader.ReadInt32();
+                
+                // Skip duplicated metadata (Tick + Type) which is only for indexing
+                // The actual Tick/Type is also inside the compressed payload
+                const int HEADER_METADATA_SIZE = 9; // 8 bytes Tick + 1 byte Type
+                _fileStream.Position += HEADER_METADATA_SIZE;
+                
+                // Read compressed data
+                byte[] compressedData = _reader.ReadBytes(compSize);
+                
+                if (compressedData.Length != compSize)
+                {
+                    return false; // Truncated or incomplete frame
+                }
+                
+                // Decompress
+                byte[] rawFrame = new byte[uncompSize];
+                try 
+                {
+                    K4os.Compression.LZ4.LZ4Codec.Decode(compressedData, 0, compressedData.Length, rawFrame, 0, uncompSize);
+                }
+                catch
+                {
+                   return false; // Decompression failed (corrupted data)
+                }
                 
                 // Apply frame
-                using (var ms = new MemoryStream(frameData))
+                using (var ms = new MemoryStream(rawFrame))
                 using (var frameReader = new BinaryReader(ms))
                 {
                     _playback.ApplyFrame(repo, frameReader);
@@ -503,6 +529,10 @@ namespace Fdp.Kernel.FlightRecorder
             catch (EndOfStreamException)
             {
                 return false;
+            }
+            catch
+            {
+                return false; // Any other error during read/decode
             }
         }
         

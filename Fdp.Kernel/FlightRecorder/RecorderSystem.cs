@@ -115,11 +115,13 @@ namespace Fdp.Kernel.FlightRecorder
                    // Reuse shared liveness buffer
                    FillLiveness(entityIndex, c * indexCapacity, indexCapacity, _livenessBuffer);
                    
-                   entityIndex.SanitizeChunk(c, new ReadOnlySpan<bool>(_livenessBuffer, 0, indexCapacity));
+                   // Safe sanitization: Copy first, then sanitize the copy
                    int bytes = entityIndex.CopyChunkToBuffer(c, _scratchBuffer);
                    
                    if (bytes > 0)
                    {
+                       // Zero out dead entities in the scratch buffer
+                       SanitizeScratchBuffer(_scratchBuffer, bytes, System.Runtime.CompilerServices.Unsafe.SizeOf<EntityHeader>(), new ReadOnlySpan<bool>(_livenessBuffer, 0, indexCapacity));
                        actualChunkCount++;
                        writer.Write(c);
                        writer.Write(1); // Count = 1 (Headers only)
@@ -232,12 +234,13 @@ namespace Fdp.Kernel.FlightRecorder
                     FillLiveness(entityIndex, startId, count, _livenessBuffer);
                     
                     // Sanitize
-                    unmanagedTable.SanitizeChunk(c, new ReadOnlySpan<bool>(_livenessBuffer, 0, capacity));
-                    
-                    // Copy
+                    // Copy first
                     int bytes = unmanagedTable.CopyChunkToBuffer(c, _scratchBuffer);
+
+                    // Sanitize the COPY
                     if (bytes > 0)
                     {
+                        SanitizeScratchBuffer(_scratchBuffer, bytes, table.ComponentSize, new ReadOnlySpan<bool>(_livenessBuffer, 0, capacity));
                         actualChunkCount++;
                         writer.Write(c);            // Chunk ID (specific to this table)
                         writer.Write(1);            // Count (1 component type)
@@ -305,11 +308,11 @@ namespace Fdp.Kernel.FlightRecorder
 
                 FillLiveness(entityIndex, c * indexCapacity, indexCapacity, _livenessBuffer);
                 
-                entityIndex.SanitizeChunk(c, new ReadOnlySpan<bool>(_livenessBuffer, 0, indexCapacity));
                 int bytes = entityIndex.CopyChunkToBuffer(c, _scratchBuffer);
                 
                 if (bytes > 0)
                 {
+                    SanitizeScratchBuffer(_scratchBuffer, bytes, System.Runtime.CompilerServices.Unsafe.SizeOf<EntityHeader>(), new ReadOnlySpan<bool>(_livenessBuffer, 0, indexCapacity));
                     actualChunkCount++;
                     writer.Write(c);
                     writer.Write(1);
@@ -361,11 +364,11 @@ namespace Fdp.Kernel.FlightRecorder
                     // Fill liveness
                     FillLiveness(entityIndex, startId, capacity, _livenessBuffer);
                     
-                    unmanagedTable.SanitizeChunk(c, new ReadOnlySpan<bool>(_livenessBuffer, 0, capacity));
                     int bytesWritten = unmanagedTable.CopyChunkToBuffer(c, _scratchBuffer);
                     
                     if (bytesWritten > 0)
                     {
+                        SanitizeScratchBuffer(_scratchBuffer, bytesWritten, table.ComponentSize, new ReadOnlySpan<bool>(_livenessBuffer, 0, capacity));
                         actualChunkCount++;
                         writer.Write(c);
                         writer.Write(1); // Count
@@ -648,6 +651,33 @@ namespace Fdp.Kernel.FlightRecorder
             writer.BaseStream.Position = countPos;
             writer.Write(actualCount);
             writer.BaseStream.Position = endPos;
+        }
+
+        /// <summary>
+        /// Sanitizes the scratch buffer by zeroing out data for dead entities.
+        /// Does NOT modify the live component table.
+        /// </summary>
+        private unsafe void SanitizeScratchBuffer(byte[] buffer, int bytesWritten, int entitySize, ReadOnlySpan<bool> liveness)
+        {
+            fixed (byte* ptr = buffer)
+            {
+                // Iterate only up to what fits in liveness or bytesWritten
+                // Note: liveness.Length is typically ChunkCapacity.
+                for (int i = 0; i < liveness.Length; i++)
+                {
+                    // If the entity is dead, zero out its slot in the scratch buffer
+                    if (!liveness[i])
+                    {
+                        int offset = i * entitySize;
+                        
+                        // Buffer safety check
+                        if (offset + entitySize <= bytesWritten)
+                        {
+                            System.Runtime.CompilerServices.Unsafe.InitBlock(ptr + offset, 0, (uint)entitySize);
+                        }
+                    }
+                }
+            }
         }
     }
     
