@@ -196,6 +196,22 @@ namespace Fdp.Kernel
         }
         
         /// <summary>
+        /// Gets direct reference to entity header WITHOUT bounds checking.
+        /// ONLY use this when the index is guaranteed valid by the caller.
+        /// Used internally by optimized parallel iterators.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal ref EntityHeader GetHeaderUnsafe(int entityIndex)
+        {
+            #if DEBUG
+            System.Diagnostics.Debug.Assert(entityIndex >= 0 && entityIndex <= _maxIssuedIndex,
+                $"GetHeaderUnsafe: Index {entityIndex} out of range [0, {_maxIssuedIndex}]");
+            #endif
+            
+            return ref _headers[entityIndex];
+        }
+        
+        /// <summary>
         /// Gets population count for a chunk (for iterator optimization).
         /// </summary>
         public int GetChunkPopulation(int chunkIndex)

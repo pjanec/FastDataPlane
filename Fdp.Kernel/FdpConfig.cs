@@ -60,5 +60,57 @@ namespace Fdp.Kernel
             int capacity = GetChunkCapacity<T>();
             return (MAX_ENTITIES + capacity - 1) / capacity; // Ceiling division
         }
+        
+        /// <summary>
+        /// Global switch to control CPU usage for parallel operations.
+        /// -1 = Use all cores (Environment.ProcessorCount)
+        ///  1 = Single threaded
+        ///  N = Specific number of threads
+        /// </summary>
+        public static int MaxDegreeOfParallelism { get; set; } = -1;
+        
+        /// <summary>
+        /// Helper to get ParallelOptions configured with MaxDegreeOfParallelism.
+        /// </summary>
+        internal static System.Threading.Tasks.ParallelOptions ParallelOptions => 
+            new System.Threading.Tasks.ParallelOptions 
+            { 
+                MaxDegreeOfParallelism = MaxDegreeOfParallelism 
+            };
+    }
+    
+    /// <summary>
+    /// Hints for the parallel partitioner regarding the workload "heaviness".
+    /// Used to balance overhead vs. granularity for optimal CPU utilization.
+    /// </summary>
+    public enum ParallelHint
+    {
+        /// <summary>
+        /// (Default) Simple math operations (e.g., Position += Velocity). 
+        /// Large batches (1024+), low overhead.
+        /// Best for systems with minimal per-entity computation.
+        /// </summary>
+        Light, 
+
+        /// <summary>
+        /// Moderate logic (e.g., Collision checks, simple state machines).
+        /// Medium batches (256-512).
+        /// Balances overhead with load distribution.
+        /// </summary>
+        Medium,
+
+        /// <summary>
+        /// Expensive logic (e.g., Pathfinding, raycasting, complex AI).
+        /// Small batches (32-64) to maximize load balancing.
+        /// Ensures all cores stay busy even with variable workloads.
+        /// </summary>
+        Heavy,
+
+        /// <summary>
+        /// Extremely expensive operations (e.g., File I/O, heavy procedural generation).
+        /// Tiny batches (1-16) to ensure every core contributes.
+        /// Maximum granularity for maximum parallelism.
+        /// </summary>
+        VeryHeavy
     }
 }

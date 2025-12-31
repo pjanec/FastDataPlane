@@ -25,7 +25,9 @@ namespace Fdp.Kernel
         private readonly int[] _populationCounts;
         
         // Track modification version per chunk for Delta Iteration
-        private readonly uint[] _chunkVersions;
+        // Using PaddedVersion to prevent false sharing when multiple threads
+        // update versions for entities in the same chunk simultaneously
+        private readonly Internal.PaddedVersion[] _chunkVersions;
         
         // Lock for thread-safe chunk allocation
         private readonly object _allocationLock = new object();
@@ -44,7 +46,7 @@ namespace Fdp.Kernel
             // Allocate tracking arrays
             _chunks = new NativeChunk<T>[_totalChunks];
             _populationCounts = new int[_totalChunks];
-            _chunkVersions = new uint[_totalChunks];
+            _chunkVersions = new Internal.PaddedVersion[_totalChunks];
             
             // Committed mask: 1 bit per chunk
             int maskSize = (_totalChunks + 63) / 64;
@@ -65,7 +67,7 @@ namespace Fdp.Kernel
         /// <summary>
         /// Gets the last modification version of a chunk.
         /// </summary>
-        public uint GetChunkVersion(int chunkIndex) => _chunkVersions[chunkIndex];
+        public uint GetChunkVersion(int chunkIndex) => _chunkVersions[chunkIndex].Value;
         
         /// <summary>
         /// Gets population count for a specific chunk.
@@ -126,8 +128,15 @@ namespace Fdp.Kernel
             
             EnsureChunkAllocated(chunkIndex);
             
-            // Mark modified
-            _chunkVersions[chunkIndex] = currentVersion;
+            // OPTIMIZATION: Check-Before-Write to prevent cache line thrashing.
+            // When multiple threads process entities in the same chunk,
+            // they all write the same version value. Without this check,
+            // each write invalidates other cores' cache lines (false sharing),
+            // causing severe performance degradation.
+            if (_chunkVersions[chunkIndex].Value != currentVersion)
+            {
+                _chunkVersions[chunkIndex].Value = currentVersion;
+            }
             
             return ref _chunks[chunkIndex][localIndex];
         }
@@ -230,7 +239,7 @@ namespace Fdp.Kernel
                         _chunks[i] = default;
                     }
                     _populationCounts[i] = 0;
-                    _chunkVersions[i] = 0;
+                    _chunkVersions[i].Value = 0;
                 }
                 Array.Clear(_committedMask, 0, _committedMask.Length);
             }
