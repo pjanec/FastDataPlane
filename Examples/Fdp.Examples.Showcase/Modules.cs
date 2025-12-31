@@ -25,6 +25,7 @@ namespace Fdp.Examples.Showcase.Modules
         public void Load(EntityRepository repo)
         {
             repo.RegisterComponent<UnitStats>();
+            repo.RegisterComponent<Corpse>();
         }
     }
 

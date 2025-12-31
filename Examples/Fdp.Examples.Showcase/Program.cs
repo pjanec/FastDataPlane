@@ -26,6 +26,7 @@ namespace Fdp.Examples.Showcase
         private static ProjectileSystem _projectileSystem = null!;
         private static HitFlashSystem _hitFlashSystem = null!;
         private static ParticleSystem _particleSystem = null!;
+        private static LifecycleSystem _lifecycle = null!;
         
         // Event Bus
         private static FdpEventBus _eventBus = null!;
@@ -83,14 +84,18 @@ namespace Fdp.Examples.Showcase
             // Register global services
             _timeSystem = new TimeSystem(_repo);
             
-            // Create Systems
+            // Create the Lifecycle System (Barrier) FIRST
+            // Other systems will reference it to queue structural changes
+            _lifecycle = new LifecycleSystem(_repo);
+            
+            // Create Systems - pass lifecycle to systems that need to destroy entities
             _movement = new MovementSystem(_repo);
             _combat = new PatrolSystem(_repo);
             _collision = new CollisionSystem(_repo, _eventBus);
             _combatSystem = new CombatSystem(_repo, _eventBus);
-            _projectileSystem = new ProjectileSystem(_repo, _eventBus);
+            _projectileSystem = new ProjectileSystem(_repo, _eventBus, _lifecycle);
             _hitFlashSystem = new HitFlashSystem(_repo);
-            _particleSystem = new ParticleSystem(_repo, _eventBus);
+            _particleSystem = new ParticleSystem(_repo, _eventBus, _lifecycle);
             
             // Flight Recorder
             _recorder = new RecorderSystem();
@@ -171,21 +176,26 @@ namespace Fdp.Examples.Showcase
             // 2. Logic Step
             if (!_isReplaying && !_isPaused)
             {
-                // Live Mode
+                // Live Mode - Run all logic systems
                 _timeSystem.Update(); // Updates GlobalTime singleton (TimeSystem has specific API)
                 
+                // All systems see the SAME world state during this phase
                 _combat.Run();          // Patrol/boundaries
                 _movement.Run();        // Move entities
                 _collision.Run();       // Detect collisions
                 _combatSystem.Run();    // Process combat
-                _projectileSystem.Run(); // Update projectiles
+                _projectileSystem.Run(); // Update projectiles (queues destruction to lifecycle ECB)
                 _hitFlashSystem.Run();  // Visual effects
-                _particleSystem.Run();  // Particle effects
+                _particleSystem.Run();  // Particle effects (queues destruction to lifecycle ECB)
+                
+                // Run the Barrier LAST - Apply all structural changes (destroy, create, etc.)
+                // This ensures all systems saw the same entities, and the recorder sees the final state
+                _lifecycle.Run();
                 
                 // Swap event bus buffers (events published this frame become consumable next frame)
                 _eventBus.SwapBuffers();
                 
-                // RECORDING
+                // RECORDING - Now the world state is final for this frame
                 if (_isRecording && !_isPaused)
                 {
                     long pos = _flightRecorderStream.Position;
@@ -400,7 +410,7 @@ namespace Fdp.Examples.Showcase
              
              // Simple ASCII buffer render
              char[,] buffer = new char[20, 60];
-             for(int y=0; y<20;y++) for(int x=0; x<60; x++) buffer[y,x] = '.';
+             for(int y=0; y<20;y++) for(int x=0; x<60; x++) buffer[y,x] = ' ';
              
              renderQuery.ForEach(entity =>
              {

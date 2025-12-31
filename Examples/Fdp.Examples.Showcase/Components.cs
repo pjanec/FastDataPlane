@@ -59,6 +59,12 @@ namespace Fdp.Examples.Showcase.Components
         public float FadeTime;
     }
     
+    // Corpse - marks a dead entity that should be removed after a delay
+    public struct Corpse
+    {
+        public float TimeRemaining; // Time before entity is removed
+    }
+    
     // Events for demonstration of Event Bus
     [EventId(100)]
     public struct CollisionEvent
