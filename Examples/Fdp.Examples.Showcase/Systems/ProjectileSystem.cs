@@ -81,16 +81,10 @@ namespace Fdp.Examples.Showcase.Systems
                         unitStats.Health -= damage;
                         
                         // Add hit flash effect
-                        if (World.HasComponent<RenderSymbol>(unit))
+                        World.AddComponent(unit, new HitFlash
                         {
-                            var render = World.GetComponentRO<RenderSymbol>(unit);
-                            World.AddComponent(unit, new HitFlash
-                            {
-                                Duration = 0.3f,
-                                FlashColor = System.ConsoleColor.Red,
-                                OriginalColor = render.Color
-                            });
-                        }
+                            Remaining = 0.3f
+                        });
                         
                         // Fire events
                         _eventBus.Publish(new ProjectileHitEvent
@@ -126,12 +120,14 @@ namespace Fdp.Examples.Showcase.Systems
                                 World.RemoveComponent<Velocity>(unit);
                             }
                             
-                            // Visual death indicator (shows 'x' until corpse timer expires)
+                            // Visual death indicator (darker color)
                             if (World.HasComponent<RenderSymbol>(unit))
                             {
                                 ref var render = ref World.GetComponentRW<RenderSymbol>(unit);
-                                render.Color = System.ConsoleColor.DarkGray;
-                                render.Symbol = 'x';
+                                render.R = (byte)(render.R / 2);
+                                render.G = (byte)(render.G / 2);
+                                render.B = (byte)(render.B / 2);
+                                render.Shape = EntityShape.Cross;
                             }
                             
                             // Mark as corpse - will be removed after 1 second

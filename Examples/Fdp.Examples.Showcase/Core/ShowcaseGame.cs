@@ -1,9 +1,8 @@
 using System;
-using System.IO;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Threading;
-using Spectre.Console;
+using Raylib_cs;
+using rlImGui_cs;
 using Fdp.Kernel;
 using Fdp.Kernel.FlightRecorder;
 using Fdp.Examples.Showcase.Components;
@@ -107,51 +106,40 @@ namespace Fdp.Examples.Showcase.Core
             SpawnUnit(UnitType.Infantry, 20, 12, 1, 1);
         }
 
-        public void RunLoop()
+        public void RunRaylibLoop()
         {
-            if (Console.IsOutputRedirected)
+            // Main Raylib game loop
+            while (!Raylib.WindowShouldClose() && IsRunning)
             {
-                Console.WriteLine("Headless mode detected. Running simulation...");
-                while (IsRunning)
-                {
-                    UpdateLoop(null);
-                    Thread.Sleep(33);
-                }
-            }
-            else
-            {
-                try
-                {
-                    // Use live display for stats
-                    AnsiConsole.Live(new Panel("Initializing..."))
-                        .Start(ctx => 
-                        {
-                            while (IsRunning)
-                            {
-                                UpdateLoop(ctx);
-                                Thread.Sleep(33);
-                            }
-                        });
-                }
-                catch (IOException)
-                {
-                    // Fallback
-                    while (IsRunning)
-                    {
-                         UpdateLoop(null);
-                         Thread.Sleep(33);
-                    }
-                }
+                float dt = Raylib.GetFrameTime();
+                
+                // Update
+                _renderer.UpdateCamera(dt);
+                UpdateFrame(dt);
+                
+                // Render
+                Raylib.BeginDrawing();
+                Raylib.ClearBackground(new Color(20, 20, 30, 255));
+                
+                _renderer.RenderBattlefield();
+                
+                // Draw ImGui UI
+                rlImGui.Begin();
+                var ui = new ShowcaseUI(this);
+                ui.DrawAllPanels();
+                rlImGui.End();
+                
+                Raylib.EndDrawing();
             }
         }
 
-        private void UpdateLoop(LiveDisplayContext? ctx)
+        private void UpdateFrame(float dt)
         {
             long frameStart = Stopwatch.GetTimestamp();
             
-            // 1. Input
+            // 1. Input - handled by Raylib keyboard checking
             long phaseStart = Stopwatch.GetTimestamp();
-            _input.HandleInput();
+            _input.HandleRaylibInput();
             RecordPhaseTime("1. Input", phaseStart);
             
             // 2. Logic Step
@@ -241,14 +229,6 @@ namespace Fdp.Examples.Showcase.Core
                     RecordPhaseTime("Playback.Step", phaseStart);
                 }
             }
-
-            // 3. Render
-            if (ctx != null)
-            {
-                phaseStart = Stopwatch.GetTimestamp();
-                _renderer.Render(ctx);
-                RecordPhaseTime("15. Render", phaseStart);
-            }
             
             // Record total frame time
             TotalFrameTime = (Stopwatch.GetTimestamp() - frameStart) * 1000.0 / Stopwatch.Frequency;
@@ -282,18 +262,19 @@ namespace Fdp.Examples.Showcase.Core
             Repo.AddComponent(e, new Position { X = x, Y = y });
             Repo.AddComponent(e, new Velocity { X = vx, Y = vy });
             
-            char sym = type switch {
-                UnitType.Tank => 'T',
-                UnitType.Aircraft => '^',
-                _ => 'i'
-            };
-            ConsoleColor col = type switch {
-                UnitType.Tank => ConsoleColor.Yellow,
-                UnitType.Aircraft => ConsoleColor.Cyan,
-                 _ => ConsoleColor.White
+            var (shape, r, g, b, size) = type switch {
+                UnitType.Tank => (EntityShape.Square, (byte)255, (byte)255, (byte)100, 1.5f),
+                UnitType.Aircraft => (EntityShape.Triangle, (byte)100, (byte)200, (byte)255, 1.2f),
+                _ => (EntityShape.Circle, (byte)150, (byte)150, (byte)150, 0.8f)
             };
             
-            Repo.AddComponent(e, new RenderSymbol { Symbol = sym, Color = col });
+            Repo.AddComponent(e, new RenderSymbol { 
+                Shape = shape, 
+                R = r, 
+                G = g, 
+                B = b,
+                Size = size
+            });
             Repo.AddComponent(e, new UnitStats { Type = type, Health = 100, MaxHealth = 100 });
         }
         

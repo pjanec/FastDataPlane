@@ -1,32 +1,40 @@
 ﻿using System;
-using System.IO;
-using Spectre.Console;
+using Raylib_cs;
+using rlImGui_cs;
 using Fdp.Examples.Showcase.Core;
 
 namespace Fdp.Examples.Showcase
 {
     class Program
     {
+        const int WINDOW_WIDTH = 1920;
+        const int WINDOW_HEIGHT = 1080;
+        const int TARGET_FPS = 144;
+
         static void Main(string[] args)
         {
-            // Setup Console
-            try 
-            { 
-                if (!Console.IsOutputRedirected) Console.Clear(); 
-            } catch (IOException) { /* Ignore if no console */ }
+            // Initialize Raylib window
+            Raylib.InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "FDP Military Showcase - Raylib + ImGui");
+            Raylib.SetTargetFPS(TARGET_FPS);
             
-            AnsiConsole.Write(new FigletText("FDP Military").Color(Color.Green));
+            // Initialize ImGui bridge
+            rlImGui.Setup(true);
 
             try
             {
                 var game = new ShowcaseGame();
                 game.Initialize();
-                game.RunLoop();
+                game.RunRaylibLoop();
                 game.Cleanup();
             }
             catch (Exception ex)
             {
                 Console.WriteLine("CRITICAL ERROR: " + ex.ToString());
+            }
+            finally
+            {
+                rlImGui.Shutdown();
+                Raylib.CloseWindow();
             }
         }
     }

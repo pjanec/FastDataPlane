@@ -48,20 +48,11 @@ namespace Fdp.Examples.Showcase.Systems
             {
                 ref var particle = ref World.GetComponentRW<Particle>(entity);
                 
-                particle.Lifetime -= dt;
+                particle.LifeRemaining -= dt;
                 
-                if (particle.Lifetime <= 0)
+                if (particle.LifeRemaining <= 0)
                 {
                     toDestroy.Add(entity);
-                }
-                else if (World.HasComponent<RenderSymbol>(entity))
-                {
-                    // Fade effect
-                    ref var render = ref World.GetComponentRW<RenderSymbol>(entity);
-                    if (particle.Lifetime < particle.FadeTime * 0.3f)
-                    {
-                        render.Color = System.ConsoleColor.DarkGray;
-                    }
                 }
             });
             
@@ -77,11 +68,11 @@ namespace Fdp.Examples.Showcase.Systems
             var rand = new System.Random();
             int particleCount = rand.Next(8, 13); // 8-12 particles
             
-            System.ConsoleColor explosionColor = unitType switch
+            (byte r, byte g, byte b) = unitType switch
             {
-                UnitType.Tank => System.ConsoleColor.DarkYellow,
-                UnitType.Aircraft => System.ConsoleColor.DarkCyan,
-                _ => System.ConsoleColor.Gray
+                UnitType.Tank => ((byte)200, (byte)180, (byte)50),
+                UnitType.Aircraft => ((byte)50, (byte)150, (byte)200),
+                _ => ((byte)150, (byte)150, (byte)150)
             };
             
             for (int i = 0; i < particleCount; i++)
@@ -100,15 +91,21 @@ namespace Fdp.Examples.Showcase.Systems
                 float lifetime = (float)(rand.NextDouble() * 0.5 + 0.5); // 0.5-1.0 seconds
                 World.AddComponent(particle, new Particle 
                 { 
-                    Lifetime = lifetime,
-                    FadeTime = lifetime
+                    LifeRemaining = lifetime,
+                    MaxLife = lifetime,
+                    R = r,
+                    G = g,
+                    B = b,
+                    Size = 0.2f
                 });
                 
-                char[] symbols = new[] { '.', '`', '+', 'o' };
                 World.AddComponent(particle, new RenderSymbol 
                 { 
-                    Symbol = symbols[rand.Next(symbols.Length)],
-                    Color = explosionColor
+                    Shape = EntityShape.Circle,
+                    R = r,
+                    G = g,
+                    B = b,
+                    Size = 0.2f
                 });
             }
         }

@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fdp.Tests", "Fdp.Tests\Fdp.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fdp.Examples.Showcase", "Examples\Fdp.Examples.Showcase\Fdp.Examples.Showcase.csproj", "{254D11F3-680C-9D94-B7D3-31B72718757A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fdp.Examples.Visualizer", "Examples\Fdp.Examples.Visualizer\Fdp.Examples.Visualizer.csproj", "{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{254D11F3-680C-9D94-B7D3-31B72718757A}.Release|x64.Build.0 = Release|Any CPU
 		{254D11F3-680C-9D94-B7D3-31B72718757A}.Release|x86.ActiveCfg = Release|Any CPU
 		{254D11F3-680C-9D94-B7D3-31B72718757A}.Release|x86.Build.0 = Release|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Debug|x64.Build.0 = Debug|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Debug|x86.Build.0 = Debug|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Release|x64.ActiveCfg = Release|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Release|x64.Build.0 = Release|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Release|x86.ActiveCfg = Release|Any CPU
+		{8B1E5C47-9A23-4F5D-B8E1-3C4D5F6A7B89}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

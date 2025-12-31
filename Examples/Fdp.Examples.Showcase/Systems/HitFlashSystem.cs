@@ -31,20 +31,12 @@ namespace Fdp.Examples.Showcase.Systems
             _query.ForEachParallel(entity =>
             {
                 ref var flash = ref World.GetComponentRW<HitFlash>(entity);
-                ref var render = ref World.GetComponentRW<RenderSymbol>(entity);
                 
                 // Update flash timer
-                flash.Duration -= dt;
+                flash.Remaining -= dt;
                 
-                if (flash.Duration > 0)
+                if (flash.Remaining <= 0)
                 {
-                    // Flash to hit color
-                    render.Color = flash.FlashColor;
-                }
-                else
-                {
-                    // Restore original color
-                    render.Color = flash.OriginalColor;
                     toRemoveQueue.Enqueue(entity);
                 }
             });

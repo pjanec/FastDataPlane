@@ -2,28 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Numerics;
 using Fdp.Kernel;
-using Spectre.Console;
-using Spectre.Console.Rendering;
+using ImGuiNET;
 using Fdp.Examples.Showcase.Components;
 
 namespace Fdp.Examples.Showcase
 {
     /// <summary>
-    /// Interactive entity inspector for debugging.
-    /// Shows entities, their components, and detailed component properties.
+    /// Interactive entity inspector for debugging using ImGui.
+    /// Shows entities in 3 panels: Top (entity list), Middle (component list), Bottom (component details).
     /// </summary>
     public class EntityInspector
     {
-        private enum FocusMode
-        {
-            EntityList,
-            ComponentList,
-            ComponentDetail
-        }
-        
         private readonly EntityRepository _repo;
-        private FocusMode _focusMode = FocusMode.EntityList;
         
         // Selection state
         private List<Entity> _entities = new();
@@ -69,202 +61,162 @@ namespace Fdp.Examples.Showcase
             }
         }
         
-        public bool HandleInput(ConsoleKeyInfo keyInfo)
+        public void DrawImGui()
         {
-            bool shift = (keyInfo.Modifiers & ConsoleModifiers.Shift) != 0;
+            Update(); // Refresh data before drawing
             
-            switch (keyInfo.Key)
+            // Position the inspector window on the right side
+            ImGui.SetNextWindowPos(new Vector2(1920 - 510, 10), ImGuiCond.FirstUseEver);
+            ImGui.SetNextWindowSize(new Vector2(500, 1060), ImGuiCond.FirstUseEver);
+            
+            if (ImGui.Begin("Entity Inspector", ImGuiWindowFlags.NoCollapse))
             {
-                case ConsoleKey.Tab:
-                    if (shift)
-                    {
-                        // Shift+Tab - Cycle backwards
-                        _focusMode = _focusMode switch
-                        {
-                            FocusMode.EntityList => FocusMode.ComponentDetail,
-                            FocusMode.ComponentList => FocusMode.EntityList,
-                            FocusMode.ComponentDetail => FocusMode.ComponentList,
-                            _ => FocusMode.EntityList
-                        };
-                    }
-                    else
-                    {
-                        // Tab - Cycle forwards
-                        _focusMode = _focusMode switch
-                        {
-                            FocusMode.EntityList => FocusMode.ComponentList,
-                            FocusMode.ComponentList => FocusMode.ComponentDetail,
-                            FocusMode.ComponentDetail => FocusMode.EntityList,
-                            _ => FocusMode.EntityList
-                        };
-                    }
-                    return true; // Consumed
-                    
-                case ConsoleKey.UpArrow:
-                    if (_focusMode == FocusMode.EntityList)
-                        _selectedEntityIndex = Math.Max(0, _selectedEntityIndex - 1);
-                    else if (_focusMode == FocusMode.ComponentList)
-                        _selectedComponentIndex = Math.Max(0, _selectedComponentIndex - 1);
-                    return true; // Consumed
-                    
-                case ConsoleKey.DownArrow:
-                    if (_focusMode == FocusMode.EntityList)
-                        _selectedEntityIndex = Math.Min(_entities.Count - 1, _selectedEntityIndex + 1);
-                    else if (_focusMode == FocusMode.ComponentList)
-                        _selectedComponentIndex = Math.Min(_components.Count - 1, _selectedComponentIndex + 1);
-                    return true; // Consumed
-                    
-                case ConsoleKey.PageUp:
-                    if (_focusMode == FocusMode.EntityList)
-                        _selectedEntityIndex = Math.Max(0, _selectedEntityIndex - 10);
-                    else if (_focusMode == FocusMode.ComponentList)
-                        _selectedComponentIndex = Math.Max(0, _selectedComponentIndex - 5);
-                    return true; // Consumed
-                    
-                case ConsoleKey.PageDown:
-                    if (_focusMode == FocusMode.EntityList)
-                        _selectedEntityIndex = Math.Min(_entities.Count - 1, _selectedEntityIndex + 10);
-                    else if (_focusMode == FocusMode.ComponentList)
-                        _selectedComponentIndex = Math.Min(_components.Count - 1, _selectedComponentIndex + 5);
-                    return true; // Consumed
-                    
-                default:
-                    return false; // Not consumed - allow common shortcuts to process
+                // TOP PANEL: Entity List
+                DrawEntityListPanel();
+                
+                ImGui.Separator();
+                
+                // MIDDLE PANEL: Component List
+                DrawComponentListPanel();
+                
+                ImGui.Separator();
+                
+                // BOTTOM PANEL: Component Details
+                DrawComponentDetailsPanel();
             }
+            ImGui.End();
         }
         
-        public IRenderable Render(int width)
+        private void DrawEntityListPanel()
         {
-            // Use Grid instead of Layout to stack panels without overlap
-            var grid = new Grid();
-            grid.AddColumn();
+            ImGui.TextColored(new Vector4(1, 1, 0, 1), $"Entities ({_entities.Count})");
+            ImGui.BeginChild("EntityListChild", new Vector2(0, 300));
             
-            grid.AddRow(RenderEntityList());
-            grid.AddRow(RenderComponentList());
-            grid.AddRow(RenderComponentDetails());
-            
-            return grid;
-        }
-        
-        private Panel RenderEntityList()
-        {
-            var table = new Table()
-                .Border(TableBorder.Rounded)
-                .BorderColor(_focusMode == FocusMode.EntityList ? Color.Yellow : Color.Grey);
-            
-            table.AddColumn("ID");
-            table.AddColumn("Gen");
-            table.AddColumn("Type");
-            table.AddColumn("Health");
-            table.AddColumn("Position");
-            
-            int displayStart = Math.Max(0, _selectedEntityIndex - 4);
-            int displayEnd = Math.Min(_entities.Count, displayStart + 8);
-            
-            for (int i = displayStart; i < displayEnd; i++)
+            if (ImGui.BeginTable("EntityTable", 5,
+                ImGuiTableFlags.Borders |
+                ImGuiTableFlags.RowBg |
+                ImGuiTableFlags.ScrollY))
             {
-                var entity = _entities[i];
-                bool isSelected = (i == _selectedEntityIndex);
+                ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 50);
+                ImGui.TableSetupColumn("Gen", ImGuiTableColumnFlags.WidthFixed, 40);
+                ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthFixed, 80);
+                ImGui.TableSetupColumn("Health", ImGuiTableColumnFlags.WidthFixed, 60);
+                ImGui.TableSetupColumn("Position", ImGuiTableColumnFlags.WidthFixed, 120);
+                ImGui.TableHeadersRow();
                 
-                string id = entity.Index.ToString();
-                string gen = entity.Generation.ToString();
-                string type = GetEntityType(entity);
-                string health = GetEntityHealth(entity);
-                string pos = GetEntityPosition(entity);
+                for (int i = 0; i < _entities.Count; i++)
+                {
+                    var entity = _entities[i];
+                    bool isSelected = (i == _selectedEntityIndex);
+                    
+                    ImGui.TableNextRow();
+                    
+                    if (isSelected)
+                        ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.3f, 0.3f, 0.5f, 1)));
+                    
+                    ImGui.TableSetColumnIndex(0);
+                    if (ImGui.Selectable($"{entity.Index}", isSelected, ImGuiSelectableFlags.SpanAllColumns))
+                        _selectedEntityIndex = i;
+                    
+                    ImGui.TableSetColumnIndex(1);
+                    ImGui.Text($"{entity.Generation}");
+                    
+                    ImGui.TableSetColumnIndex(2);
+                    ImGui.Text(GetEntityType(entity));
+                    
+                    ImGui.TableSetColumnIndex(3);
+                    ImGui.Text(GetEntityHealth(entity));
+                    
+                    ImGui.TableSetColumnIndex(4);
+                    ImGui.Text(GetEntityPosition(entity));
+                }
                 
-                if (isSelected && _focusMode == FocusMode.EntityList)
-                {
-                    table.AddRow(
-                        $"[yellow]>{id}[/]",
-                        $"[yellow]{gen}[/]",
-                        $"[yellow]{type}[/]",
-                        $"[yellow]{health}[/]",
-                        $"[yellow]{pos}[/]"
-                    );
-                }
-                else if (isSelected)
-                {
-                    table.AddRow($"[bold]{id}[/]", gen, type, health, pos);
-                }
-                else
-                {
-                    table.AddRow(id, gen, type, health, pos);
-                }
+                ImGui.EndTable();
             }
             
-            return new Panel(table)
-                .Header($"[bold]Entities ({_entities.Count})[/]")
-                .BorderColor(_focusMode == FocusMode.EntityList ? Color.Yellow : Color.Grey);
+            ImGui.EndChild();
         }
         
-        private Panel RenderComponentList()
+        private void DrawComponentListPanel()
         {
-            var table = new Table()
-                .Border(TableBorder.Rounded)
-                .BorderColor(_focusMode == FocusMode.ComponentList ? Color.Yellow : Color.Grey);
-            
-            table.AddColumn("Component");
-            table.AddColumn("Summary");
+            ImGui.TextColored(new Vector4(1, 1, 0, 1), $"Components ({_components.Count})");
+            ImGui.BeginChild("ComponentListChild", new Vector2(0, 250));
             
             if (_entities.Count == 0 || _selectedEntityIndex >= _entities.Count)
             {
-                table.AddRow("[dim]No entity selected[/]", "");
+                ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1), "No entity selected");
             }
-            else
+            else if (ImGui.BeginTable("ComponentTable", 2,
+                ImGuiTableFlags.Borders |
+                ImGuiTableFlags.RowBg |
+                ImGuiTableFlags.ScrollY))
             {
+                ImGui.TableSetupColumn("Component", ImGuiTableColumnFlags.WidthFixed, 150);
+                ImGui.TableSetupColumn("Summary", ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableHeadersRow();
+                
                 for (int i = 0; i < _components.Count; i++)
                 {
                     var comp = _components[i];
                     bool isSelected = (i == _selectedComponentIndex);
                     
-                    if (isSelected && _focusMode == FocusMode.ComponentList)
-                    {
-                        table.AddRow(
-                            $"[yellow]>{comp.TypeName}[/]",
-                            $"[yellow]{comp.Summary}[/]"
-                        );
-                    }
-                    else if (isSelected)
-                    {
-                        table.AddRow($"[bold]{comp.TypeName}[/]", comp.Summary);
-                    }
-                    else
-                    {
-                        table.AddRow(comp.TypeName, comp.Summary);
-                    }
+                    ImGui.TableNextRow();
+                    
+                    if (isSelected)
+                        ImGui.TableSetBgColor(ImGuiTableBgTarget.RowBg0, ImGui.GetColorU32(new Vector4(0.3f, 0.3f, 0.5f, 1)));
+                    
+                    ImGui.TableSetColumnIndex(0);
+                    if (ImGui.Selectable(comp.TypeName, isSelected, ImGuiSelectableFlags.SpanAllColumns))
+                        _selectedComponentIndex = i;
+                    
+                    ImGui.TableSetColumnIndex(1);
+                    ImGui.Text(comp.Summary);
                 }
+                
+                ImGui.EndTable();
             }
             
-            return new Panel(table)
-                .Header($"[bold]Components ({_components.Count})[/]")
-                .BorderColor(_focusMode == FocusMode.ComponentList ? Color.Yellow : Color.Grey);
+            ImGui.EndChild();
         }
         
-        private Panel RenderComponentDetails()
+        private void DrawComponentDetailsPanel()
         {
-            var grid = new Grid();
-            grid.AddColumn();
+            ImGui.TextColored(new Vector4(1, 1, 0, 1), "Component Details");
+            ImGui.BeginChild("ComponentDetailsChild", new Vector2(0, 0));
             
             if (_components.Count == 0 || _selectedComponentIndex >= _components.Count)
             {
-                grid.AddRow("[dim]No component selected[/]");
+                ImGui.TextColored(new Vector4(0.5f, 0.5f, 0.5f, 1), "No component selected");
             }
             else
             {
                 var comp = _components[_selectedComponentIndex];
                 
-                grid.AddRow($"[bold underline]{comp.TypeName}[/]");
-                grid.AddRow("");
+                ImGui.TextColored(new Vector4(0, 1, 1, 1), comp.TypeName);
+                ImGui.Separator();
                 
-                foreach (var prop in comp.Properties)
+                if (ImGui.BeginTable("PropertiesTable", 2,
+                    ImGuiTableFlags.Borders |
+                    ImGuiTableFlags.RowBg))
                 {
-                    grid.AddRow($"[cyan]{prop.Key}:[/] {prop.Value}");
+                    ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, 120);
+                    ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableHeadersRow();
+                    
+                    foreach (var prop in comp.Properties)
+                    {
+                        ImGui.TableNextRow();
+                        ImGui.TableSetColumnIndex(0);
+                        ImGui.TextColored(new Vector4(0, 1, 1, 1), prop.Key);
+                        ImGui.TableSetColumnIndex(1);
+                        ImGui.Text(prop.Value);
+                    }
+                    
+                    ImGui.EndTable();
                 }
             }
             
-            return new Panel(grid)
-                .Header("[bold]Component Details[/]")
-                .BorderColor(_focusMode == FocusMode.ComponentDetail ? Color.Yellow : Color.Grey);
+            ImGui.EndChild();
         }
         
         private string GetEntityType(Entity entity)
@@ -335,11 +287,11 @@ namespace Fdp.Examples.Showcase
             {
                 Position pos => $"({pos.X:F1}, {pos.Y:F1})",
                 Velocity vel => $"({vel.X:F1}, {vel.Y:F1})",
-                RenderSymbol sym => $"'{sym.Symbol}' {sym.Color}",
+                RenderSymbol sym => $"{sym.Shape} RGB({sym.R},{sym.G},{sym.B})",
                 UnitStats stats => $"{stats.Type} HP:{stats.Health:F0}",
                 Projectile proj => $"Life:{proj.Lifetime:F1}s",
-                Particle part => $"Life:{part.Lifetime:F1}s",
-                HitFlash flash => $"{flash.Duration:F2}s",
+                Particle part => $"Life:{part.LifeRemaining:F1}s",
+                HitFlash flash => $"Remaining:{flash.Remaining:F2}",
                 Corpse corpse => $"Ttl:{corpse.TimeRemaining:F1}s",
                 _ => ""
             };

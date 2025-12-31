@@ -97,14 +97,20 @@ namespace Fdp.Examples.Showcase.Systems
                         });
                         
                         // Visual: small colored bullet
-                        char symbol = '*';
-                        System.ConsoleColor color = shooterStats.Type switch
+                        (byte r, byte g, byte b) = shooterStats.Type switch
                         {
-                            UnitType.Tank => System.ConsoleColor.Yellow,
-                            UnitType.Aircraft => System.ConsoleColor.Cyan,
-                            _ => System.ConsoleColor.White
+                            UnitType.Tank => ((byte)255, (byte)255, (byte)100),
+                            UnitType.Aircraft => ((byte)100, (byte)200, (byte)255),
+                            _ => ((byte)200, (byte)200, (byte)200)
                         };
-                        World.AddComponent(projectile, new RenderSymbol { Symbol = symbol, Color = color });
+                        World.AddComponent(projectile, new RenderSymbol 
+                        { 
+                            Shape = EntityShape.Cross, 
+                            R = r, 
+                            G = g, 
+                            B = b,
+                            Size = 0.4f
+                        });
                         
                         // Fire event
                         _eventBus.Publish(new ProjectileFiredEvent
