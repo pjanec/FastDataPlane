@@ -366,9 +366,9 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestListObject>(reader);
             
             // Assert
-            Assert.Equal(10000, result.Numbers.Count);
-            Assert.Equal(0, result.Numbers[0]);
-            Assert.Equal(9999, result.Numbers[9999]);
+            Assert.Equal(10000, result!.Numbers!.Count);
+            Assert.Equal(0, result.Numbers![0]);
+            Assert.Equal(9999, result.Numbers![9999]);
         }
         
         #endregion
@@ -683,11 +683,11 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestFloatArrayObject>(reader);
             
             // Assert
-            Assert.Equal(4, result.Coordinates.Length);
-            Assert.Equal(1.1f, result.Coordinates[0], precision: 5);
-            Assert.Equal(2.2f, result.Coordinates[1], precision: 5);
-            Assert.Equal(3.3f, result.Coordinates[2], precision: 5);
-            Assert.Equal(4.4f, result.Coordinates[3], precision: 5);
+            Assert.Equal(4, result!.Coordinates!.Length);
+            Assert.Equal(1.1f, result.Coordinates![0], precision: 5);
+            Assert.Equal(2.2f, result.Coordinates![1], precision: 5);
+            Assert.Equal(3.3f, result.Coordinates![2], precision: 5);
+            Assert.Equal(4.4f, result.Coordinates![3], precision: 5);
         }
         
         #endregion
@@ -786,7 +786,7 @@ namespace Fdp.Tests
             // Arrange
             var obj = new TestStringArrayObject
             {
-                Names = new string[] { "Alpha", "Bravo", "Charlie", null, "Delta" }
+                Names = new string[] { "Alpha", "Bravo", "Charlie", null!, "Delta" }
             };
             
             using var ms = new MemoryStream();
@@ -800,12 +800,12 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestStringArrayObject>(reader);
             
             // Assert
-            Assert.Equal(5, result.Names.Length);
-            Assert.Equal("Alpha", result.Names[0]);
-            Assert.Equal("Bravo", result.Names[1]);
-            Assert.Equal("Charlie", result.Names[2]);
-            Assert.Null(result.Names[3]); // Null in middle
-            Assert.Equal("Delta", result.Names[4]);
+            Assert.Equal(5, result!.Names!.Length);
+            Assert.Equal("Alpha", result.Names![0]);
+            Assert.Equal("Bravo", result.Names![1]);
+            Assert.Equal("Charlie", result.Names![2]);
+            Assert.Null(result.Names![3]); // Null in middle
+            Assert.Equal("Delta", result.Names![4]);
         }
         
         [MessagePackObject]
@@ -821,7 +821,7 @@ namespace Fdp.Tests
             // Arrange
             var obj = new TestListOfStringsObject
             {
-                Tags = new List<string> { "tag1", null, "tag2", "tag3", null }
+                Tags = new List<string> { "tag1", null!, "tag2", "tag3", null! }
             };
             
             using var ms = new MemoryStream();
@@ -835,12 +835,12 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestListOfStringsObject>(reader);
             
             // Assert
-            Assert.Equal(5, result.Tags.Count);
-            Assert.Equal("tag1", result.Tags[0]);
-            Assert.Null(result.Tags[1]);
-            Assert.Equal("tag2", result.Tags[2]);
-            Assert.Equal("tag3", result.Tags[3]);
-            Assert.Null(result.Tags[4]);
+            Assert.Equal(5, result!.Tags!.Count);
+            Assert.Equal("tag1", result.Tags![0]);
+            Assert.Null(result.Tags![1]);
+            Assert.Equal("tag2", result.Tags![2]);
+            Assert.Equal("tag3", result.Tags![3]);
+            Assert.Null(result.Tags![4]);
         }
         
         #endregion

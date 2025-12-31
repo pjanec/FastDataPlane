@@ -148,7 +148,7 @@ namespace Fdp.Tests
             repo.SetSingletonManaged(new GlobalSettings { GameName = "Game2", Version = 2 });
             
             var retrieved = repo.GetSingletonManaged<GlobalSettings>();
-            Assert.Equal("Game2", retrieved.GameName);
+            Assert.Equal("Game2", retrieved!.GameName);
             Assert.Equal(2, retrieved.Version);
         }
         
@@ -172,7 +172,7 @@ namespace Fdp.Tests
             Assert.Equal(0.016f, time.DeltaTime, 5);
             
             var settings = repo.GetSingletonManaged<GlobalSettings>();
-            Assert.Equal("Test", settings.GameName);
+            Assert.Equal("Test", settings!.GameName);
             
             Assert.True(repo.HasSingleton<GameConfig>());
             Assert.True(repo.HasSingleton<TimeState>());

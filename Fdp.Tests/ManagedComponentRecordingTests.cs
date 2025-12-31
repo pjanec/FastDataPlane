@@ -7,7 +7,7 @@ using MessagePack;
 
 namespace Fdp.Tests
 {
-    public class ManagedComponentRecordingTests
+    public class ManagedComponentRecordingTests : IDisposable
     {
         private readonly string _testFilePath;
         

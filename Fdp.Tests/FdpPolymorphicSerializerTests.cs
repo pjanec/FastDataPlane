@@ -107,7 +107,7 @@ namespace Fdp.Tests
             using var writer = new BinaryWriter(ms);
             
             // Act
-            FdpPolymorphicSerializer.Write(writer, null);
+            FdpPolymorphicSerializer.Write(writer, null!);
             
             // Assert
             ms.Position = 0;
@@ -173,7 +173,7 @@ namespace Fdp.Tests
             // Arrange
             using var ms = new MemoryStream();
             using var writer = new BinaryWriter(ms);
-            FdpPolymorphicSerializer.Write(writer, null);
+            FdpPolymorphicSerializer.Write(writer, null!);
             
             ms.Position = 0;
             using var reader = new BinaryReader(ms);
@@ -197,7 +197,7 @@ namespace Fdp.Tests
             {
                 new MoveCommand { CommandId = 1, X = 5, Y = 10 },
                 new AttackCommand { CommandId = 2, TargetId = 100 },
-                null,
+                null!,
                 new FormationCommand { CommandId = 3, FormationType = "Line", UnitIds = new[] { 1, 2, 3 } },
                 new MoveCommand { CommandId = 4, X = 15, Y = 20 }
             };
@@ -217,7 +217,7 @@ namespace Fdp.Tests
             var results = new List<ICommand>();
             for (int i = 0; i < commands.Length; i++)
             {
-                results.Add((ICommand)FdpPolymorphicSerializer.Read(reader));
+                results.Add((ICommand)FdpPolymorphicSerializer.Read(reader)!);
             }
             
             // Assert
@@ -228,9 +228,9 @@ namespace Fdp.Tests
             Assert.IsType<FormationCommand>(results[3]);
             Assert.IsType<MoveCommand>(results[4]);
             
-            var formation = (FormationCommand)results[3];
-            Assert.Equal("Line", formation.FormationType);
-            Assert.Equal(3, formation.UnitIds.Length);
+            var formation = (FormationCommand)results[3]!;
+            Assert.Equal("Line", formation!.FormationType);
+            Assert.Equal(3, formation.UnitIds!.Length);
         }
         
         #endregion
@@ -256,14 +256,14 @@ namespace Fdp.Tests
             
             ms.Position = 0;
             using var reader = new BinaryReader(ms);
-            var result = (FormationCommand)FdpPolymorphicSerializer.Read(reader);
+            var result = (FormationCommand)FdpPolymorphicSerializer.Read(reader)!;
             
             // Assert
-            Assert.Equal(100, result.CommandId);
+            Assert.Equal(100, result!.CommandId);
             Assert.Equal("Wedge", result.FormationType);
-            Assert.Equal(10, result.UnitIds.Length);
-            Assert.Equal(1, result.UnitIds[0]);
-            Assert.Equal(10, result.UnitIds[9]);
+            Assert.Equal(10, result.UnitIds!.Length);
+            Assert.Equal(1, result.UnitIds![0]);
+            Assert.Equal(10, result.UnitIds![9]);
         }
         
         #endregion
@@ -367,7 +367,7 @@ namespace Fdp.Tests
             var results = new List<ICommand>();
             for (int i = 0; i < 1000; i++)
             {
-                results.Add((ICommand)FdpPolymorphicSerializer.Read(reader));
+                results.Add((ICommand)FdpPolymorphicSerializer.Read(reader)!);
             }
             
             // Assert - spot check
@@ -419,44 +419,44 @@ namespace Fdp.Tests
             var ultraComplex = new UltraComplexCommand
             {
                 CommandId = 42,
-                Name = null, // Null string
-                Tags = new List<string> { "alpha", null, "beta", null, "gamma" }, // List with nulls
+                Name = null!, // Null string
+                Tags = new List<string> { "alpha", null!, "beta", null!, "gamma" }, // List with nulls
                 NestedCommands = new ICommand[]
                 {
                     new MoveCommand { CommandId = 1, X = 1.1f, Y = 2.2f },
-                    null, // Null polymorphic element
+                    null!, // Null polymorphic element
                     new AttackCommand { CommandId = 2, TargetId = 100 },
                     new FormationCommand 
                     { 
                         CommandId = 3, 
-                        FormationType = null, // Null string in nested object
+                        FormationType = null!, // Null string in nested object
                         UnitIds = new[] { 1, 2, 3 }
                     },
-                    null
+                    null!
                 },
                 Matrix = new List<List<int>>
                 {
                     new List<int> { 1, 2, 3 },
                     new List<int>(), // Empty list
                     new List<int> { 4, 5 },
-                    null // Null list in list
+                    null! // Null list in list
                 },
                 JaggedMoves = new MoveCommand[][]
                 {
-                    new MoveCommand[] { new MoveCommand { CommandId = 10, X = 1, Y = 2 }, null },
-                    null, // Null array within array
-                    new MoveCommand[] { null, null, new MoveCommand { CommandId = 11, X = 3, Y = 4 } }
+                    new MoveCommand[] { new MoveCommand { CommandId = 10, X = 1, Y = 2 }, null! },
+                    null!, // Null array within array
+                    new MoveCommand[] { null!, null!, new MoveCommand { CommandId = 11, X = 3, Y = 4 } }
                 },
                 ArrayOfPolymorphicLists = new List<ICommand>[]
                 {
                     new List<ICommand> 
                     { 
                         new MoveCommand { CommandId = 20, X = 5, Y = 6 },
-                        null,
+                        null!,
                         new AttackCommand { CommandId = 21, TargetId = 200 }
                     },
-                    null, // Null list in array
-                    new List<ICommand> { null } // List containing only null
+                    null!, // Null list in array
+                    new List<ICommand> { null! } // List containing only null
                 }
             };
             
@@ -469,7 +469,7 @@ namespace Fdp.Tests
             // Read it back
             ms.Position = 0;
             using var reader = new BinaryReader(ms);
-            var result = (UltraComplexCommand)FdpPolymorphicSerializer.Read(reader);
+            var result = (UltraComplexCommand)FdpPolymorphicSerializer.Read(reader)!;
             
             // Assert - Verify EVERYTHING survived
             Assert.NotNull(result);
@@ -477,51 +477,51 @@ namespace Fdp.Tests
             Assert.Null(result.Name);
             
             // Tags
-            Assert.Equal(5, result.Tags.Count);
-            Assert.Equal("alpha", result.Tags[0]);
-            Assert.Null(result.Tags[1]);
-            Assert.Equal("beta", result.Tags[2]);
-            Assert.Null(result.Tags[3]);
-            Assert.Equal("gamma", result.Tags[4]);
+            Assert.Equal(5, result!.Tags!.Count);
+            Assert.Equal("alpha", result.Tags![0]);
+            Assert.Null(result.Tags![1]);
+            Assert.Equal("beta", result.Tags![2]);
+            Assert.Null(result.Tags![3]);
+            Assert.Equal("gamma", result.Tags![4]);
             
             // Nested polymorphic commands
-            Assert.Equal(5, result.NestedCommands.Length);
-            Assert.IsType<MoveCommand>(result.NestedCommands[0]);
-            Assert.Null(result.NestedCommands[1]);
-            Assert.IsType<AttackCommand>(result.NestedCommands[2]);
-            var formation = result.NestedCommands[3] as FormationCommand;
+            Assert.Equal(5, result.NestedCommands!.Length);
+            Assert.IsType<MoveCommand>(result.NestedCommands![0]);
+            Assert.Null(result.NestedCommands![1]);
+            Assert.IsType<AttackCommand>(result.NestedCommands![2]);
+            var formation = result.NestedCommands![3] as FormationCommand;
             Assert.NotNull(formation);
-            Assert.Null(formation.FormationType); // Null string in nested object
-            Assert.Equal(3, formation.UnitIds.Length);
-            Assert.Null(result.NestedCommands[4]);
+            Assert.Null(formation!.FormationType); // Null string in nested object
+            Assert.Equal(3, formation.UnitIds!.Length);
+            Assert.Null(result.NestedCommands![4]);
             
             // Matrix (list of lists)
-            Assert.Equal(4, result.Matrix.Count);
-            Assert.Equal(3, result.Matrix[0].Count);
-            Assert.Empty(result.Matrix[1]);
-            Assert.Equal(2, result.Matrix[2].Count);
-            Assert.Null(result.Matrix[3]);
+            Assert.Equal(4, result.Matrix!.Count);
+            Assert.Equal(3, result.Matrix![0]!.Count);
+            Assert.Empty(result.Matrix![1]!);
+            Assert.Equal(2, result.Matrix![2]!.Count);
+            Assert.Null(result.Matrix![3]);
             
             // Jagged arrays
-            Assert.Equal(3, result.JaggedMoves.Length);
-            Assert.Equal(2, result.JaggedMoves[0].Length);
-            Assert.NotNull(result.JaggedMoves[0][0]);
-            Assert.Null(result.JaggedMoves[0][1]);
-            Assert.Null(result.JaggedMoves[1]); // Null array
-            Assert.Equal(3, result.JaggedMoves[2].Length);
-            Assert.Null(result.JaggedMoves[2][0]);
-            Assert.Null(result.JaggedMoves[2][1]);
-            Assert.NotNull(result.JaggedMoves[2][2]);
+            Assert.Equal(3, result.JaggedMoves!.Length);
+            Assert.Equal(2, result.JaggedMoves![0]!.Length);
+            Assert.NotNull(result.JaggedMoves![0]![0]);
+            Assert.Null(result.JaggedMoves![0]![1]);
+            Assert.Null(result.JaggedMoves![1]); // Null array
+            Assert.Equal(3, result.JaggedMoves![2]!.Length);
+            Assert.Null(result.JaggedMoves![2]![0]);
+            Assert.Null(result.JaggedMoves![2]![1]);
+            Assert.NotNull(result.JaggedMoves![2]![2]);
             
             // Array of polymorphic lists
-            Assert.Equal(3, result.ArrayOfPolymorphicLists.Length);
-            Assert.Equal(3, result.ArrayOfPolymorphicLists[0].Count);
-            Assert.IsType<MoveCommand>(result.ArrayOfPolymorphicLists[0][0]);
-            Assert.Null(result.ArrayOfPolymorphicLists[0][1]);
-            Assert.IsType<AttackCommand>(result.ArrayOfPolymorphicLists[0][2]);
-            Assert.Null(result.ArrayOfPolymorphicLists[1]); // Null list
-            Assert.Single(result.ArrayOfPolymorphicLists[2]);
-            Assert.Null(result.ArrayOfPolymorphicLists[2][0]); // List containing null
+            Assert.Equal(3, result.ArrayOfPolymorphicLists!.Length);
+            Assert.Equal(3, result.ArrayOfPolymorphicLists![0]!.Count);
+            Assert.IsType<MoveCommand>(result.ArrayOfPolymorphicLists![0]![0]);
+            Assert.Null(result.ArrayOfPolymorphicLists![0]![1]);
+            Assert.IsType<AttackCommand>(result.ArrayOfPolymorphicLists![0]![2]);
+            Assert.Null(result.ArrayOfPolymorphicLists![1]); // Null list
+            Assert.Single(result.ArrayOfPolymorphicLists![2]!);
+            Assert.Null(result.ArrayOfPolymorphicLists![2]![0]); // List containing null
         }
         
         #endregion

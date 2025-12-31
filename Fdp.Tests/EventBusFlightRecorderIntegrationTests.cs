@@ -376,11 +376,11 @@ namespace Fdp.Tests
                 
                 // Verify
                 var events = eventBus.ConsumeManaged<TestManagedEvent>();
-                Assert.Equal(1, events.Count);
-                Assert.Equal("Hello World", events[0].Message);
-                Assert.Equal(1, events[0].Priority);
-                Assert.Equal(2, events[0].Tags.Count);
-                Assert.Equal("tag1", events[0].Tags[0]);
+                var evt = Assert.Single(events);
+                Assert.Equal("Hello World", evt.Message);
+                Assert.Equal(1, evt.Priority);
+                Assert.Equal(2, evt.Tags.Count);
+                Assert.Equal("tag1", evt.Tags[0]);
                 
                 _output.WriteLine("✅ Managed event recorded and replayed successfully");
             }

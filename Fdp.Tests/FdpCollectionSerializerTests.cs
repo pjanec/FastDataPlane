@@ -65,8 +65,8 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestDictObject>(reader);
             
             // Assert
-            Assert.Equal(3, result.Scores.Count);
-            Assert.Equal(100, result.Scores["Alice"]);
+            Assert.Equal(3, result!.Scores!.Count);
+            Assert.Equal(100, result.Scores!["Alice"]);
             Assert.Equal(200, result.Scores["Bob"]);
             Assert.Equal(300, result.Scores["Charlie"]);
         }
@@ -75,7 +75,7 @@ namespace Fdp.Tests
         public class TestDictCustomObject
         {
             [Key(0)]
-            public Dictionary<int, Player> Players { get; set; }
+            public Dictionary<int, Player> Players { get; set; } = null!;
         }
         
         [Fact]
@@ -88,7 +88,7 @@ namespace Fdp.Tests
                 {
                     { 1, new Player { Id = 1, Name = "Hero", Score = 99.5f } },
                     { 2, new Player { Id = 2, Name = "Villain", Score = 88.8f } },
-                    { 3, null } // Null value
+                    { 3, null! } // Null value
                 }
             };
             
@@ -172,8 +172,8 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestHashSetObject>(reader);
             
             // Assert
-            Assert.Equal(4, result.Tags.Count);
-            Assert.Contains("alpha", result.Tags);
+            Assert.Equal(4, result!.Tags!.Count);
+            Assert.Contains("alpha", result.Tags!);
             Assert.Contains("beta", result.Tags);
             Assert.Contains("gamma", result.Tags);
             Assert.Contains("delta", result.Tags);
@@ -210,9 +210,9 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestHashSetCustomObject>(reader);
             
             // Assert
-            Assert.Equal(2, result.UniquePlayers.Count);
-            Assert.Contains(result.UniquePlayers, p => p.Name == "P1");
-            Assert.Contains(result.UniquePlayers, p => p.Name == "P2");
+            Assert.Equal(2, result!.UniquePlayers!.Count);
+            Assert.Contains(result.UniquePlayers!, p => p!.Name == "P1");
+            Assert.Contains(result.UniquePlayers, p => p!.Name == "P2");
         }
         
         #endregion
@@ -246,12 +246,12 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestQueueObject>(reader);
             
             // Assert
-            Assert.Equal(5, result.Commands.Count);
-            Assert.Equal(1, result.Commands.Dequeue());
-            Assert.Equal(2, result.Commands.Dequeue());
-            Assert.Equal(3, result.Commands.Dequeue());
-            Assert.Equal(4, result.Commands.Dequeue());
-            Assert.Equal(5, result.Commands.Dequeue());
+            Assert.Equal(5, result!.Commands!.Count);
+            Assert.Equal(1, result.Commands!.Dequeue());
+            Assert.Equal(2, result.Commands!.Dequeue());
+            Assert.Equal(3, result.Commands!.Dequeue());
+            Assert.Equal(4, result.Commands!.Dequeue());
+            Assert.Equal(5, result.Commands!.Dequeue());
         }
         
         [MessagePackObject]
@@ -267,12 +267,12 @@ namespace Fdp.Tests
             // Arrange
             var obj = new TestQueueCustomObject
             {
-                PlayerQueue = new Queue<Player>(new[]
+                PlayerQueue = new Queue<Player>(new Player?[]
                 {
                     new Player { Id = 1, Name = "First", Score = 100 },
                     null, // Null in queue
                     new Player { Id = 2, Name = "Second", Score = 200 }
-                })
+                }!)
             };
             
             using var ms = new MemoryStream();
@@ -286,9 +286,9 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestQueueCustomObject>(reader);
             
             // Assert
-            Assert.Equal(3, result.PlayerQueue.Count);
+            Assert.Equal(3, result!.PlayerQueue!.Count);
             var first = result.PlayerQueue.Dequeue();
-            Assert.Equal("First", first.Name);
+            Assert.Equal("First", first!.Name);
             var nullPlayer = result.PlayerQueue.Dequeue();
             Assert.Null(nullPlayer);
             var second = result.PlayerQueue.Dequeue();
@@ -326,10 +326,10 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestStackObject>(reader);
             
             // Assert - Stack was created with array, so LIFO order should be reversed
-            Assert.Equal(3, result.UndoStack.Count);
-            Assert.Equal("action3", result.UndoStack.Pop());
-            Assert.Equal("action2", result.UndoStack.Pop());
-            Assert.Equal("action1", result.UndoStack.Pop());
+            Assert.Equal(3, result!.UndoStack!.Count);
+            Assert.Equal("action3", result.UndoStack!.Pop());
+            Assert.Equal("action2", result.UndoStack!.Pop());
+            Assert.Equal("action1", result.UndoStack!.Pop());
         }
         
         #endregion
@@ -366,10 +366,10 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestConcurrentDictObject>(reader);
             
             // Assert
-            Assert.Equal(3, result.ThreadSafeData.Count);
-            Assert.Equal("One", result.ThreadSafeData[1]);
-            Assert.Equal("Two", result.ThreadSafeData[2]);
-            Assert.Equal("Three", result.ThreadSafeData[3]);
+            Assert.Equal(3, result!.ThreadSafeData!.Count);
+            Assert.Equal("One", result.ThreadSafeData![1]);
+            Assert.Equal("Two", result.ThreadSafeData![2]);
+            Assert.Equal("Three", result.ThreadSafeData![3]);
         }
         
         #endregion
@@ -402,11 +402,11 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestConcurrentBagObject>(reader);
             
             // Assert - Bag doesn't guarantee order, just count
-            Assert.Equal(4, result.Numbers.Count);
-            Assert.Contains(10, result.Numbers);
-            Assert.Contains(20, result.Numbers);
-            Assert.Contains(30, result.Numbers);
-            Assert.Contains(40, result.Numbers);
+            Assert.Equal(4, result!.Numbers!.Count);
+            Assert.Contains(10, result.Numbers!);
+            Assert.Contains(20, result.Numbers!);
+            Assert.Contains(30, result.Numbers!);
+            Assert.Contains(40, result.Numbers!);
         }
         
         #endregion
@@ -459,15 +459,15 @@ namespace Fdp.Tests
             var result = FdpAutoSerializer.Deserialize<TestComplexCollections>(reader);
             
             // Assert
-            Assert.Equal(2, result.GroupedData.Count);
-            Assert.Equal(3, result.GroupedData["evens"].Count);
-            Assert.Equal(2, result.GroupedData["evens"][0]);
+            Assert.Equal(2, result!.GroupedData!.Count);
+            Assert.Equal(3, result.GroupedData!["evens"].Count);
+            Assert.Equal(2, result.GroupedData!["evens"][0]);
             
-            Assert.Equal(2, result.ListOfDicts.Count);
-            Assert.Equal("a", result.ListOfDicts[0][1]);
-            Assert.Equal("c", result.ListOfDicts[1][3]);
+            Assert.Equal(2, result.ListOfDicts!.Count);
+            Assert.Equal("a", result.ListOfDicts![0][1]);
+            Assert.Equal("c", result.ListOfDicts![1][3]);
             
-            Assert.Single(result.SetOfQueues);
+            Assert.Single(result.SetOfQueues!);
         }
         
         #endregion

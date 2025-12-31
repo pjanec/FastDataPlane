@@ -280,7 +280,9 @@ namespace Fdp.Tests
             // Let it run for a bit
             Thread.Sleep(500);
             keepPublishing = false;
+#pragma warning disable xUnit1031 // Do not use blocking task operations in test method
             Task.WaitAll(publishTask, swapTask);
+#pragma warning restore xUnit1031 // Do not use blocking task operations in test method
 
             // Final swap and consume
             _bus.SwapBuffers();

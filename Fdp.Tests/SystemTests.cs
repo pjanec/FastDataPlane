@@ -67,7 +67,7 @@ namespace Fdp.Tests
         
         protected override void OnUpdate()
         {
-            ExecutionOrder.Add(Name);
+            ExecutionOrder.Add(Name!);
         }
     }
     

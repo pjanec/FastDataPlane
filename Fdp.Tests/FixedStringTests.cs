@@ -51,7 +51,7 @@ namespace Fdp.Tests
         [Fact]
         public void FixedString32_NullString()
         {
-            var str = new FixedString32(null);
+            var str = new FixedString32(null!);
             
             Assert.True(str.IsEmpty);
             Assert.Equal(string.Empty, str.ToString());
