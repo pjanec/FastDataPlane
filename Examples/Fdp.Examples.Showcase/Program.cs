@@ -15,7 +15,6 @@ namespace Fdp.Examples.Showcase
     {
         private static EntityRepository _repo = null!;
         private static TimeSystem _timeSystem = null!;
-        private static RecorderSystem _recorder = null!;
         private static PlaybackSystem _playback = null!;
 
         // Systems
@@ -30,19 +29,23 @@ namespace Fdp.Examples.Showcase
         
         // Event Bus
         private static FdpEventBus _eventBus = null!;
+        
+        // Flight Recorder - AsyncRecorder writes to disk in background thread
+        private static AsyncRecorder? _diskRecorder = null;
+        private static string _recordingFilePath = "showcase_recording.fdp";
+        
+        // Playback Controller - handles file replay with seeking
+        private static PlaybackController? _playbackController = null;
 
         // State
         private static bool _isRunning = true;
         private static bool _isRecording = true;
         private static bool _isReplaying = false;
         private static bool _isPaused = false;
-        private static MemoryStream _flightRecorderStream = null!; // In-memory flight recorder
-        private static BinaryWriter _recorderWriter = null!;
         
-        // Frame indexing for seeking
-        private static List<long> _framePositions = new List<long>(); // Stream position of each frame
-        private static int _currentFrameIndex = 0;
+        // Frame tracking
         private static int _totalRecordedFrames = 0;
+        private static uint _previousTick = 0;
         
         static void Main(string[] args)
         {
@@ -97,11 +100,9 @@ namespace Fdp.Examples.Showcase
             _hitFlashSystem = new HitFlashSystem(_repo);
             _particleSystem = new ParticleSystem(_repo, _eventBus, _lifecycle);
             
-            // Flight Recorder
-            _recorder = new RecorderSystem();
+            // Flight Recorder - Async disk recorder with double buffering
+            _diskRecorder = new AsyncRecorder(_recordingFilePath);
             _playback = new PlaybackSystem();
-            _flightRecorderStream = new MemoryStream();
-            _recorderWriter = new BinaryWriter(_flightRecorderStream);
 
             // Spawn Initial Entities
             SpawnUnit(UnitType.Tank, 10, 10, 5, 0);
@@ -176,6 +177,11 @@ namespace Fdp.Examples.Showcase
             // 2. Logic Step
             if (!_isReplaying && !_isPaused)
             {
+                // Increment the Global Version so changes this frame get a new timestamp
+                // This is CRITICAL for delta frame recording - without it, the dirty scan
+                // algorithm won't detect changes and will record empty deltas
+                _repo.Tick();
+                
                 // Live Mode - Run all logic systems
                 _timeSystem.Update(); // Updates GlobalTime singleton (TimeSystem has specific API)
                 
@@ -195,19 +201,37 @@ namespace Fdp.Examples.Showcase
                 // Swap event bus buffers (events published this frame become consumable next frame)
                 _eventBus.SwapBuffers();
                 
-                // RECORDING - Now the world state is final for this frame
+                // RECORDING - Async disk recording to prevent memory growth
                 if (_isRecording && !_isPaused)
                 {
-                    long pos = _flightRecorderStream.Position;
-                    _framePositions.Add(pos); // Index this frame for seeking
-                    _recorder.RecordKeyframe(_repo, _recorderWriter, _eventBus);
+                    // Record keyframe every 60 frames, delta frames otherwise
+                    bool isKeyframe = (_totalRecordedFrames % 60 == 0);
+                    
+                    if (isKeyframe)
+                    {
+                        _diskRecorder.CaptureKeyframe(_repo, blocking: false);
+                    }
+                    else
+                    {
+                        _diskRecorder.CaptureFrame(_repo, _previousTick, blocking: false);
+                    }
+                    
                     _totalRecordedFrames++;
-                    _currentFrameIndex = _totalRecordedFrames - 1; // We're at the latest frame
+                    _previousTick = _repo.GlobalVersion;
                 }
             }
-            else
+            else if (_isReplaying && _playbackController != null)
             {
-                // Replay Mode logic would go here (seeking stream)
+                // Replay Mode - Automatic playback
+                if (!_isPaused)
+                {
+                    // Advance to next frame
+                    if (!_playbackController.StepForward(_repo))
+                    {
+                        // Reached end of recording - pause automatically
+                        _isPaused = true;
+                    }
+                }
             }
 
             // 3. Render
@@ -241,46 +265,69 @@ namespace Fdp.Examples.Showcase
                         break;
                         
                     case ConsoleKey.P: 
-                        _isReplaying = !_isReplaying;
-                        if (_isReplaying && _totalRecordedFrames > 0)
+                        if (!_isReplaying)
                         {
-                            _currentFrameIndex = 0; // Start from beginning
-                            SeekToFrame(_currentFrameIndex);
+                            // Enter replay mode: Stop recording, flush file, and open with PlaybackController
+                            _isRecording = false;
+                            _diskRecorder?.Dispose(); // Flush and close the file
+                            _diskRecorder = null;
+                            
+                            // Initialize PlaybackController - builds frame index automatically
+                            try
+                            {
+                                _playbackController = new PlaybackController(_recordingFilePath);
+                                _isReplaying = true;
+                                
+                                // Seek to first frame
+                                if (_playbackController.TotalFrames > 0)
+                                {
+                                    _playbackController.Rewind(_repo);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Failed to load recording: {ex.Message}");
+                            }
+                        }
+                        else
+                        {
+                            // Exit replay mode
+                            _isReplaying = false;
+                            _playbackController?.Dispose();
+                            _playbackController = null;
                         }
                         break;
                         
                     // Seeking controls
                     case ConsoleKey.LeftArrow:
-                        if (_isReplaying)
+                        if (_isReplaying && _playbackController != null)
                         {
                             int step = ctrl ? 100 : (shift ? 10 : 1);
-                            _currentFrameIndex = Math.Max(0, _currentFrameIndex - step);
-                            SeekToFrame(_currentFrameIndex);
+                            int targetFrame = Math.Max(0, _playbackController.CurrentFrame - step);
+                            _playbackController.SeekToFrame(_repo, targetFrame);
                         }
                         break;
                         
                     case ConsoleKey.RightArrow:
-                        if (_isReplaying)
+                        if (_isReplaying && _playbackController != null)
                         {
                             int step = ctrl ? 100 : (shift ? 10 : 1);
-                            _currentFrameIndex = Math.Min(_totalRecordedFrames - 1, _currentFrameIndex + step);
-                            SeekToFrame(_currentFrameIndex);
+                            int targetFrame = Math.Min(_playbackController.TotalFrames - 1, _playbackController.CurrentFrame + step);
+                            _playbackController.SeekToFrame(_repo, targetFrame);
                         }
                         break;
                         
                     case ConsoleKey.Home:
-                        if (_isReplaying && _totalRecordedFrames > 0)
+                        if (_isReplaying && _playbackController != null)
                         {
-                            _currentFrameIndex = 0;
-                            SeekToFrame(_currentFrameIndex);
+                            _playbackController.Rewind(_repo);
                         }
                         break;
                         
                     case ConsoleKey.End:
-                        if (_isReplaying && _totalRecordedFrames > 0)
+                        if (_isReplaying && _playbackController != null)
                         {
-                            _currentFrameIndex = _totalRecordedFrames - 1;
-                            SeekToFrame(_currentFrameIndex);
+                            _playbackController.SeekToFrame(_repo, _playbackController.TotalFrames - 1);
                         }
                         break;
                         
@@ -298,16 +345,6 @@ namespace Fdp.Examples.Showcase
             }
         }
         
-        static void SeekToFrame(int frameIndex)
-        {
-            if (frameIndex < 0 || frameIndex >= _totalRecordedFrames) return;
-            
-            long position = _framePositions[frameIndex];
-            _flightRecorderStream.Position = position;
-            
-            using var reader = new BinaryReader(_flightRecorderStream, System.Text.Encoding.UTF8, true);
-            _playback.ApplyFrame(_repo, reader, processEvents: false);
-        }
         
         static void SpawnRandomUnit(UnitType type)
         {
@@ -377,14 +414,17 @@ namespace Fdp.Examples.Showcase
               table.AddRow("Recording", _isRecording ? "[green]ON[/]" : "[red]OFF[/]");
               table.AddRow("Paused", _isPaused ? "[red]YES[/]" : "[green]NO[/]");
               table.AddRow("Entities", $"{entityCount}");
-              table.AddRow("Rec Frames", $"{_totalRecordedFrames}");
               
-              if (_isReplaying && _totalRecordedFrames > 0)
+              if (_isReplaying && _playbackController != null)
               {
-                  table.AddRow("Replay Frame", $"{_currentFrameIndex + 1}/{_totalRecordedFrames}");
+                  table.AddRow("Replay Frame", $"{_playbackController.CurrentFrame + 1}/{_playbackController.TotalFrames}");
+                  table.AddRow("Rec Tick", $"{_playbackController.GetFrameMetadata(_playbackController.CurrentFrame).Tick}");
               }
-              
-              table.AddRow("Buffer Size", $"{_flightRecorderStream.Length / 1024} KB");
+              else if (_diskRecorder != null)
+              {
+                  table.AddRow("Rec Frames", $"{_diskRecorder.RecordedFrames}");
+                  table.AddRow("Dropped", $"{_diskRecorder.DroppedFrames}");
+              }
 
               // Add controls hint
               var controls = new Panel(
@@ -437,9 +477,19 @@ namespace Fdp.Examples.Showcase
 
         static void Cleanup()
         {
+            // Dispose the async recorder - waits for background writes to complete
+            _diskRecorder?.Dispose();
+            
+            // Print recording stats
+            if (_diskRecorder != null)
+            {
+                Console.WriteLine($"\nRecording Statistics:");
+                Console.WriteLine($"  Total Frames Recorded: {_diskRecorder.RecordedFrames}");
+                Console.WriteLine($"  Dropped Frames: {_diskRecorder.DroppedFrames}");
+                Console.WriteLine($"  Recording saved to: {_recordingFilePath}");
+            }
+            
             _repo.Dispose();
-            _recorderWriter.Dispose();
-            _flightRecorderStream.Dispose();
         }
     }
 }
