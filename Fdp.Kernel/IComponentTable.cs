@@ -39,5 +39,10 @@ namespace Fdp.Kernel
         // Serialization
         byte[] Serialize(EntityRepository repo, MessagePack.MessagePackSerializerOptions options);
         void Deserialize(EntityRepository repo, byte[] data, MessagePack.MessagePackSerializerOptions options);
+
+        /// <summary>
+        /// Synchronizes data from a source table of the same type.
+        /// </summary>
+        void SyncFrom(IComponentTable source);
     }
 }

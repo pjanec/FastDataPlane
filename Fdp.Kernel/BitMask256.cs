@@ -116,6 +116,15 @@ namespace Fdp.Kernel
             // When embedded in EntityHeader (heap/static), alignment is guaranteed
             return (_q0 | _q1 | _q2 | _q3) == 0;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void BitwiseAnd(in BitMask256 other)
+        {
+            _q0 &= other._q0;
+            _q1 &= other._q1;
+            _q2 &= other._q2;
+            _q3 &= other._q3;
+        }
         
         // ----------------------------------------------------------
         // QUERY OPERATIONS (AVX2 Optimized)

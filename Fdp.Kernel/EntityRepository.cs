@@ -17,7 +17,7 @@ namespace Fdp.Kernel
     /// Thread-safe for entity creation/destruction.
     /// Component access is NOT thread-safe (by design for performance).
     /// </summary>
-    public sealed class EntityRepository : IDisposable
+    public sealed partial class EntityRepository : IDisposable
     {
         private readonly EntityIndex _entityIndex;
         private readonly Dictionary<Type, IComponentTable> _componentTables;

@@ -133,7 +133,8 @@ namespace Fdp.Kernel
             // they all write the same version value. Without this check,
             // each write invalidates other cores' cache lines (false sharing),
             // causing severe performance degradation.
-            if (_chunkVersions[chunkIndex].Value != currentVersion)
+            // Also ignoring version 0 to prevent read-via-indexer from resetting versions.
+            if (currentVersion != 0 && _chunkVersions[chunkIndex].Value != currentVersion)
             {
                 _chunkVersions[chunkIndex].Value = currentVersion;
             }
@@ -404,12 +405,72 @@ namespace Fdp.Kernel
         }
 
         /// <summary>
+        /// Synchronizes dirty chunks from a source table to this table.
+        /// Uses version tracking to optimize transfer (only copies modified chunks).
+        /// </summary>
+        public void SyncDirtyChunks(NativeChunkTable<T> source)
+        {
+            #if FDP_PARANOID_MODE
+            if (source.TotalChunks != _totalChunks)
+                throw new ArgumentException("Source table has different topology");
+            #endif
+
+            // Get pointer to access raw data for memcpy
+            byte* thisBase = (byte*)_basePtr;
+            byte* sourceBase = (byte*)source._basePtr;
+
+            for (int i = 0; i < _totalChunks; i++)
+            {
+                // Optimization: Version Check
+                uint srcVer = source.GetChunkVersion(i);
+                if (_chunkVersions[i].Value == srcVer)
+                    continue;
+
+                // Source likely has changes (or we are stale).
+                
+                // Liveness check: Is source committed?
+                if (!source.IsChunkCommitted(i))
+                {
+                    // Source is empty/null. If we are committed, we should clear/decommit.
+                    if (IsChunkCommitted(i))
+                    {
+                        SetPopulation(i, 0); // Mark empty so Decommit succeeds
+                        TryDecommitChunk(i);
+                    }
+                    
+                    // Sync version so we don't check again until it changes
+                    _chunkVersions[i].Value = srcVer;
+                    continue;
+                }
+
+                // Source has data. Copy it.
+                EnsureChunkAllocated(i);
+                
+                long offset = i * (long)FdpConfig.CHUNK_SIZE_BYTES;
+                byte* destChunk = thisBase + offset;
+                byte* sourceChunk = sourceBase + offset;
+
+                // Tier 1 Copy: Memcpy (64KB)
+                Unsafe.CopyBlock(destChunk, sourceChunk, (uint)FdpConfig.CHUNK_SIZE_BYTES);
+
+                // Update metadata
+                _chunkVersions[i].Value = srcVer;
+                SetPopulation(i, source.GetPopulationCount(i));
+            }
+        }
+
+        /// <summary>
         /// Explicitly sets the population count for a chunk.
         /// Internal use only for metadata rebuilding.
         /// </summary>
         public void SetPopulation(int chunkIndex, int count)
         {
              System.Threading.Interlocked.Exchange(ref _populationCounts[chunkIndex], count);
+        }
+
+        public void IncrementChunkVersion(int chunkIndex)
+        {
+            _chunkVersions[chunkIndex].Value++;
         }
     }
 }

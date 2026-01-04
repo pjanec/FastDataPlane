@@ -94,6 +94,7 @@ namespace Fdp.Kernel
                 // Increment chunk population
                 int chunkIndex = index / _headers.ChunkCapacity;
                 _headers.IncrementPopulation(chunkIndex);
+                _headers.IncrementChunkVersion(chunkIndex);
                 
                 _activeCount++;
                 
@@ -146,6 +147,7 @@ namespace Fdp.Kernel
                 // Decrement chunk population
                 int chunkIndex = entity.Index / _headers.ChunkCapacity;
                 _headers.DecrementPopulation(chunkIndex);
+                _headers.IncrementChunkVersion(chunkIndex);
                 
                 // Add to free-list
                 #if FDP_PARANOID_MODE
@@ -271,6 +273,59 @@ namespace Fdp.Kernel
                 output[i] = header.IsActive; 
             }
         }
+
+        // ===================================
+        // SYNCHRONIZATION SUPPORT
+        // ===================================
+
+        /// <summary>
+        /// Synchronizes this index with a source index.
+        /// Copies entity headers (generations, masks, flags) and global counters.
+        /// </summary>
+        public void SyncFrom(EntityIndex source)
+        {
+            // Sync the underlying headers table using extremely fast chunk-based memcpy
+            _headers.SyncDirtyChunks(source._headers);
+            
+            // Sync global counters
+            _activeCount = source._activeCount;
+            _maxIssuedIndex = source._maxIssuedIndex;
+            
+            // Note: We do NOT sync the free list. 
+            // The replica is expected to be Read-Only or synced fully from source.
+            // Rebuilding the free list (if ever needed) is expensive and unnecessary for pure replication.
+        }
+
+        public void ApplyComponentFilter(BitMask256 mask)
+        {
+            int totalChunks = _headers.TotalChunks;
+            int chunkCapacity = _headers.ChunkCapacity;
+
+            for (int chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++)
+            {
+                // Skip if destination has no data for this chunk
+                if (!_headers.IsChunkCommitted(chunkIndex))
+                    continue;
+
+                // We can iterate the chunk.
+                // Note: using GetRefRW(..., 0) now SAFE (ignores version update).
+                // We are choosing NOT to dirty the chunk version because we are applying a deterministic filter
+                // that is consistent with the source + filter state. 
+                // Any mismatch will be fixed by next SyncFrom which overwrites (if source changed).
+                
+                int startId = chunkIndex * chunkCapacity;
+                int endId = Math.Min(startId + chunkCapacity, _maxIssuedIndex + 1);
+
+                for (int i = startId; i < endId; i++)
+                {
+                   ref var header = ref _headers.GetRefRW(i, 0); 
+                   if (header.IsActive)
+                   {
+                       header.ComponentMask.BitwiseAnd(mask);
+                   }
+                }
+            }
+        }
         
         public void Dispose()
         {
@@ -306,20 +361,21 @@ namespace Fdp.Kernel
             header.AuthorityMask.Clear(); 
             header.DisType = disType;
             
+            int chunkIndex = index / _headers.ChunkCapacity;
+            _headers.IncrementChunkVersion(chunkIndex);
+
             // Fix Count Logic: Only increment active count if we are transitioning from Dead -> Alive
             if (isActive && !wasActive)
             {
                  _activeCount++;
                  
                  // Update Chunk Population
-                 int chunkIndex = index / _headers.ChunkCapacity;
                  _headers.IncrementPopulation(chunkIndex); 
             }
             // If we are transitioning Alive -> Dead (unlikely in Restore, but possible if overwriting)
             else if (!isActive && wasActive)
             {
                 _activeCount--;
-                int chunkIndex = index / _headers.ChunkCapacity;
                 _headers.DecrementPopulation(chunkIndex);
             }
         }

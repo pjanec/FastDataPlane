@@ -172,6 +172,20 @@ namespace Fdp.Kernel
         {
             _data?.Dispose();
         }
+
+        public void SyncFrom(IComponentTable source)
+        {
+            if (source is ComponentTable<T> typedSource)
+            {
+                _data.SyncDirtyChunks(typedSource._data);
+            }
+            #if FDP_PARANOID_MODE
+            else
+            {
+                throw new ArgumentException($"Source table type mismatch. Expected {typeof(ComponentTable<T>).Name}, got {source.GetType().Name}");
+            }
+            #endif
+        }
     }
 
     [MessagePack.MessagePackObject]

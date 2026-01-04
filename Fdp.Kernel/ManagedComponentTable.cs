@@ -112,7 +112,10 @@ namespace Fdp.Kernel
             }
             
             _chunks[chunkIndex][localIndex] = value;
-            _chunkVersions[chunkIndex] = version;
+            if (version != 0)
+            {
+                _chunkVersions[chunkIndex] = version;
+            }
         }
 
         /// <summary>
@@ -187,6 +190,58 @@ namespace Fdp.Kernel
                 _chunks[chunkIndex][localIndex] = null;
             }
         }
+
+        public int TotalChunks => _chunks.Length;
+
+        /// <summary>
+        /// Synchronizes dirty chunks from a source table.
+        /// Uses shallow copy (Array.Copy) to copy references.
+        /// Version tracking avoids unnecessary copies.
+        /// </summary>
+        public void SyncDirtyChunks(ManagedComponentTable<T> source)
+        {
+            // Assuming matching configurations by architecture design
+            int loopMax = Math.Min(_chunks.Length, source._chunks.Length);
+            
+            for (int i = 0; i < loopMax; i++)
+            {
+                // Optimization: Version Check
+                uint srcVer = source.GetChunkVersion(i);
+                if (_chunkVersions[i] == srcVer)
+                    continue;
+
+                // Liveness check: Does source have data?
+                // Access source._chunks directly as we are same type
+                var srcChunk = source._chunks[i]; 
+                
+                if (srcChunk == null)
+                {
+                    // Source is empty. If we have data, clear it.
+                    if (_chunks[i] != null)
+                    {
+                        // Release the array for GC
+                        _chunks[i] = null!; 
+                    }
+                    
+                    _chunkVersions[i] = srcVer;
+                    continue;
+                }
+
+                // Source has data. Ensure we have storage.
+                if (_chunks[i] == null)
+                {
+                    _chunks[i] = new T[_chunkSize];
+                }
+                
+                // Shallow Copy
+                // Copies references. This relies on Managed Components being IMMUTABLE records/classes.
+                // SrcChunk is guaranteed not null here.
+                Array.Copy(srcChunk, _chunks[i], _chunkSize);
+
+                // Update version
+                _chunkVersions[i] = srcVer;
+            }
+        }
         
         public void Dispose()
         {
@@ -232,6 +287,20 @@ namespace Fdp.Kernel
                 ref var header = ref repo.GetHeader(item.EntityId);
                 header.ComponentMask.SetBit(_componentTypeId);
             }
+        }
+
+        public void SyncFrom(IComponentTable source)
+        {
+             if (source is ManagedComponentTable<T> typedSource)
+             {
+                 this.SyncDirtyChunks(typedSource);
+             }
+             #if FDP_PARANOID_MODE
+             else
+             {
+                 throw new ArgumentException($"Source table type mismatch: {source.GetType().Name}");
+             }
+             #endif
         }
     }
 }
