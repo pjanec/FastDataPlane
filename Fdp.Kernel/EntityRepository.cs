@@ -268,6 +268,14 @@ namespace Fdp.Kernel
             // Optionally clear component tables if needed (managed references) for GC correctness
             // But relying on overwrite for now.
         }
+
+        /// <summary>
+        /// Resets the repository state but keeps allocations (for pooling).
+        /// </summary>
+        public void SoftClear()
+        {
+             Clear();
+        }
         
         internal void RebuildFreeList()
         {
