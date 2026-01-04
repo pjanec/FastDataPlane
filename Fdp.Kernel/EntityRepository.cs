@@ -33,6 +33,14 @@ namespace Fdp.Kernel
             _lifecycleStream = stream;
         }
         
+        // Event Bus for Module Communication (Batch 2)
+        public FdpEventBus Bus { get; }
+
+        // Simulation Time for ISimulationView (Batch 2)
+        private float _simulationTime;
+        public float SimulationTime => _simulationTime;
+        public void SetSimulationTime(float time) { _simulationTime = time; }
+        
         
         // Flight Recorder Destruction Log
         private readonly List<Entity> _destructionLog = new List<Entity>(128);
@@ -87,6 +95,7 @@ namespace Fdp.Kernel
         
         public EntityRepository()
         {
+            Bus = new FdpEventBus();
             _entityIndex = new EntityIndex();
             _componentTables = new Dictionary<Type, IComponentTable>();
             _metadata = new ComponentMetadataTable();
@@ -678,7 +687,7 @@ namespace Fdp.Kernel
         /// Returns null if component not set.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal T? GetManagedComponent<T>(Entity entity) where T : class
+        internal T GetManagedComponent<T>(Entity entity) where T : class
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
@@ -694,7 +703,7 @@ namespace Fdp.Kernel
         /// Allocates if component doesn't exist yet.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal ref T? GetManagedComponentRW<T>(Entity entity) where T : class
+        internal ref T GetManagedComponentRW<T>(Entity entity) where T : class
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
@@ -710,7 +719,7 @@ namespace Fdp.Kernel
         /// Does not update version or allocate.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal T? GetManagedComponentRO<T>(Entity entity) where T : class
+        internal T GetManagedComponentRO<T>(Entity entity) where T : class
         {
             var table = GetManagedTable<T>(false);
             return table.GetRO(entity.Index);
@@ -719,7 +728,7 @@ namespace Fdp.Kernel
         /// <summary>
         /// Sets (or adds) a managed component.
         /// </summary>
-        internal void SetManagedComponent<T>(Entity entity, T? value) where T : class
+        internal void SetManagedComponent<T>(Entity entity, T value) where T : class
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
@@ -749,7 +758,7 @@ namespace Fdp.Kernel
         /// <summary>
         /// Adds a managed component to an entity.
         /// </summary>
-        internal void AddManagedComponent<T>(Entity entity, T? value) where T : class
+        internal void AddManagedComponent<T>(Entity entity, T value) where T : class
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
@@ -1354,6 +1363,8 @@ namespace Fdp.Kernel
         {
             if (_disposed) return;
             
+            Bus?.Dispose();
+
             // Dispose all component tables
             foreach (var table in _componentTables.Values)
             {

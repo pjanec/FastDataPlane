@@ -4,6 +4,8 @@ using System;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 
+#nullable disable
+
 namespace Fdp.Kernel.Internal  
 {  
     internal static class ComponentTypeHelper  
@@ -222,5 +224,4 @@ namespace Fdp.Kernel.Internal
             public static void Remove(EntityRepository repo, Entity e) => _remove(repo, e);  
         }  
     }
-
 }

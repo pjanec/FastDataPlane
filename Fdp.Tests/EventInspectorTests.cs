@@ -128,8 +128,9 @@ namespace Fdp.Tests
              // 3. Inspect immediately (Inspector should see injected data in Read buffer)
              var read = inspector.InspectReadBuffer().Cast<TestInspectorEvent>().ToList();
              
-             Assert.Single(read);
-             Assert.Equal(999, read[0].Value);
+             Assert.Equal(2, read.Count);
+             Assert.Equal(0, read[0].Value);
+             Assert.Equal(999, read[1].Value);
         }
 
         [Fact]

@@ -41,14 +41,19 @@ namespace Fdp.Kernel
         public void InjectIntoCurrent(ReadOnlySpan<byte> data)
         {
             int eventCount = data.Length / _elementSize;
+            int newCount = _currentCount + eventCount;
             
             // Ensure capacity
-            long requiredSize = (long)eventCount * _elementSize;
+            long requiredSize = (long)newCount * _elementSize;
             if (requiredSize > _currentSize)
             {
-                long newSize = requiredSize * 2;
+                long newSize = Math.Max(requiredSize, _currentSize * 2); 
                 byte* newBuffer = (byte*)NativeMemoryAllocator.Reserve(newSize);
                 NativeMemoryAllocator.Commit(newBuffer, newSize);
+                
+                // Copy existing
+                long existingSize = (long)_currentCount * _elementSize;
+                System.Buffer.MemoryCopy(_currentBuffer, newBuffer, newSize, existingSize);
                 
                 // Free old
                 NativeMemoryAllocator.Free(_currentBuffer, _currentSize);
@@ -57,13 +62,14 @@ namespace Fdp.Kernel
                 _currentSize = newSize;
             }
             
-            // Copy data
+            // Append data
+            long offset = (long)_currentCount * _elementSize;
             fixed (byte* src = data)
             {
-                System.Buffer.MemoryCopy(src, _currentBuffer, _currentSize, data.Length);
+                System.Buffer.MemoryCopy(src, _currentBuffer + offset, _currentSize - offset, data.Length);
             }
             
-            _currentCount = eventCount;
+            _currentCount = newCount;
         }
 
         public void ClearCurrent()

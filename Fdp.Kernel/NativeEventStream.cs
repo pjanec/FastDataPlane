@@ -186,20 +186,22 @@ namespace Fdp.Kernel
             lock (_lock)
             {
                 int eventCount = data.Length / sizeof(T);
+                int newCount = _readBuffer.Count + eventCount;
                 
                 // Ensure capacity
-                if (eventCount > _readBuffer.Capacity)
+                if (newCount > _readBuffer.Capacity)
                 {
-                    _readBuffer.Resize(eventCount);
+                    _readBuffer.Resize(newCount);
                 }
                 
-                // Copy data directly
+                // Copy data directly (Append)
+                long offsetBytes = (long)_readBuffer.Count * sizeof(T);
                 fixed (byte* src = data)
                 {
-                    System.Buffer.MemoryCopy(src, _readBuffer.Data, _readBuffer.Size, data.Length);
+                    System.Buffer.MemoryCopy(src, (byte*)_readBuffer.Data + offsetBytes, _readBuffer.Size - offsetBytes, data.Length);
                 }
                 
-                _readBuffer.Count = eventCount;
+                _readBuffer.Count = newCount;
             }
         }
 

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Buffers;
+using System.Linq;
 
 namespace Fdp.Kernel
 {
@@ -330,6 +332,81 @@ namespace Fdp.Kernel
             
             // Use internal access to inject
             stream.InjectIntoCurrent(events.Cast<T>());
+        }
+
+        /// <summary>
+        /// Creates a snapshot of current event buffers without consuming them.
+        /// Used by EventAccumulator to capture history.
+        /// </summary>
+        public FrameEventData SnapshotCurrentBuffers()
+        {
+            var data = new FrameEventData();
+            data.NativeEvents = new List<(int, byte[], int, int)>();
+            data.ManagedEvents = new List<(int, object[], int, Type)>();
+            
+            // Copy native events
+            foreach (var stream in _nativeStreams.Values)
+            {
+                var buffer = stream.GetRawBytes(); // Gets READ buffer
+                int len = buffer.Length;
+                if (len > 0)
+                {
+                    var pooled = ArrayPool<byte>.Shared.Rent(len);
+                    buffer.CopyTo(pooled);
+                    data.NativeEvents.Add((stream.EventTypeId, pooled, len, stream.ElementSize));
+                }
+            }
+            
+            // Copy managed events
+            foreach (var streamObj in _managedStreams.Values)
+            {
+                if (streamObj is IEventStreamInspector inspector && streamObj is IManagedEventStreamInfo info)
+                {
+                    // InspectReadBuffer uses _front (READ)
+                    // We need count of _front. IEventStreamInspector.Count returns _front.Count.
+                    int count = inspector.Count; 
+                    if (count > 0)
+                    {
+                        var pooled = ArrayPool<object>.Shared.Rent(count);
+                        int i = 0;
+                        foreach(var item in inspector.InspectReadBuffer())
+                        {
+                            pooled[i++] = item;
+                        }
+                        
+                        data.ManagedEvents.Add((info.TypeId, pooled, count, info.EventType));
+                    }
+                }
+            }
+            
+            return data;
+        }
+
+        /// <summary>
+        /// Injects pre-captured events into this bus.
+        /// Used by EventAccumulator to replay history to replicas.
+        /// </summary>
+        public void InjectEvents(FrameEventData frameData)
+        {
+            // Inject native events
+            if (frameData.NativeEvents != null)
+            {
+                foreach (var (typeId, buffer, length, elementSize) in frameData.NativeEvents)
+                {
+                    ReadOnlySpan<byte> slice = new ReadOnlySpan<byte>(buffer, 0, length);
+                    InjectIntoCurrentBySize(typeId, elementSize, slice);
+                }
+            }
+            
+            // Inject managed events
+            if (frameData.ManagedEvents != null)
+            {
+                foreach (var (typeId, objects, count, eventType) in frameData.ManagedEvents)
+                {
+                    var slice = new ArraySegment<object>(objects, 0, count);
+                    InjectManagedIntoCurrent(typeId, eventType, slice);
+                }
+            }
         }
 
         public void Dispose()
