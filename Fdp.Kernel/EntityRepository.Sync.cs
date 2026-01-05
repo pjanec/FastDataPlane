@@ -23,25 +23,39 @@ namespace Fdp.Kernel
             }
             
             // 2. Sync component tables (with optional filtering)
-            foreach (var kvp in _componentTables)
+            foreach (var kvp in source._componentTables)
             {
                 Type type = kvp.Key;
-                IComponentTable myTable = kvp.Value;
-                int typeId = myTable.ComponentTypeId;
+                IComponentTable srcTable = kvp.Value;
+                int typeId = srcTable.ComponentTypeId;
                 
                 // Mask Filtering
                 if (mask.HasValue && !mask.Value.IsSet(typeId))
                     continue;  // Skip filtered components
                 
-                // Get source table
-                if (source._componentTables.TryGetValue(type, out var srcTable))
+                // Get or Create destination table
+                if (!_componentTables.TryGetValue(type, out var myTable))
                 {
-                    // Delegate to table-specific sync which handles efficient dirty tracking
-                    myTable.SyncFrom(srcTable);
+                    // Schema Mismatch: Destination missing table.
+                    // Automatically register component to match schema.
+                    // Use Reflection to invoke generic RegisterComponent<T>
+                    var method = typeof(EntityRepository).GetMethod(nameof(RegisterComponent))
+                        ?.MakeGenericMethod(type);
+                    
+                    if (method != null)
+                    {
+                        method.Invoke(this, null);
+                        myTable = _componentTables[type];
+                    }
+                    else
+                    {
+                        // Should not happen, but safe fallback
+                        continue;
+                    }
                 }
-                // If source doesn't have the table, we assume it has no data for this component.
-                // ideally we should clear our table, but avoiding that complexity for now 
-                // as schema mismatch is not a primary supported case.
+                
+                // Sync data
+                myTable.SyncFrom(srcTable);
             }
             
             // 3. Sync global version
