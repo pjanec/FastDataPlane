@@ -69,6 +69,12 @@ namespace Fdp.Kernel
         }
         
         /// <summary>
+        /// Gets a Span over the specified chunk's data.
+        /// Advanced API for heavy optimization.
+        /// </summary>
+        public Span<T> GetSpan(int chunkIndex) => _data.GetChunkSpan(chunkIndex);
+
+        /// <summary>
         /// Gets the underlying chunk table (for advanced usage).
         /// </summary>
         public NativeChunkTable<T> GetChunkTable() => _data;

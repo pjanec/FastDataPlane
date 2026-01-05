@@ -656,6 +656,8 @@ namespace Fdp.Kernel
                  throw new InvalidOperationException($"Phase Error: Cannot modify OWNED component {typeof(T).Name} during {_currentPhase} (UnownedOnly).");
         }
         
+
+
         // ================================================
         // TIER 2: MANAGED COMPONENTS
         // ================================================

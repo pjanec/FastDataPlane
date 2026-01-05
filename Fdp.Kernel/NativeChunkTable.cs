@@ -177,6 +177,18 @@ namespace Fdp.Kernel
             
             return _chunks[chunkIndex];
         }
+
+        /// <summary>
+        /// Gets a Span over the specified chunk's data.
+        /// Returns empty span if chunk is not committed.
+        /// </summary>
+        public Span<T> GetChunkSpan(int chunkIndex)
+        {
+            if (!IsChunkCommitted(chunkIndex))
+                return Span<T>.Empty;
+
+            return _chunks[chunkIndex].AsSpan();
+        }
         
         /// <summary>
         /// Checks if a chunk has been committed.
