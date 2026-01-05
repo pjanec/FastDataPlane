@@ -39,6 +39,7 @@ namespace Fdp.Kernel
         /// Calls action for each matching entity.
         /// Performance: Skips chunks with no matching entities.
         /// </summary>
+        [Obsolete("Use foreach loop for zero allocation. query.ForEach allocates closures.")]
         public void ForEach(Action<Entity> action)
         {
             if (action == null)
@@ -56,6 +57,87 @@ namespace Fdp.Kernel
                 {
                     action(new Entity(i, header.Generation));
                 }
+            }
+        }
+
+        /// <summary>
+        /// Gets an enumerator for zero-allocation iteration.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public EntityEnumerator GetEnumerator() => new EntityEnumerator(this);
+
+        /// <summary>
+        /// Zero-allocation enumerator for EntityQuery.
+        /// </summary>
+        public ref struct EntityEnumerator
+        {
+            // Fields to cache for performance (avoid referencing EntityQuery object in loop)
+            private readonly BitMask256 _includeMask;
+            private readonly BitMask256 _excludeMask;
+            private readonly BitMask256 _authorityIncludeMask;
+            private readonly BitMask256 _authorityExcludeMask;
+            private readonly bool _hasDisFilter;
+            private readonly ulong _disFilterValue;
+            private readonly ulong _disFilterMask;
+            private readonly EntityIndex _entityIndex;
+            
+            private int _currentIndex;
+            private readonly int _maxIndex;
+
+            internal EntityEnumerator(EntityQuery query)
+            {
+                _includeMask = query._includeMask;
+                _excludeMask = query._excludeMask;
+                _authorityIncludeMask = query._authorityIncludeMask;
+                _authorityExcludeMask = query._authorityExcludeMask;
+                _hasDisFilter = query._hasDisFilter;
+                _disFilterValue = query._disFilterValue;
+                _disFilterMask = query._disFilterMask;
+                
+                // Direct access to index for maximum speed
+                _entityIndex = query._repository.GetEntityIndex();
+                _maxIndex = _entityIndex.MaxIssuedIndex;
+                _currentIndex = -1; 
+            }
+
+            public Entity Current
+            {
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                get => new Entity(_currentIndex, _entityIndex.GetHeaderUnsafe(_currentIndex).Generation);
+            }
+
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public bool MoveNext()
+            {
+                // Tight loop with inlined checks
+                while (++_currentIndex <= _maxIndex)
+                {
+                    ref var header = ref _entityIndex.GetHeaderUnsafe(_currentIndex);
+
+                    if (!header.IsActive)
+                        continue;
+
+                    // INLINED MATCH LOGIC (Critical for perf)
+                    
+                    // 1. Component Mask
+                    if (!BitMask256.HasAll(header.ComponentMask, _includeMask)) continue;
+                    if (BitMask256.HasAny(header.ComponentMask, _excludeMask)) continue;
+
+                    // 2. Authority Mask
+                    if (!BitMask256.HasAll(header.AuthorityMask, _authorityIncludeMask)) continue;
+                    if (BitMask256.HasAny(header.AuthorityMask, _authorityExcludeMask)) continue;
+
+                    // 3. DIS Filter (Single instruction check)
+                    if (_hasDisFilter)
+                    {
+                        if ((header.DisType.Value & _disFilterMask) != _disFilterValue)
+                            continue;
+                    }
+
+                    return true;
+                }
+
+                return false;
             }
         }
         
@@ -218,7 +300,10 @@ namespace Fdp.Kernel
             // 1024 is the crossover point where parallelism beats single-threaded for light work.
             if (activeCount < 1024 && hint == ParallelHint.Light)
             {
-                ForEach(action);
+                foreach (var entity in this)
+                {
+                    action(entity);
+                }
                 return;
             }
             

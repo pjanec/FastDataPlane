@@ -40,7 +40,7 @@ namespace Fdp.Examples
                     .With<Velocity>()
                     .Build();
                 
-                query.ForEach((Entity e) =>
+                foreach (var e in query)
                 {
                     ref var pos = ref repo.GetComponentRW<Position>(e);
                     ref readonly var vel = ref repo.GetComponentRO<Velocity>(e);
@@ -48,7 +48,7 @@ namespace Fdp.Examples
                     pos.X += vel.X;
                     pos.Y += vel.Y;
                     pos.Z += vel.Z;
-                });
+                }
                 
                 // Record keyframe every 60 frames (1 second)
                 if (frame % 60 == 0)
@@ -98,11 +98,11 @@ namespace Fdp.Examples
                     
                     // Print positions
                     var query = repo.Query().With<Position>().Build();
-                    query.ForEach((Entity e) =>
+                    foreach (var e in query)
                     {
                         ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                         Console.WriteLine($"  Entity {e.Index}: Position ({pos.X}, {pos.Y}, {pos.Z})");
-                    });
+                    }
                 }
             }
             

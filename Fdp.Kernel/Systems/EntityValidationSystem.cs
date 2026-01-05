@@ -30,7 +30,8 @@ namespace Fdp.Kernel.Systems
             float dt = DeltaTime; // from ComponentSystem
 
             // 1. Validation Logic
-            _pendingEntities.ForEach(entity =>
+            // 1. Validation Logic
+            foreach (var entity in _pendingEntities)
             {
                 ref var lifecycle = ref World.GetComponentRW<LifecycleDescriptor>(entity);
                 
@@ -55,7 +56,7 @@ namespace Fdp.Kernel.Systems
                          World.DestroyEntity(entity);
                     }
                 }
-            });
+            }
         }
     }
 }
