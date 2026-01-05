@@ -49,5 +49,14 @@ namespace ModuleHost.Core.Abstractions
         /// Creates a query builder for iterating entities.
         /// </summary>
         QueryBuilder Query();
+
+        /// <summary>
+        /// Acquires a command buffer for queueing mutations.
+        /// Modules use this to queue changes (create/destroy entities, add/remove components).
+        /// Commands are played back on main thread after module execution.
+        /// 
+        /// Thread-safe: Each module gets its own command buffer.
+        /// </summary>
+        IEntityCommandBuffer GetCommandBuffer();
     }
 }

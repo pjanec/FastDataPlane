@@ -1,0 +1,23 @@
+using System;
+using Fdp.Kernel;
+
+namespace ModuleHost.Core.Abstractions
+{
+    /// <summary>
+    /// Interface for recording deferred mutations to the world.
+    /// Used by modules to safely queue changes.
+    /// </summary>
+    public interface IEntityCommandBuffer
+    {
+        Entity CreateEntity();
+        void DestroyEntity(Entity entity);
+        
+        void AddComponent<T>(Entity entity, in T component) where T : unmanaged;
+        void SetComponent<T>(Entity entity, in T component) where T : unmanaged;
+        void RemoveComponent<T>(Entity entity) where T : unmanaged;
+        
+        void AddManagedComponent<T>(Entity entity, T? component) where T : class;
+        void SetManagedComponent<T>(Entity entity, T? component) where T : class;
+        void RemoveManagedComponent<T>(Entity entity) where T : class;
+    }
+}

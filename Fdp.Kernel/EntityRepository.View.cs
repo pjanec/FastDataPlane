@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using Fdp.Kernel;
 using Fdp.Kernel.Internal;
 using ModuleHost.Core.Abstractions;
@@ -7,6 +8,9 @@ namespace Fdp.Kernel
 {
     public sealed partial class EntityRepository : ISimulationView
     {
+        // Thread-local command buffer for modules
+        internal readonly ThreadLocal<EntityCommandBuffer> _perThreadCommandBuffer = new(() => new EntityCommandBuffer(), trackAllValues: true);
+
         // Properties
         uint ISimulationView.Tick => _globalVersion;
         
@@ -14,6 +18,11 @@ namespace Fdp.Kernel
         
         // Methods
         
+        IEntityCommandBuffer ISimulationView.GetCommandBuffer()
+        {
+            return _perThreadCommandBuffer.Value!;
+        }
+
         ref readonly T ISimulationView.GetComponentRO<T>(Entity e)
         {
             // Delegate to existing internal methods via UnsafeShim or direct if accessible

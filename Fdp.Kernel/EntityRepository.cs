@@ -1395,7 +1395,18 @@ namespace Fdp.Kernel
             
             // Dispose entity index
             _entityIndex?.Dispose();
-            
+
+            // Dispose ThreadLocal Command Buffers (BATCH-05 Fix)
+            // Since trackAllValues: true was enabled, we can clean up all created instances.
+            if (_perThreadCommandBuffer != null)
+            {
+                foreach (var buffer in _perThreadCommandBuffer.Values)
+                {
+                    buffer.Dispose();
+                }
+                _perThreadCommandBuffer.Dispose();
+            }
+
             _disposed = true;
         }
     }

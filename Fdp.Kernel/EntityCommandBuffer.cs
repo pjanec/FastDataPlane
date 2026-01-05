@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
+using ModuleHost.Core.Abstractions;
 
 namespace Fdp.Kernel
 {
@@ -8,8 +9,9 @@ namespace Fdp.Kernel
     /// Thread-safe for recording (each thread should have its own buffer).
     /// Playback must be done on the main thread after parallel work completes.
     /// </summary>
-    public unsafe class EntityCommandBuffer : IDisposable
+    public unsafe class EntityCommandBuffer : IEntityCommandBuffer, IDisposable
     {
+
         private enum OpCode : byte
         {
             CreateEntity = 0,
@@ -340,6 +342,11 @@ namespace Fdp.Kernel
         /// Gets whether the buffer has any recorded commands.
         /// </summary>
         public bool IsEmpty => _position == 0;
+
+        /// <summary>
+        /// Gets whether the buffer has any recorded commands.
+        /// </summary>
+        public bool HasCommands => _position > 0;
         
         // ============================================
         // INTERNAL HELPERS
