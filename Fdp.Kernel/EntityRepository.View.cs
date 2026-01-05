@@ -38,13 +38,28 @@ namespace Fdp.Kernel
         {
             // Call internal method directly
             var val = GetManagedComponentRO<T>(e);
-            if (val == null) throw new InvalidOperationException($"Entity {e} missing component {typeof(T).Name}");
+            if (val == null) 
+            {
+                bool has = HasManagedComponent<T>(e);
+                System.Console.WriteLine($"FATAL: Entity {e} GetManagedComponentRO<{typeof(T).Name}> returned null, but Has={has}. Idx={e.Index}");
+                throw new InvalidOperationException($"Entity {e} missing component {typeof(T).Name}");
+            }
             return val;
         }
         
         bool ISimulationView.IsAlive(Entity e)
         {
             return IsAlive(e);
+        }
+
+        bool ISimulationView.HasComponent<T>(Entity e)
+        {
+            return HasUnmanagedComponent<T>(e);
+        }
+
+        bool ISimulationView.HasManagedComponent<T>(Entity e)
+        {
+            return HasManagedComponent<T>(e);
         }
         
         ReadOnlySpan<T> ISimulationView.ConsumeEvents<T>()

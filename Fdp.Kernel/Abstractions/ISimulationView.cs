@@ -37,6 +37,16 @@ namespace ModuleHost.Core.Abstractions
         /// Checks if entity is alive (not destroyed).
         /// </summary>
         bool IsAlive(Entity e);
+
+        /// <summary>
+        /// Checks if entity has component (Unified/Unmanaged).
+        /// </summary>
+        bool HasComponent<T>(Entity e) where T : unmanaged;
+
+        /// <summary>
+        /// Checks if entity has managed component.
+        /// </summary>
+        bool HasManagedComponent<T>(Entity e) where T : class;
         
         /// <summary>
         /// Consumes all accumulated events of type T.

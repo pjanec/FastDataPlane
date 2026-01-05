@@ -15,16 +15,16 @@ namespace Fdp.Examples
         {
             // Create repository and register components
             using var repo = new EntityRepository();
-            repo.RegisterComponent<Position>();
-            repo.RegisterComponent<Velocity>();
+            repo.RegisterComponent<ExamplePosition>();
+            repo.RegisterComponent<ExampleVelocity>();
             
             // Create some entities
             var entity1 = repo.CreateEntity();
-            repo.AddComponent(entity1, new Position { X = 10, Y = 20, Z = 30 });
-            repo.AddComponent(entity1, new Velocity { X = 1, Y = 0, Z = 0 });
+            repo.AddComponent(entity1, new ExamplePosition { X = 10, Y = 20, Z = 30 });
+            repo.AddComponent(entity1, new ExampleVelocity { X = 1, Y = 0, Z = 0 });
             
             var entity2 = repo.CreateEntity();
-            repo.AddComponent(entity2, new Position { X = 0, Y = 0, Z = 0 });
+            repo.AddComponent(entity2, new ExamplePosition { X = 0, Y = 0, Z = 0 });
             
             // Start recording
             using var recorder = new AsyncRecorder("simulation.fdp");
@@ -36,14 +36,14 @@ namespace Fdp.Examples
                 
                 // Simulate physics (every entity with velocity moves)
                 var query = repo.Query()
-                    .With<Position>()
-                    .With<Velocity>()
+                    .With<ExamplePosition>()
+                    .With<ExampleVelocity>()
                     .Build();
                 
                 foreach (var e in query)
                 {
-                    ref var pos = ref repo.GetComponentRW<Position>(e);
-                    ref readonly var vel = ref repo.GetComponentRO<Velocity>(e);
+                    ref var pos = ref repo.GetComponentRW<ExamplePosition>(e);
+                    ref readonly var vel = ref repo.GetComponentRO<ExampleVelocity>(e);
                     
                     pos.X += vel.X;
                     pos.Y += vel.Y;
@@ -78,8 +78,8 @@ namespace Fdp.Examples
         {
             // Create fresh repository
             using var repo = new EntityRepository();
-            repo.RegisterComponent<Position>();
-            repo.RegisterComponent<Velocity>();
+            repo.RegisterComponent<ExamplePosition>();
+            repo.RegisterComponent<ExampleVelocity>();
             
             // Open recording
             using var reader = new RecordingReader("simulation.fdp");
@@ -97,10 +97,10 @@ namespace Fdp.Examples
                     Console.WriteLine($"Frame {frameCount}: Active entities: {repo.EntityCount}");
                     
                     // Print positions
-                    var query = repo.Query().With<Position>().Build();
+                    var query = repo.Query().With<ExamplePosition>().Build();
                     foreach (var e in query)
                     {
-                        ref readonly var pos = ref repo.GetComponentRO<Position>(e);
+                        ref readonly var pos = ref repo.GetComponentRO<ExamplePosition>(e);
                         Console.WriteLine($"  Entity {e.Index}: Position ({pos.X}, {pos.Y}, {pos.Z})");
                     }
                 }
@@ -110,13 +110,13 @@ namespace Fdp.Examples
         }
     }
     
-    // Example component types
-    public struct Position
+    // Example component types (Renamed to prevent conflicts with other examples)
+    public struct ExamplePosition
     {
         public float X, Y, Z;
     }
     
-    public struct Velocity
+    public struct ExampleVelocity
     {
         public float X, Y, Z;
     }

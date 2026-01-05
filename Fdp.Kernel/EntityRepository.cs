@@ -1097,7 +1097,10 @@ namespace Fdp.Kernel
                 throw new InvalidOperationException($"Component type ID {typeId} not registered");
             
             if (!_componentTables.TryGetValue(componentType, out var table))
-                throw new InvalidOperationException($"Component {componentType.Name} not registered. Call RegisterComponent first.");
+            {
+                var registered = string.Join(", ", _componentTables.Keys.Select(k => k.Name));
+                throw new InvalidOperationException($"Component {componentType.Name} (ID: {typeId}) not registered. Registered: {registered}. Call RegisterComponent first.");
+            }
             
             // Use the raw write interface
             table.SetRaw(entity.Index, dataPtr, size, _globalVersion);
