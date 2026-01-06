@@ -254,7 +254,7 @@ namespace Fdp.Kernel
                         {
                             fixed (byte* dataPtr = &_buffer[readPos])
                             {
-                                repo.SetComponentRaw(entity, typeId, (IntPtr)dataPtr, size);
+                                repo.SetComponentRawFast(entity, typeId, (IntPtr)dataPtr, size);
                             }
                         }
                         

@@ -21,6 +21,7 @@ namespace Fdp.Kernel
     {
         private readonly EntityIndex _entityIndex;
         private readonly Dictionary<Type, IComponentTable> _componentTables;
+        private IComponentTable?[] _tableCache = new IComponentTable[FdpConfig.MAX_COMPONENT_TYPES];
         private readonly ComponentMetadataTable _metadata;
         private readonly object _tableLock = new object();
         private bool _disposed;
@@ -811,6 +812,19 @@ namespace Fdp.Kernel
                 
                 var newTable = new ManagedComponentTable<T>();
                 _componentTables[type] = newTable;
+                
+                // Update Cache
+                int typeId = ManagedComponentType<T>.ID;
+                if (typeId < _tableCache.Length)
+                {
+                    _tableCache[typeId] = newTable;
+                }
+                else
+                {
+                    Array.Resize(ref _tableCache, typeId + 1);
+                    _tableCache[typeId] = newTable;
+                }
+                
                 return newTable;
             }
             
@@ -847,6 +861,20 @@ namespace Fdp.Kernel
                 
                 var newTable = new ComponentTable<T>();
                 _componentTables[type] = newTable;
+                
+                // Update Cache
+                int typeId = ComponentType<T>.ID;
+                if (typeId < _tableCache.Length)
+                {
+                    _tableCache[typeId] = newTable;
+                }
+                else
+                {
+                    // Expand cache if needed (though MAX_COMPONENT_TYPES should cover)
+                    Array.Resize(ref _tableCache, typeId + 1);
+                    _tableCache[typeId] = newTable;
+                }
+                
                 return newTable;
             }
         }
@@ -1112,11 +1140,49 @@ namespace Fdp.Kernel
         }
         
         /// <summary>
+        /// OPTIMIZED: Fast path for command buffer playback.
+        /// Uses direct array lookup instead of dictionary + lock.
+        /// </summary>
+        internal unsafe void SetComponentRawFast(Entity entity, int typeId, IntPtr dataPtr, int size)
+        {
+            // O(1) array access - NO LOCKS, NO HASHING
+            if (typeId >= _tableCache.Length || _tableCache[typeId] == null)
+            {
+                #if DEBUG || FDP_PARANOID_MODE
+                throw new InvalidOperationException(
+                    $"Component type {typeId} not registered. " +
+                    $"All components must be registered before command buffer playback.");
+                #else
+                // In release: fallback to slow path (should never happen in production)
+                SetComponentRaw(entity, typeId, dataPtr, size);
+                return;
+                #endif
+            }
+            
+            var table = _tableCache[typeId];
+            
+            // Direct memory copy
+            table.SetRaw(entity.Index, dataPtr, size, _globalVersion);
+            
+            // Update component mask
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.ComponentMask.SetBit(typeId);
+            header.LastChangeTick = _globalVersion;
+        }
+
+        /// <summary>
         /// Sets a component using raw bytes (type-erased).
         /// Used internally by EntityCommandBuffer during playback.
         /// </summary>
         internal unsafe void SetComponentRaw(Entity entity, int typeId, IntPtr dataPtr, int size)
         {
+            // Use fast path if cache available
+            if (typeId < _tableCache.Length && _tableCache[typeId] != null)
+            {
+                SetComponentRawFast(entity, typeId, dataPtr, size);
+                return;
+            }
+
             if (!IsAlive(entity)) return;
             
             Type? componentType = ComponentTypeRegistry.GetType(typeId);
