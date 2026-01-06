@@ -61,6 +61,12 @@ namespace ModuleHost.Core.Abstractions
         QueryBuilder Query();
 
         /// <summary>
+        /// Consumes all captured managed events of type T.
+        /// Returns a read-only list (snapshot) of events.
+        /// </summary>
+        System.Collections.Generic.IReadOnlyList<T> ConsumeManagedEvents<T>() where T : class;
+
+        /// <summary>
         /// Acquires a command buffer for queueing mutations.
         /// Modules use this to queue changes (create/destroy entities, add/remove components).
         /// Commands are played back on main thread after module execution.

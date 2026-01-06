@@ -66,6 +66,11 @@ namespace Fdp.Kernel
         {
             return Bus.Consume<T>();
         }
+
+        System.Collections.Generic.IReadOnlyList<T> ISimulationView.ConsumeManagedEvents<T>()
+        {
+            return Bus.ConsumeManaged<T>();
+        }
         
         QueryBuilder ISimulationView.Query()
         {

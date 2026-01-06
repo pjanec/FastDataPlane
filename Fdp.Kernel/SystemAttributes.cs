@@ -30,10 +30,10 @@ namespace Fdp.Kernel
         
         public UpdateBeforeAttribute(Type target)
         {
-            if (!typeof(ComponentSystem).IsAssignableFrom(target))
-            {
-                throw new ArgumentException($"Type {target.Name} must derive from ComponentSystem", nameof(target));
-            }
+            // Relaxed check to allow ModuleHost systems (which don't inherit ComponentSystem)
+            if (target == null)
+                throw new ArgumentNullException(nameof(target));
+                
             Target = target;
         }
     }
@@ -48,10 +48,10 @@ namespace Fdp.Kernel
         
         public UpdateAfterAttribute(Type target)
         {
-            if (!typeof(ComponentSystem).IsAssignableFrom(target))
-            {
-                throw new ArgumentException($"Type {target.Name} must derive from ComponentSystem", nameof(target));
-            }
+            // Relaxed check to allow ModuleHost systems (which don't inherit ComponentSystem)
+            if (target == null)
+                throw new ArgumentNullException(nameof(target));
+
             Target = target;
         }
     }
