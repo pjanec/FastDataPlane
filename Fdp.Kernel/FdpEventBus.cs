@@ -17,6 +17,10 @@ namespace Fdp.Kernel
         // ConcurrentDictionary allows lock-free lazy initialization
         private readonly ConcurrentDictionary<int, INativeEventStream> _nativeStreams = new();
         private readonly ConcurrentDictionary<int, object> _managedStreams = new();
+        
+        // Track active event IDs for current frame (rebuilt during SwapBuffers)
+        // READ-ONLY during module execution phase (safe for concurrent access).
+        private readonly HashSet<int> _activeEventIds = new();
 
         private bool _disposed;
 
@@ -45,6 +49,57 @@ namespace Fdp.Kernel
             var stream = GetOrCreateManagedStream<T>();
             stream.Write(evt);
         }
+
+        /// <summary>
+        /// Checks if an unmanaged event of type T exists in the current frame.
+        /// </summary>
+        public bool HasEvent<T>() where T : unmanaged
+        {
+            return _activeEventIds.Contains(EventType<T>.Id);
+        }
+
+        /// <summary>
+        /// Checks if a managed event of type T exists in the current frame.
+        /// </summary>
+        public bool HasManagedEvent<T>() where T : class
+        {
+            return _activeEventIds.Contains(GetManagedTypeId<T>());
+        }
+
+        private static readonly ConcurrentDictionary<Type, int> _unmanagedEventIdCache = new();
+
+        /// <summary>
+        /// Checks if an event of the specified type exists in the current frame.
+        /// </summary>
+        public bool HasEvent(Type type)
+        {
+            if (type.IsValueType)
+            {
+                if (!_unmanagedEventIdCache.TryGetValue(type, out int id))
+                {
+                    // Slow path: Reflection to get EventType<T>.Id
+                    // We assume the type has [EventId] attribute or is a valid event type using Fdp.Kernel event system.
+                    try 
+                    {
+                        var eventTypeGeneric = typeof(EventType<>).MakeGenericType(type);
+                        var idField = eventTypeGeneric.GetField("Id", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                        id = (int)idField!.GetValue(null)!;
+                        _unmanagedEventIdCache[type] = id;
+                    }
+                    catch
+                    {
+                        // Fallback or error?
+                        return false;
+                    }
+                }
+                return _activeEventIds.Contains(id);
+            }
+            else
+            {
+                return _activeEventIds.Contains(type.FullName!.GetHashCode() & 0x7FFFFFFF);
+            }
+        }
+
 
         /// <summary>
         /// Registers a native event type to ensure the stream exists.
@@ -140,20 +195,51 @@ namespace Fdp.Kernel
         /// - Events from current frame become readable
         /// - Previous frame's events are cleared
         /// </summary>
+        /// <summary>
+        /// Swaps all event buffers.
+        /// MUST be called at the end of each frame (PostSimulation phase).
+        /// Rebuilds the _activeEventIds set for fast lookups in the next frame.
+        /// </summary>
         public void SwapBuffers()
         {
+            _activeEventIds.Clear();
+
             // Swap native streams
             foreach (var stream in _nativeStreams.Values)
             {
-                stream.Swap();  // Swap handles clearing the write buffer internally
+                stream.Swap();
+                if (stream.GetRawBytes().Length > 0)
+                {
+                    _activeEventIds.Add(stream.EventTypeId);
+                }
             }
 
             // Swap managed streams
             foreach (var streamObj in _managedStreams.Values)
             {
-                // Dynamic dispatch (we don't know T at compile time)
-                var swapMethod = streamObj.GetType().GetMethod(nameof(ManagedEventStream<object>.Swap));
-                swapMethod?.Invoke(streamObj, null);
+                if (streamObj is IManagedEventStreamInfo info)
+                {
+                    // Call Swap via reflection (or just cast to dynamic/common interface?)
+                    // Dynamic is slow. We know it has Swap().
+                    // But interface IManagedEventStreamInfo doesn't have Swap.
+                    // We can use reflection or known type if T was known.
+                    // Let's use reflection cached or simple dynamic.
+                    // Since it worked before with reflection:
+                    
+                    var swapMethod = streamObj.GetType().GetMethod(nameof(ManagedEventStream<object>.Swap));
+                    swapMethod?.Invoke(streamObj, null);
+                    
+                    // Check active
+                    var countProp = streamObj.GetType().GetProperty("Count"); // This returns Back buffer count?
+                    // No, ManagedEventStream IEventStreamInspector.Count returns _front.Count.
+                    // But we want to know if _front (READ) has data.
+                    // After Swap, _front is what was just swapped in.
+                    
+                    if (streamObj is IEventStreamInspector inspector && inspector.Count > 0)
+                    {
+                        _activeEventIds.Add(info.TypeId);
+                    }
+                }
             }
         }
 

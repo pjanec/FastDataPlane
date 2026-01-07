@@ -490,6 +490,17 @@ namespace Fdp.Kernel
         }
 
         /// <summary>
+        /// Checks if a component table has been modified since the specified tick.
+        /// Uses lazy scan of chunk versions (fast, no writes).
+        /// </summary>
+        public bool HasComponentChanged(Type componentType, uint sinceTick)
+        {
+            if (_componentTables.TryGetValue(componentType, out var table))
+                return table.HasChanges(sinceTick);
+            return false;
+        }
+
+        /// <summary>
         /// Removes a component.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

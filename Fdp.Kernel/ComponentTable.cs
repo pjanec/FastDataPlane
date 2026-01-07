@@ -22,6 +22,14 @@ namespace Fdp.Kernel
         public Type ComponentType => typeof(T);
         public int ComponentSize => ComponentType<T>.Size;
         
+        /// <summary>
+        /// Efficiently checks if this table has been modified since the specified version.
+        /// </summary>
+        public bool HasChanges(uint sinceVersion)
+        {
+            return _data.HasChanges(sinceVersion);
+        }
+
         public uint GetVersionForEntity(int entityId)
         {
             int chunkIndex = entityId / _data.ChunkCapacity;

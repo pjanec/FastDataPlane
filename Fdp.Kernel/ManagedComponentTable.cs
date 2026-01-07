@@ -31,6 +31,20 @@ namespace Fdp.Kernel
         public int ChunkCapacity => _chunkSize;
         
         /// <summary>
+        /// Efficiently checks if this table has been modified since the specified version.
+        /// Uses lazy scan of chunk versions.
+        /// </summary>
+        public bool HasChanges(uint sinceVersion)
+        {
+            for (int i = 0; i < _chunkVersions.Length; i++)
+            {
+                if (_chunkVersions[i] > sinceVersion)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Gets or sets component for an entity. Lazy-allocates chunks.
         /// </summary>
         public T? this[int entityIndex]
