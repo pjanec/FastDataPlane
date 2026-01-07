@@ -290,6 +290,19 @@ namespace Fdp.Kernel
         {
             GetTable<T>(true);
         }
+
+        /// <summary>
+        /// Registers an event type to ensure the stream exists.
+        /// Useful for delayed events via CommandBuffer.
+        /// </summary>
+        public void RegisterEvent<T>() where T : unmanaged
+        {
+            // Forces creation of the stream via Publish (dummy call? No, creating stream is enough).
+            // But we don't have public "CreateStream".
+            // Bus.Publish<T>(default) would create it but also emit an empty event.
+            // We need Bus.Register<T>().
+            Bus.Register<T>();
+        }
         
         /// <summary>
         /// Destroys an entity and removes all its components.
@@ -717,7 +730,7 @@ namespace Fdp.Kernel
             #endif
             
             var table = GetManagedTable<T>(false);
-            return table[entity.Index];
+            return table[entity.Index]!;
         }
         
         /// <summary>
@@ -733,7 +746,8 @@ namespace Fdp.Kernel
             #endif
             
             var table = GetManagedTable<T>(false);
-            return ref table.GetRW(entity.Index, _globalVersion);
+            ref var val = ref table.GetRW(entity.Index, _globalVersion);
+            return ref Unsafe.As<T?, T>(ref val);
         }
         
         /// <summary>
@@ -744,7 +758,7 @@ namespace Fdp.Kernel
         internal T GetManagedComponentRO<T>(Entity entity) where T : class
         {
             var table = GetManagedTable<T>(false);
-            return table.GetRO(entity.Index);
+            return table.GetRO(entity.Index)!;
         }
         
         /// <summary>
@@ -1170,7 +1184,7 @@ namespace Fdp.Kernel
                 #endif
             }
             
-            var table = _tableCache[typeId];
+            var table = _tableCache[typeId]!;
             
             // Direct memory copy
             table.SetRaw(entity.Index, dataPtr, size, _globalVersion);

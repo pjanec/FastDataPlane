@@ -47,6 +47,50 @@ namespace Fdp.Kernel
         }
 
         /// <summary>
+        /// Registers a native event type to ensure the stream exists.
+        /// </summary>
+        public void Register<T>() where T : unmanaged
+        {
+            GetOrCreateNativeStream<T>();
+        }
+
+        /// <summary>
+        /// Publishes a raw event to the native stream.
+        /// Used by EntityCommandBuffer playback.
+        /// </summary>
+        public unsafe void PublishRaw(int typeId, void* data)
+        {
+            if (_nativeStreams.TryGetValue(typeId, out var stream))
+            {
+                stream.WriteRaw(data);
+            }
+            else
+            {
+                throw new InvalidOperationException($"Event type {typeId} not registered via RegisterEvent<T>(). Cannot playback command.");
+            }
+        }
+
+        /// <summary>
+        /// Publishes a managed event using object reference (type-erased).
+        /// Used by EntityCommandBuffer playback.
+        /// </summary>
+        public void PublishManagedRaw(int typeId, object evt)
+        {
+            if (_managedStreams.TryGetValue(typeId, out var stream))
+            {
+                // Dynamic dispatch to call Write(T)
+                var managedStream = stream as dynamic;
+                managedStream.Write((dynamic)evt);
+            }
+            else
+            {
+                 // Try to resolve type from object if possible, but typeId lookup failed.
+                 // We require registration just like native events.
+                 throw new InvalidOperationException($"Managed event type {typeId} not registered. Cannot playback command.");
+            }
+        }
+
+        /// <summary>
         /// Consumes all events of type T from the previous frame.
         /// Returns empty span if no events were published.
         /// This is how systems "subscribe" to events - by calling Consume in their Update.

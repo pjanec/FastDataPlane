@@ -6,8 +6,12 @@ namespace Fdp.Kernel
     /// Type-erased interface for native event streams.
     /// Allows recorder to access event data without knowing generic type T.
     /// </summary>
-    public interface INativeEventStream
+    public unsafe interface INativeEventStream
     {
+        /// <summary>
+        /// Writes a single event from raw memory.
+        /// </summary>
+        void WriteRaw(void* data);
         /// <summary>
         /// Event type ID from [EventId] attribute.
         /// </summary>

@@ -19,5 +19,10 @@ namespace ModuleHost.Core.Abstractions
         void AddManagedComponent<T>(Entity entity, T? component) where T : class;
         void SetManagedComponent<T>(Entity entity, T? component) where T : class;
         void RemoveManagedComponent<T>(Entity entity) where T : class;
+        
+        /// <summary>
+        /// Publishes an event to be processed in the next frame.
+        /// </summary>
+        void PublishEvent<T>(in T evt) where T : unmanaged;
     }
 }

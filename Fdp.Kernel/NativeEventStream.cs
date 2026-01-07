@@ -73,6 +73,14 @@ namespace Fdp.Kernel
         }
 
         /// <summary>
+        /// Writes an event from raw memory.
+        /// </summary>
+        public unsafe void WriteRaw(void* data)
+        {
+             Write(System.Runtime.CompilerServices.Unsafe.AsRef<T>(data));
+        }
+
+        /// <summary>
         /// Writes an event to the write buffer.
         /// Thread-safe: multiple threads can write concurrently.
         /// Auto-expands buffer if capacity is exceeded.

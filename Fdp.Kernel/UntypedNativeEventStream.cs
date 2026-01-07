@@ -38,6 +38,37 @@ namespace Fdp.Kernel
             return ReadOnlySpan<byte>.Empty;
         }
 
+        public void WriteRaw(void* data)
+        {
+             // Append element
+             int newCount = _currentCount + 1;
+             long requiredSize = (long)newCount * _elementSize;
+             
+             if (requiredSize > _currentSize)
+             {
+                 // Resize
+                 long newSize = Math.Max(requiredSize, _currentSize * 2); 
+                 byte* newBuffer = (byte*)NativeMemoryAllocator.Reserve(newSize);
+                 NativeMemoryAllocator.Commit(newBuffer, newSize);
+                 
+                 // Copy existing
+                 long existingSize = (long)_currentCount * _elementSize;
+                 System.Buffer.MemoryCopy(_currentBuffer, newBuffer, newSize, existingSize);
+                 
+                 // Free old
+                 NativeMemoryAllocator.Free(_currentBuffer, _currentSize);
+                 
+                 _currentBuffer = newBuffer;
+                 _currentSize = newSize;
+             }
+             
+             // Copy data
+             long offset = (long)_currentCount * _elementSize;
+             System.Buffer.MemoryCopy(data, _currentBuffer + offset, _currentSize - offset, _elementSize);
+             
+             _currentCount = newCount;
+        }
+
         public void InjectIntoCurrent(ReadOnlySpan<byte> data)
         {
             int eventCount = data.Length / _elementSize;

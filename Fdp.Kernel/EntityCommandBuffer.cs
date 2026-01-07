@@ -21,7 +21,9 @@ namespace Fdp.Kernel
             SetUnmanagedComponent = 4,
             AddManagedComponent = 5,
             RemoveManagedComponent = 6,
-            SetManagedComponent = 7
+            SetManagedComponent = 7,
+            PublishUnmanagedEvent = 8,
+            PublishManagedEvent = 9
         }
         
         // Simple byte buffer for command stream
@@ -185,6 +187,43 @@ namespace Fdp.Kernel
             WriteInt(typeId);
         }
         
+        /// <summary>
+        /// Records a PublishEvent command.
+        /// </summary>
+        public void PublishEvent<T>(in T evt) where T : unmanaged
+        {
+            int componentSize = Unsafe.SizeOf<T>();
+            if (componentSize > MaxComponentSize)
+                throw new ArgumentException($"Event size {componentSize} exceeds maximum {MaxComponentSize}");
+            
+            int typeId = EventType<T>.Id;
+            EnsureCapacity(1 + 4 + 4 + componentSize); // OpCode + TypeID + Size + Data
+            
+            _buffer[_position++] = (byte)OpCode.PublishUnmanagedEvent;
+            WriteInt(typeId);
+            WriteInt(componentSize);
+            WriteComponent(evt);
+        }
+
+        /// <summary>
+        /// Records a PublishManagedEvent command.
+        /// Use this for class-based events.
+        /// </summary>
+        public void PublishManagedEvent<T>(T evt) where T : class
+        {
+            if (evt == null) throw new ArgumentNullException(nameof(evt));
+            
+            int typeId = typeof(T).FullName!.GetHashCode() & 0x7FFFFFFF;
+            int objectIndex = _managedObjects.Count;
+            _managedObjects.Add(evt);
+            
+            EnsureCapacity(1 + 4 + 4); // OpCode + TypeID + ObjectIndex
+            
+            _buffer[_position++] = (byte)OpCode.PublishManagedEvent;
+            WriteInt(typeId);
+            WriteInt(objectIndex);
+        }
+        
         // ============================================
         // PLAYBACK API (Main thread only!)
         // ============================================
@@ -311,6 +350,30 @@ namespace Fdp.Kernel
                         {
                             repo.RemoveManagedComponentRaw(entity, typeId);
                         }
+                        break;
+                    }
+                    
+                    case OpCode.PublishUnmanagedEvent:
+                    {
+                        int typeId = ReadInt(ref readPos);
+                        int size = ReadInt(ref readPos);
+                        
+                        fixed (byte* dataPtr = &_buffer[readPos])
+                        {
+                            repo.Bus.PublishRaw(typeId, dataPtr);
+                        }
+                        
+                        readPos += size;
+                        break;
+                    }
+                    
+                    case OpCode.PublishManagedEvent:
+                    {
+                        int typeId = ReadInt(ref readPos);
+                        int objectIndex = ReadInt(ref readPos);
+                        
+                        object evt = _managedObjects[objectIndex];
+                        repo.Bus.PublishManagedRaw(typeId, evt);
                         break;
                     }
                     
