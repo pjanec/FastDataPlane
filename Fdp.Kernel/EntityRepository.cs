@@ -344,6 +344,24 @@ namespace Fdp.Kernel
         {
             return _entityIndex.IsAlive(entity);
         }
+
+        /// <summary>
+        /// Reconstructs an Entity handle from an index.
+        /// Returns Entity.Null if index is invalid or entity is not active.
+        ///
+        /// WARNING: Only use this if you are certain the index corresponds to a live entity
+        /// from the current frame (e.g., iterating a raw array). Do NOT use this to 
+        /// restore entity references stored from previous frames; use the full Entity struct instead.
+        /// </summary>
+        public Entity GetEntity(int index)
+        {
+            if (index < 0 || index > MaxEntityIndex) return Entity.Null;
+            
+            ref var header = ref _entityIndex.GetHeader(index);
+            if (!header.IsActive) return Entity.Null;
+            
+            return new Entity(index, header.Generation);
+        }
         
         // ========================================================================
         // PUBLIC API (Clean, Unified, High-Performance)
