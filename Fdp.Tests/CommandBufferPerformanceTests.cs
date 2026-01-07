@@ -34,7 +34,7 @@ namespace Fdp.Tests
             // Record commands
             for (int i = 0; i < entityCount; i++)
             {
-                cmd.SetComponent(new Entity(i), new TestComponent { Value = i + 1 });
+                cmd.SetComponent(new Entity(i,1), new TestComponent { Value = i + 1 });
             }
             
             // Warmup

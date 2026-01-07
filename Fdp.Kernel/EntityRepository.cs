@@ -878,7 +878,7 @@ namespace Fdp.Kernel
         // COMPONENT TABLE MANAGEMENT (Internal)
         // ================================================
         
-        private ComponentTable<T> GetTable<T>(bool allowCreate) where T : unmanaged
+        internal ComponentTable<T> GetTable<T>(bool allowCreate) where T : unmanaged
         {
             Type type = typeof(T);
             

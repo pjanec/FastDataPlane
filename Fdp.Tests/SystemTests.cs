@@ -434,24 +434,26 @@ namespace Fdp.Tests
                 var attr = new Fdp.Kernel.UpdateBeforeAttribute(typeof(string));
             });
         }
+
+		// commented out, as the behavior was relaxed to allow usage mu modulehost modules that do not inherit from ComponentSystem
+		//[Fact]
+        //public void SystemAttributes_UpdateAfter_InvalidType_ThrowsException()
+        //{
+        //    Assert.Throws<ArgumentException>(() =>
+        //    {
+        //        var attr = new Fdp.Kernel.UpdateAfterAttribute(typeof(int));
+        //    });
+        //}
         
-        [Fact]
-        public void SystemAttributes_UpdateAfter_InvalidType_ThrowsException()
-        {
-            Assert.Throws<ArgumentException>(() =>
-            {
-                var attr = new Fdp.Kernel.UpdateAfterAttribute(typeof(int));
-            });
-        }
-        
-        [Fact]
-        public void SystemAttributes_UpdateInGroup_InvalidType_ThrowsException()
-        {
-            Assert.Throws<ArgumentException>(() =>
-            {
-                var attr = new Fdp.Kernel.UpdateInGroupAttribute(typeof(object));
-            });
-        }
+		// commented out, as the behavior was relaxed to allow usage mu modulehost modules that do not inherit from ComponentSystem
+        //[Fact]
+        //public void SystemAttributes_UpdateInGroup_InvalidType_ThrowsException()
+        //{
+        //    Assert.Throws<ArgumentException>(() =>
+        //    {
+        //        var attr = new Fdp.Kernel.UpdateInGroupAttribute(typeof(object));
+        //    });
+        //}
         
         [Fact]
         public void ComponentSystem_CanAccessRepository()
