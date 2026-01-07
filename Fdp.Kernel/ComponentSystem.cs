@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 
 namespace Fdp.Kernel
 {
@@ -45,6 +46,11 @@ namespace Fdp.Kernel
         /// Disabled systems are skipped.
         /// </summary>
         public bool Enabled { get; set; } = true;
+        
+        /// <summary>
+        /// Duration of the last OnUpdate execution in milliseconds.
+        /// </summary>
+        public double LastUpdateDuration { get; private set; }
         
         private bool _created = false;
         private bool _disposed = false;
@@ -104,7 +110,10 @@ namespace Fdp.Kernel
             
             if (Enabled)
             {
+                long start = Stopwatch.GetTimestamp();
                 OnUpdate();
+                long end = Stopwatch.GetTimestamp();
+                LastUpdateDuration = (end - start) * 1000.0 / Stopwatch.Frequency;
             }
         }
         
