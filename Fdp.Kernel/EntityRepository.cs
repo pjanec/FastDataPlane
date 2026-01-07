@@ -370,6 +370,17 @@ namespace Fdp.Kernel
         }
 
         /// <summary>
+        /// Set component value (alias for AddComponent - upsert behavior).
+        /// Use this when semantically updating an existing component.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetComponent<T>(Entity entity, T component)
+        {
+            // In FDP, AddComponent is already upsert (update-or-insert)
+            AddComponent<T>(entity, component);
+        }
+
+        /// <summary>
         /// Gets a reference (Read/Write) to a component.
         /// Updates version/dirty flags for change tracking.
         /// </summary>
@@ -1299,7 +1310,7 @@ namespace Fdp.Kernel
         /// Allocates Tier 1 memory if it doesn't exist.
         /// Use this for struct/value types that you want ref access to.
         /// </summary>
-        public void SetSingletonUnmanaged<T>(T value) where T : unmanaged
+        public void SetSingletonUnmanaged<T>(in T value) where T : unmanaged
         {
             int typeId = ComponentType<T>.ID;  // Will auto-register via ComponentType<T>
             EnsureSingletonCapacity(typeId);
@@ -1382,9 +1393,9 @@ namespace Fdp.Kernel
         }
         
         /// <summary>
-        /// Checks if a singleton has been set.
+        /// Checks if a singleton has been set (Unmanaged).
         /// </summary>
-        public bool HasSingleton<T>() where T : unmanaged
+        public bool HasSingletonUnmanaged<T>() where T : unmanaged
         {
             int typeId = ComponentType<T>.ID;
             if (typeId >= _singletons.Length) return false;
@@ -1435,6 +1446,62 @@ namespace Fdp.Kernel
             {
                 int newSize = Math.Max(_singletons.Length * 2, typeId + 1);
                 Array.Resize(ref _singletons, newSize);
+            }
+        }
+
+        // =========================================================
+        // UNIFIED SINGLETON API
+        // =========================================================
+
+        /// <summary>
+        /// Sets a singleton component (Managed or Unmanaged).
+        /// </summary>
+        public void SetSingleton<T>(T value)
+        {
+            if (ComponentTypeHelper.IsUnmanaged<T>())
+            {
+                // Unbox/Cast via UnsafeShim logic would be ideal if T is constrained
+                // But here we can't easily cast T to unmanaged without constraint.
+                // We use our UnsafeShim helper pattern.
+                UnsafeShim.SetSingletonUnmanaged(this, value);
+            }
+            else
+            {
+                UnsafeShim.SetSingletonManaged(this, value);
+            }
+        }
+
+        /// <summary>
+        /// Gets a singleton component (Managed or Unmanaged).
+        /// Throws if missing.
+        /// </summary>
+        public ref T GetSingleton<T>()
+        {
+            if (ComponentTypeHelper.IsUnmanaged<T>())
+            {
+                return ref UnsafeShim.GetSingletonUnmanaged<T>(this);
+            }
+            else
+            {
+                // For managed, we return ref to table entry? 
+                // GetSingletonManaged returns T? validation issues with ref return of class.
+                // We return ref T via shim.
+                return ref UnsafeShim.GetSingletonManaged<T>(this);
+            }
+        }
+
+        /// <summary>
+        /// Checks if singleton exists.
+        /// </summary>
+        public bool HasSingleton<T>()
+        {
+            if (ComponentTypeHelper.IsUnmanaged<T>())
+            {
+                return UnsafeShim.HasSingletonUnmanaged<T>(this);
+            }
+            else
+            {
+                return UnsafeShim.HasSingletonManaged<T>(this);
             }
         }
         
