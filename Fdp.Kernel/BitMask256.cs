@@ -125,6 +125,15 @@ namespace Fdp.Kernel
             _q2 &= other._q2;
             _q3 &= other._q3;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void BitwiseOr(in BitMask256 other)
+        {
+            _q0 |= other._q0;
+            _q1 |= other._q1;
+            _q2 |= other._q2;
+            _q3 |= other._q3;
+        }
         
         // ----------------------------------------------------------
         // QUERY OPERATIONS (AVX2 Optimized)

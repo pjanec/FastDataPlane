@@ -276,6 +276,7 @@ namespace Fdp.Kernel
         public void SoftClear()
         {
              Clear();
+             Bus.ClearAll();
         }
         
         internal void RebuildFreeList()

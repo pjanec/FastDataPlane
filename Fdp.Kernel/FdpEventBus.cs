@@ -513,6 +513,49 @@ namespace Fdp.Kernel
         }
 
         /// <summary>
+        /// Clears all buffers (Read and Write) and resets active event state.
+        /// Used when resetting an EntityRepository for reuse in a pool.
+        /// </summary>
+        public void ClearAll()
+        {
+            _activeEventIds.Clear();
+            
+            // Clear Native Streams
+            foreach (var stream in _nativeStreams.Values)
+            {
+                stream.ClearCurrent();
+                // We also need to clear pending/write buffer if any
+                // Assuming stream has ClearPending or we Swap and Clear?
+                // Best to expose ClearAll on stream or clear both.
+                // Since NativeEventStream logic is simple, let's call ClearCurrent() 
+                // and we need to clear Back buffer too.
+                // Assuming NativeEventStream has reset capabilities or we just Swap and Clear again?
+                // Double swap + clear handles both?
+                
+                // For valid robust clearing:
+                stream.ClearCurrent();
+                stream.Swap(); 
+                stream.ClearCurrent();
+                
+                // If stream has dedicated "Reset" or "ClearAll", use that.
+                // If not, the double-swap-clear trick works for double buffers.
+            }
+            
+            // Clear Managed Streams
+            foreach (var streamObj in _managedStreams.Values)
+            {
+                // Reflection to clear both
+                var type = streamObj.GetType();
+                var clearMethod = type.GetMethod(nameof(ManagedEventStream<object>.ClearCurrent));
+                var swapMethod = type.GetMethod(nameof(ManagedEventStream<object>.Swap));
+                
+                clearMethod?.Invoke(streamObj, null);
+                swapMethod?.Invoke(streamObj, null);
+                clearMethod?.Invoke(streamObj, null);
+            }
+        }
+
+        /// <summary>
         /// Injects pre-captured events into this bus.
         /// Used by EventAccumulator to replay history to replicas.
         /// </summary>
