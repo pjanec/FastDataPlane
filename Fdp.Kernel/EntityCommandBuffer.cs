@@ -23,7 +23,8 @@ namespace Fdp.Kernel
             RemoveManagedComponent = 6,
             SetManagedComponent = 7,
             PublishUnmanagedEvent = 8,
-            PublishManagedEvent = 9
+            PublishManagedEvent = 9,
+            SetLifecycleState = 10
         }
         
         // Simple byte buffer for command stream
@@ -224,6 +225,18 @@ namespace Fdp.Kernel
             WriteInt(objectIndex);
         }
         
+        /// <summary>
+        /// Records a SetLifecycleState command.
+        /// </summary>
+        public void SetLifecycleState(Entity entity, EntityLifecycle state)
+        {
+            EnsureCapacity(1 + 8 + 1); // OpCode + Entity + State
+            
+            _buffer[_position++] = (byte)OpCode.SetLifecycleState;
+            WriteEntity(entity);
+            _buffer[_position++] = (byte)state;
+        }
+        
         // ============================================
         // PLAYBACK API (Main thread only!)
         // ============================================
@@ -374,6 +387,18 @@ namespace Fdp.Kernel
                         
                         object evt = _managedObjects[objectIndex];
                         repo.Bus.PublishManagedRaw(typeId, evt);
+                        break;
+                    }
+
+                    case OpCode.SetLifecycleState:
+                    {
+                        Entity entity = ReadEntity(ref readPos, entityRemap);
+                        EntityLifecycle state = (EntityLifecycle)_buffer[readPos++];
+                        
+                        if (repo.IsAlive(entity))
+                        {
+                            repo.SetLifecycleState(entity, state);
+                        }
                         break;
                     }
                     

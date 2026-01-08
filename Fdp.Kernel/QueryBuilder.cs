@@ -83,7 +83,46 @@ namespace Fdp.Kernel
             return this;
         }
 
+        private EntityLifecycle _lifecycleFilter = EntityLifecycle.Active;
 
+        /// <summary>
+        /// Filter query to specific lifecycle state.
+        /// Default: Active (excludes Constructing and TearDown).
+        /// </summary>
+        public QueryBuilder WithLifecycle(EntityLifecycle state)
+        {
+            _lifecycleFilter = state;
+            return this;
+        }
+        
+        /// <summary>
+        /// Include entities currently being constructed.
+        /// Use when module needs to setup staging entities.
+        /// </summary>
+        public QueryBuilder IncludeConstructing()
+        {
+            _lifecycleFilter = EntityLifecycle.Constructing;
+            return this;
+        }
+        
+        /// <summary>
+        /// Include entities in teardown phase.
+        /// Use when module needs to cleanup before destruction.
+        /// </summary>
+        public QueryBuilder IncludeTearDown()
+        {
+            _lifecycleFilter = EntityLifecycle.TearDown;
+            return this;
+        }
+        
+        /// <summary>
+        /// Include all entities regardless of lifecycle state.
+        /// </summary>
+        public QueryBuilder IncludeAll()
+        {
+            _lifecycleFilter = EntityLifecycle.All; // Special value
+            return this;
+        }
         
         /// <summary>
         /// Builds the EntityQuery.
@@ -91,7 +130,7 @@ namespace Fdp.Kernel
         /// </summary>
         public EntityQuery Build()
         {
-            return new EntityQuery(_repository, _includeMask, _excludeMask, _authorityIncludeMask, _authorityExcludeMask, _hasDisFilter, _disFilterValue, _disFilterMask);
+            return new EntityQuery(_repository, _includeMask, _excludeMask, _authorityIncludeMask, _authorityExcludeMask, _hasDisFilter, _disFilterValue, _disFilterMask, _lifecycleFilter);
         }
     }
 }

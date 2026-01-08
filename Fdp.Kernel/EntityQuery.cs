@@ -21,8 +21,9 @@ namespace Fdp.Kernel
         private readonly bool _hasDisFilter;
         private readonly ulong _disFilterValue; // The target ID
         private readonly ulong _disFilterMask;  // Which bytes to check
+        private readonly EntityLifecycle _lifecycleFilter;
 
-        internal EntityQuery(EntityRepository repository, BitMask256 includeMask, BitMask256 excludeMask, BitMask256 authorityIncludeMask, BitMask256 authorityExcludeMask, bool hasDisFilter, ulong disFilterValue, ulong disFilterMask)
+        internal EntityQuery(EntityRepository repository, BitMask256 includeMask, BitMask256 excludeMask, BitMask256 authorityIncludeMask, BitMask256 authorityExcludeMask, bool hasDisFilter, ulong disFilterValue, ulong disFilterMask, EntityLifecycle lifecycleFilter)
         {
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _includeMask = includeMask;
@@ -32,6 +33,7 @@ namespace Fdp.Kernel
             _hasDisFilter = hasDisFilter;
             _disFilterValue = disFilterValue;
             _disFilterMask = disFilterMask;
+            _lifecycleFilter = lifecycleFilter;
         }
 
         /// <summary>
@@ -79,6 +81,7 @@ namespace Fdp.Kernel
             private readonly bool _hasDisFilter;
             private readonly ulong _disFilterValue;
             private readonly ulong _disFilterMask;
+            private readonly EntityLifecycle _lifecycleFilter;
             private readonly EntityIndex _entityIndex;
             
             private int _currentIndex;
@@ -93,6 +96,7 @@ namespace Fdp.Kernel
                 _hasDisFilter = query._hasDisFilter;
                 _disFilterValue = query._disFilterValue;
                 _disFilterMask = query._disFilterMask;
+                _lifecycleFilter = query._lifecycleFilter;
                 
                 // Direct access to index for maximum speed
                 _entityIndex = query._repository.GetEntityIndex();
@@ -119,6 +123,13 @@ namespace Fdp.Kernel
 
                     // INLINED MATCH LOGIC (Critical for perf)
                     
+                    // 0. Lifecycle Filter
+                    if (_lifecycleFilter != EntityLifecycle.All)
+                    {
+                        if (header.LifecycleState != _lifecycleFilter)
+                            continue;
+                    }
+
                     // 1. Component Mask
                     if (!BitMask256.HasAll(header.ComponentMask, _includeMask)) continue;
                     if (BitMask256.HasAny(header.ComponentMask, _excludeMask)) continue;
@@ -214,6 +225,13 @@ namespace Fdp.Kernel
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Matches(int entityIndex, in EntityHeader header)
         {
+            // Lifecycle Filter
+            if (_lifecycleFilter != EntityLifecycle.All)
+            {
+                if (header.LifecycleState != _lifecycleFilter)
+                    return false;
+            }
+
             // Component Mask
             if (!BitMask256.HasAll(header.ComponentMask, _includeMask)) return false;
             if (BitMask256.HasAny(header.ComponentMask, _excludeMask)) return false;

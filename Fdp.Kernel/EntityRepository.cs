@@ -176,6 +176,7 @@ namespace Fdp.Kernel
             var entity = _entityIndex.CreateEntity();
             ref var header = ref _entityIndex.GetHeader(entity.Index);
             header.LastChangeTick = _globalVersion;
+            header.LifecycleState = EntityLifecycle.Active; // Default to Active
             
             // Emit Lifecycle Event
             if (_lifecycleStream != null)
@@ -211,8 +212,22 @@ namespace Fdp.Kernel
             // 3. Set Authority Mask (Directly in header for speed)
             ref var header = ref _entityIndex.GetHeader(entity.Index);
             header.AuthorityMask = authorityMask;
+            header.LifecycleState = EntityLifecycle.Constructing; // Override to Constructing
 
             return entity;
+        }
+
+        /// <summary>
+        /// Sets the lifecycle state of an entity.
+        /// Used by ELM to transition from Constructing -> Active -> TearDown.
+        /// </summary>
+        public void SetLifecycleState(Entity entity, EntityLifecycle state)
+        {
+            if (!IsAlive(entity)) throw new InvalidOperationException($"Entity {entity} is not alive");
+            
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            header.LifecycleState = state;
+            header.LastChangeTick = _globalVersion;
         }
 
         /// <summary>

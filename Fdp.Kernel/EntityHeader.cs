@@ -48,10 +48,16 @@ namespace Fdp.Kernel
         /// The Full DIS Type (Takes 8 bytes of the 20 reserved)
         /// </summary>
         [FieldOffset(76)] 
-        public DISEntityType DisType; 
+        public DISEntityType DisType;
+
+        /// <summary>
+        /// Lifecycle state of the entity (Constructing, Active, TearDown).
+        /// </summary>
+        [FieldOffset(84)]
+        public EntityLifecycle LifecycleState;
         
-        // Padding: 12 bytes remaining
-        // Total so far: 76 + 8 = 84 bytes. Reserved to 96.
+        // Padding: 11 bytes remaining
+        // Total so far: 84 + 1 = 85 bytes. Reserved to 96.
         
         /// <summary>
         /// Checks if entity is currently active (not destroyed).
@@ -82,6 +88,7 @@ namespace Fdp.Kernel
             Generation = 0;
             Flags = 0;
             LastChangeTick = 0;
+            LifecycleState = EntityLifecycle.Constructing; 
         }
         
         public override readonly string ToString()

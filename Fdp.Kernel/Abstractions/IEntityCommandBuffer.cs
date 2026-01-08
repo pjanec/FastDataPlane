@@ -24,5 +24,10 @@ namespace ModuleHost.Core.Abstractions
         /// Publishes an event to be processed in the next frame.
         /// </summary>
         void PublishEvent<T>(in T evt) where T : unmanaged;
+        
+        /// <summary>
+        /// Sets the lifecycle state of the entity (Constructing, Active, TearDown).
+        /// </summary>
+        void SetLifecycleState(Entity entity, EntityLifecycle state);
     }
 }
