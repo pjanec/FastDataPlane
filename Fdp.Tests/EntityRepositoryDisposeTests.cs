@@ -9,7 +9,7 @@ namespace Fdp.Tests
     public class EntityRepositoryDisposeTests
     {
         [Fact]
-        public void Dispose_DisposesThreadLocalCommandBuffer()
+        public async Task Dispose_DisposesThreadLocalCommandBuffer()
         {
             var repo = new EntityRepository();
             
@@ -23,7 +23,7 @@ namespace Fdp.Tests
                     cmd.CreateEntity(); // Use it
                 });
             }
-            Task.WaitAll(tasks);
+            await Task.WhenAll(tasks);
             
             // Dispose
             repo.Dispose();
