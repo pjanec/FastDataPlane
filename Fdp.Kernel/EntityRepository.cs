@@ -1302,7 +1302,7 @@ namespace Fdp.Kernel
             
             // Cast to managed table and set
             var managedTable = table as dynamic; // Use dynamic to avoid generic constraint issues
-            managedTable[entity.Index] = componentObj;
+            managedTable[entity.Index] = (dynamic)componentObj;
             
             // Update component mask
             ref var header2 = ref _entityIndex.GetHeader(entity.Index);
@@ -1327,7 +1327,7 @@ namespace Fdp.Kernel
             
             // Cast to managed table and set
             var managedTable = table as dynamic;
-            managedTable[entity.Index] = componentObj;
+            managedTable[entity.Index] = (dynamic)componentObj;
             
             // Update component mask
             ref var header2 = ref _entityIndex.GetHeader(entity.Index);
