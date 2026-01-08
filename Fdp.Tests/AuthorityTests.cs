@@ -57,11 +57,11 @@ namespace Fdp.Tests
             // Not owned (default)
             
             int count = 0;
-            repo.Query().WithOwned<Position>().Build().ForEach(e =>
+            foreach (var e in repo.Query().WithOwned<Position>().Build())
             {
                 count++;
                 Assert.Equal(e1, e);
-            });
+            }
             
             Assert.Equal(1, count);
         }
@@ -82,11 +82,11 @@ namespace Fdp.Tests
             
             int count = 0;
             // Should match e2
-            repo.Query().With<Position>().WithoutOwned<Position>().Build().ForEach(e =>
+            foreach (var e in repo.Query().With<Position>().WithoutOwned<Position>().Build())
             {
                 count++;
                 Assert.Equal(e2, e);
-            });
+            }
             
             Assert.Equal(1, count);
         }

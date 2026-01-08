@@ -98,6 +98,11 @@ namespace Fdp.Kernel
                 var beforeAttrs = systemType.GetCustomAttributes<UpdateBeforeAttribute>(true);
                 foreach (var attr in beforeAttrs)
                 {
+                    if (!typeof(ComponentSystem).IsAssignableFrom(attr.Target))
+                    {
+                        throw new ArgumentException($"Invalid UpdateBefore target: {attr.Target.Name} must inherit from ComponentSystem");
+                    }
+                    
                     // Find target system in our list
                     var targetSystem = _systems.FirstOrDefault(s => s.GetType() == attr.Target);
                     if (targetSystem != null)
@@ -114,6 +119,11 @@ namespace Fdp.Kernel
                 var afterAttrs = systemType.GetCustomAttributes<UpdateAfterAttribute>(true);
                 foreach (var attr in afterAttrs)
                 {
+                    if (!typeof(ComponentSystem).IsAssignableFrom(attr.Target))
+                    {
+                        throw new ArgumentException($"Invalid UpdateAfter target: {attr.Target.Name} must inherit from ComponentSystem");
+                    }
+                    
                     // Find target system in our list
                     var targetSystem = _systems.FirstOrDefault(s => s.GetType() == attr.Target);
                     if (targetSystem != null)

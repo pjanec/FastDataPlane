@@ -90,7 +90,10 @@ namespace Fdp.Tests
             
             // Verify
             var results = new HashSet<int>();
-            query.ForEach(e => results.Add(e.Index));
+            foreach (var e in query)
+            {
+                results.Add(e.Index);
+            }
             
             Assert.Contains(e1.Index, results);
             Assert.Contains(e2.Index, results);

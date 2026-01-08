@@ -665,10 +665,8 @@ namespace Fdp.Kernel.FlightRecorder
                 else
                 {
                     // Managed: Use Serializer (Reflection for generic access)
-                    // We assume ManagedComponentTable is the underlying type
-                    var managedTable = table as dynamic; // Shortcut to access generic methods
                     // Accessing index 0 (Singleton)
-                    object? val = managedTable[0];
+                    object? val = table.GetRawObject(0);
                     
                     if (val != null)
                     {

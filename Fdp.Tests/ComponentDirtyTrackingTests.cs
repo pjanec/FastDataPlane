@@ -81,6 +81,7 @@ namespace Fdp.Tests
             repo.RegisterComponent<Position>();
             
             uint beforeWrite = repo.GlobalVersion;
+            repo.SetGlobalVersion(beforeWrite + 1); // Advance version so writes are detected
             
             var entity = repo.CreateEntity();
             repo.SetComponent(entity, new Position { X = 1 });
@@ -89,8 +90,6 @@ namespace Fdp.Tests
             repo.DestroyEntity(entity);
             
             // Should still report change (chunk was modified)
-            // Note: DestroyEntity marks entity dead in bitmask, but chunk version might persist.
-            // Actually, DestroyEntity modifies components (clears them) so it SHOULD update version.
             Assert.True(repo.HasComponentChanged(typeof(Position), beforeWrite));
         }
 
@@ -108,7 +107,7 @@ namespace Fdp.Tests
             using var repo = new EntityRepository();
             repo.RegisterComponent<Position>();
             var field = typeof(EntityRepository).GetField("_componentTables", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var tables = (System.Collections.Generic.Dictionary<Type, IComponentTable>)field.GetValue(repo);
+            var tables = (System.Collections.Generic.Dictionary<Type, IComponentTable>)field!.GetValue(repo)!;
             var wrapper = (ComponentTable<Position>)tables[typeof(Position)];
             var table = wrapper.GetChunkTable();
             
@@ -139,7 +138,7 @@ namespace Fdp.Tests
             repo.RegisterComponent<Position>();
             
             var field = typeof(EntityRepository).GetField("_componentTables", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            var tables = (System.Collections.Generic.Dictionary<Type, IComponentTable>)field.GetValue(repo);
+            var tables = (System.Collections.Generic.Dictionary<Type, IComponentTable>)field!.GetValue(repo)!;
             var wrapper = (ComponentTable<Position>)tables[typeof(Position)];
             var table = wrapper.GetChunkTable();
             

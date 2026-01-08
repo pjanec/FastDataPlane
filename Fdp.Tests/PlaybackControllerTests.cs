@@ -192,11 +192,11 @@ namespace Fdp.Tests
             
             // Verify state is correct
             var query = repo.Query().With<Position>().Build();
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(6f, pos.X); // Frame 6 position
-            });
+            }
         }
         
         [Fact]
@@ -238,13 +238,13 @@ namespace Fdp.Tests
             
             // Verify state
             var query = repo.Query().With<Position>().Build();
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(25f, pos.X);
                 Assert.Equal(50f, pos.Y);
                 Assert.Equal(75f, pos.Z);
-            });
+            }
         }
         
         [Fact]
@@ -264,11 +264,11 @@ namespace Fdp.Tests
             Assert.Equal(37, controller.CurrentFrame);
             
             var query = repo.Query().With<Position>().Build();
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(37f, pos.X);
-            });
+            }
         }
         
         [Fact]
@@ -311,11 +311,11 @@ namespace Fdp.Tests
             
             // Verify the position matches frame 8
             var query = repo.Query().With<Position>().Build();
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(8f, pos.X);
-            });
+            }
         }
         
         // ================================================
@@ -345,11 +345,11 @@ namespace Fdp.Tests
             Assert.Equal(0, controller.CurrentFrame);
             
             var query = repo.Query().With<Position>().Build();
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(0f, pos.X);
-            });
+            }
         }
         
         // ================================================
@@ -376,11 +376,11 @@ namespace Fdp.Tests
             Assert.Equal(50, controller.CurrentFrame);
             
             var query = repo.Query().With<Position>().Build();
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(50f, pos.X);
-            });
+            }
         }
         
         [Fact]
@@ -463,13 +463,13 @@ namespace Fdp.Tests
             
             // Assert - Verify final state
             var query = repo.Query().With<Position>().Build();
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(14f, pos.X);
                 Assert.Equal(28f, pos.Y);
                 Assert.Equal(42f, pos.Z);
-            });
+            }
         }
         
         [Fact]
@@ -499,13 +499,13 @@ namespace Fdp.Tests
         private void VerifyPosition(EntityRepository repo, float expectedX)
         {
             var query = repo.Query().With<Position>().Build();
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 Assert.Equal(expectedX, pos.X);
                 Assert.Equal(expectedX * 2, pos.Y);
                 Assert.Equal(expectedX * 3, pos.Z);
-            });
+            }
         }
     }
 }

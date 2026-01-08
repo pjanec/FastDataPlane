@@ -133,9 +133,15 @@ namespace Fdp.Kernel
         {
             if (_managedStreams.TryGetValue(typeId, out var stream))
             {
-                // Dynamic dispatch to call Write(T)
-                var managedStream = stream as dynamic;
-                managedStream.Write((dynamic)evt);
+                if (stream is IManagedEventStream managedStream)
+                {
+                    managedStream.WriteRaw(evt);
+                }
+                else
+                {
+                    // Should not happen for valid streams, but fallback
+                    throw new InvalidOperationException($"Stream for type {typeId} does not implement IManagedEventStream");
+                }
             }
             else
             {
@@ -217,27 +223,16 @@ namespace Fdp.Kernel
             // Swap managed streams
             foreach (var streamObj in _managedStreams.Values)
             {
-                if (streamObj is IManagedEventStreamInfo info)
+                if (streamObj is IManagedEventStream managedStream)
                 {
-                    // Call Swap via reflection (or just cast to dynamic/common interface?)
-                    // Dynamic is slow. We know it has Swap().
-                    // But interface IManagedEventStreamInfo doesn't have Swap.
-                    // We can use reflection or known type if T was known.
-                    // Let's use reflection cached or simple dynamic.
-                    // Since it worked before with reflection:
-                    
-                    var swapMethod = streamObj.GetType().GetMethod(nameof(ManagedEventStream<object>.Swap));
-                    swapMethod?.Invoke(streamObj, null);
-                    
-                    // Check active
-                    var countProp = streamObj.GetType().GetProperty("Count"); // This returns Back buffer count?
-                    // No, ManagedEventStream IEventStreamInspector.Count returns _front.Count.
-                    // But we want to know if _front (READ) has data.
-                    // After Swap, _front is what was just swapped in.
+                    managedStream.Swap();
                     
                     if (streamObj is IEventStreamInspector inspector && inspector.Count > 0)
                     {
-                        _activeEventIds.Add(info.TypeId);
+                        if (streamObj is IManagedEventStreamInfo info)
+                        {
+                            _activeEventIds.Add(info.TypeId);
+                        }
                     }
                 }
             }
@@ -306,8 +301,10 @@ namespace Fdp.Kernel
             // Clear managed streams
             foreach (var streamObj in _managedStreams.Values)
             {
-                var method = streamObj.GetType().GetMethod(nameof(ManagedEventStream<object>.ClearCurrent));
-                method?.Invoke(streamObj, null);
+                if (streamObj is IManagedEventStream managedStream)
+                {
+                    managedStream.ClearCurrent();
+                }
             }
         }
 
@@ -544,14 +541,12 @@ namespace Fdp.Kernel
             // Clear Managed Streams
             foreach (var streamObj in _managedStreams.Values)
             {
-                // Reflection to clear both
-                var type = streamObj.GetType();
-                var clearMethod = type.GetMethod(nameof(ManagedEventStream<object>.ClearCurrent));
-                var swapMethod = type.GetMethod(nameof(ManagedEventStream<object>.Swap));
-                
-                clearMethod?.Invoke(streamObj, null);
-                swapMethod?.Invoke(streamObj, null);
-                clearMethod?.Invoke(streamObj, null);
+                if (streamObj is IManagedEventStream managedStream)
+                {
+                    managedStream.ClearCurrent();
+                    managedStream.Swap();
+                    managedStream.ClearCurrent();
+                }
             }
         }
 

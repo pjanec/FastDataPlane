@@ -309,12 +309,12 @@ namespace Fdp.Tests
             
             // Verify all names
             int count = 0;
-            query.ForEach(e =>
+            foreach (var e in query)
             {
                 ref var comp = ref repo.GetComponentRW<NamedEntity>(e);
                 Assert.StartsWith("Entity", comp.Name.ToString());
                 count++;
-            });
+            }
             
             Assert.Equal(10, count);
         }

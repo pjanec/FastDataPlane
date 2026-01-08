@@ -9,7 +9,7 @@ namespace Fdp.Tests
     public class EntityRepositoryAsViewTests
     {
         public struct TestPosition { public float X, Y; }
-        public class TestManagedData { public string Name; }
+        public class TestManagedData { public string Name { get; set; } = string.Empty; }
 
         [Fact]
         public void EntityRepository_ImplementsISimulationView()

@@ -106,7 +106,10 @@ namespace Fdp.Tests
             var query = repo.Query().With<Position>().Build();
             
             var matches = new List<Entity>();
-            query.ForEach(e => matches.Add(e));
+            foreach (var e in query)
+            {
+                matches.Add(e);
+            }
             
             Assert.Equal(2, matches.Count); // e1 and e2
             Assert.Contains(e1, matches);
@@ -140,7 +143,10 @@ namespace Fdp.Tests
                 .Build();
             
             var matches = new List<Entity>();
-            query.ForEach(e => matches.Add(e));
+            foreach (var e in query)
+            {
+                matches.Add(e);
+            }
             
             Assert.Equal(2, matches.Count); // e2 and e3
         }
@@ -166,7 +172,10 @@ namespace Fdp.Tests
                 .Build();
             
             var matches = new List<Entity>();
-            query.ForEach(e => matches.Add(e));
+            foreach (var e in query)
+            {
+                matches.Add(e);
+            }
             
             Assert.Single(matches);
             Assert.Equal(e1, matches[0]);
@@ -282,15 +291,15 @@ namespace Fdp.Tests
                 .Build();
             
             // Update positions based on velocity
-            query.ForEach(e =>
+            foreach (var e in query)
             {
-                ref var pos = ref repo.GetComponentRW<Position>(e);
-                ref var vel = ref repo.GetComponentRW<Velocity>(e);
+                ref var loopPos = ref repo.GetComponentRW<Position>(e);
+                ref var loopVel = ref repo.GetComponentRW<Velocity>(e);
                 
-                pos.X += vel.X;
-                pos.Y += vel.Y;
-                pos.Z += vel.Z;
-            });
+                loopPos.X += loopVel.X;
+                loopPos.Y += loopVel.Y;
+                loopPos.Z += loopVel.Z;
+            }
             
             // Verify updates
             var firstEntity = query.FirstOrNull();
@@ -399,7 +408,10 @@ namespace Fdp.Tests
                 .Build();
             
             int count = 0;
-            query.ForEach(e => count++);
+            foreach (var e in query)
+            {
+                count++;
+            }
             
             Assert.Equal(5000, count);
         }

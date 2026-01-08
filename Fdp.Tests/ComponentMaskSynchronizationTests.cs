@@ -219,7 +219,10 @@ namespace Fdp.Tests
             // Unmanaged query should work
             var query = replayRepo.Query().With<TestUnmanagedComponent>().Build();
             int count = 0;
-            query.ForEach(entity => count++);
+            foreach (var e in query)
+            {
+                count++;
+            }
             Assert.Equal(1, count);
         }
         
@@ -266,7 +269,10 @@ namespace Fdp.Tests
             // Query should work
             var query = replayRepo.Query().With<TestUnmanagedComponent>().Build();
             int count = 0;
-            query.ForEach(entity => count++);
+            foreach (var e in query)
+            {
+                count++;
+            }
             Assert.Equal(1, count);
         }
         
@@ -310,7 +316,10 @@ namespace Fdp.Tests
             // Unmanaged query works
             var unmanagedQuery = replayRepo.Query().With<TestUnmanagedComponent>().Build();
             int unmanagedCount = 0;
-            unmanagedQuery.ForEach(entity => unmanagedCount++);
+            foreach (var e in unmanagedQuery)
+            {
+                unmanagedCount++;
+            }
             Assert.Equal(1, unmanagedCount);
             
             // Managed component should exist in data but mask should be wrong

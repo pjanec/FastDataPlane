@@ -373,8 +373,8 @@ namespace Fdp.Kernel.FlightRecorder
                     
                     object? val = deserializeMethod.Invoke(null, new object[] { reader });
                     
-                    // Set to index 0 (Singleton) via dynamic to bypass generic constraint on variable
-                    ((dynamic)table!)[0] = (dynamic)val!;
+                    // Set to index 0 (Singleton) via SetRawObject
+                    table.SetRawObject(0, val!);
                 }
             }
         }

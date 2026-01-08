@@ -78,11 +78,12 @@ namespace Fdp.Tests.Benchmarks
             float totalX = 0;
             // Suppress obsolete warning for benchmark
             #pragma warning disable CS0618
-            query.ForEach(e =>
+            // Converted to foreach to satisfy zero-alloc rules
+            foreach (var e in query)
             {
                 ref readonly var pos = ref repo.GetComponentRO<Pos>(e);
                 totalX += pos.X;
-            });
+            }
             #pragma warning restore CS0618
         }
 

@@ -195,11 +195,11 @@ namespace Fdp.Tests
             var result = new Position { X = -999, Y = -999, Z = -999 };
             
             var query = repo.Query().With<Position>().Build();
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref repo.GetComponentRO<Position>(e);
                 result = pos;
-            });
+            }
             
             return result;
         }

@@ -63,14 +63,14 @@ namespace Fdp.Tests
             
             var query = replayRepo.Query().With<Position>().Build();
             bool found = false;
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref replayRepo.GetComponentRO<Position>(e);
                 Assert.Equal(10f, pos.X);
                 Assert.Equal(20f, pos.Y);
                 Assert.Equal(30f, pos.Z);
                 found = true;
-            });
+            }
             Assert.True(found, "Entity with Position component should exist");
         }
         
@@ -146,7 +146,7 @@ namespace Fdp.Tests
             // Assert - e1 should have updated position
             var query = replayRepo.Query().With<Position>().Build();
             int count = 0;
-            query.ForEach((Entity e) =>
+            foreach (var e in query)
             {
                 ref readonly var pos = ref replayRepo.GetComponentRO<Position>(e);
                 if (e.Index == e1.Index)
@@ -154,7 +154,7 @@ namespace Fdp.Tests
                     Assert.Equal(100f, pos.X);
                 }
                 count++;
-            });
+            }
             Assert.Equal(2, count);
         }
         

@@ -8,7 +8,7 @@ namespace Fdp.Tests
     [EventId(101)]
     public struct TestEventA { public int Value; }
     
-    public class TestManagedEventA { public string Message; }
+    public class TestManagedEventA { public string Message { get; set; } = string.Empty; }
 
     public class EventAccumulatorTests
     {

@@ -30,6 +30,29 @@ namespace Fdp.Kernel
         public int ComponentSize => IntPtr.Size; // Reference size
         public int ChunkCapacity => _chunkSize;
         
+        // NEW: Type-erased setter
+        public void SetRawObject(int index, object value)
+        {
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+            
+            // Fast cast
+            this[index] = (T)value;
+        }
+        
+        // NEW: Type-erased getter
+        public object GetRawObject(int index)
+        {
+            var val = this[index];
+            if (val == null) return null!;
+            return val;
+        }
+
+        public void ClearRaw(int index)
+        {
+            this[index] = null;
+        }
+        
         /// <summary>
         /// Efficiently checks if this table has been modified since the specified version.
         /// Uses lazy scan of chunk versions.

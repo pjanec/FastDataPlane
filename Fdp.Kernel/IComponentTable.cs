@@ -48,6 +48,27 @@ namespace Fdp.Kernel
         void Deserialize(EntityRepository repo, byte[] data, MessagePack.MessagePackSerializerOptions options);
 
         /// <summary>
+        /// Set component value using type-erased object.
+        /// Used by command buffers and network ingress.
+        /// </summary>
+        /// <param name="index">Entity index</param>
+        /// <param name="value">Component value (must match table's component type)</param>
+        /// <exception cref="InvalidCastException">If value type doesn't match component type</exception>
+        void SetRawObject(int index, object value);
+        
+        /// <summary>
+        /// Get component value as type-erased object.
+        /// </summary>
+        /// <param name="index">Entity index</param>
+        /// <returns>Component value boxed as object</returns>
+        object GetRawObject(int index);
+
+        /// <summary>
+        /// Clears component data for the entity (e.g. set to null).
+        /// </summary>
+        void ClearRaw(int index);
+
+        /// <summary>
         /// Synchronizes data from a source table of the same type.
         /// </summary>
         void SyncFrom(IComponentTable source);

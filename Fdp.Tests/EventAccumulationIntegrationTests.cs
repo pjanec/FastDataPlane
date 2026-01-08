@@ -9,7 +9,7 @@ namespace Fdp.Tests
         [EventId(9201)]
         public struct PositionEvent { public int X, Y; public uint Frame; }
 
-        public class ChatMessageEvent { public string Text; public uint Frame; }
+        public class ChatMessageEvent { public string Text { get; set; } = string.Empty; public uint Frame; }
 
         [Fact]
         public void Integration_AccumulatorReplaysHistoryToReplica()

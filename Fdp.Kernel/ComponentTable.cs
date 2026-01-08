@@ -21,6 +21,32 @@ namespace Fdp.Kernel
         public int ComponentTypeId => _componentTypeId;
         public Type ComponentType => typeof(T);
         public int ComponentSize => ComponentType<T>.Size;
+
+        // NEW: Type-erased setter
+        public void SetRawObject(int index, object value)
+        {
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+            
+            // Fast cast - type safety guaranteed by caller logic or via InvalidCastException
+            _data[index] = (T)value;
+        }
+        
+        // NEW: Type-erased getter
+        public object GetRawObject(int index)
+        {
+            // Box the struct
+            return _data[index];
+        }
+
+        public void ClearRaw(int index)
+        {
+            // For unmanaged components, clearing data is optional as mask handles validity.
+            // But for consistency we could zero it. 
+            // However, FDP design says "Component data is not explicitly cleared".
+            // So we can leave it empty or zero it.
+            // Let's match current behavior: do nothing. Mask is what matters.
+        }
         
         /// <summary>
         /// Efficiently checks if this table has been modified since the specified version.

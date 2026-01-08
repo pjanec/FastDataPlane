@@ -4,12 +4,23 @@ using System.Collections.Generic;
 namespace Fdp.Kernel
 {
     /// <summary>
+    /// Type-agnostic interface for managed event stream operations.
+    /// Used by FdpEventBus to avoid dynamic dispatch.
+    /// </summary>
+    public interface IManagedEventStream
+    {
+        void WriteRaw(object evt);
+        void Swap();
+        void ClearCurrent();
+    }
+
+    /// <summary>
     /// Double-buffered event stream for managed (reference type) events.
     /// Uses locking for thread safety since List<T> is not thread-safe.
     /// Suitable for low-volume events (< 100/frame).
     /// </summary>
     /// <typeparam name="T">Managed event type (class)</typeparam>
-    public class ManagedEventStream<T> : IManagedEventStreamInfo, IEventStreamInspector where T : class
+    public class ManagedEventStream<T> : IManagedEventStreamInfo, IEventStreamInspector, IManagedEventStream where T : class
     {
         // Double buffers: front for reading, back for writing
         private List<T> _front = new List<T>();
@@ -62,6 +73,11 @@ namespace Fdp.Kernel
             {
                 _back.Add(evt);
             }
+        }
+
+        public void WriteRaw(object evt)
+        {
+            Write((T)evt);
         }
 
         /// <summary>

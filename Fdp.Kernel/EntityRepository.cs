@@ -1301,8 +1301,7 @@ namespace Fdp.Kernel
                 throw new InvalidOperationException($"Component {componentType.Name} not registered. Call RegisterManagedComponent first.");
             
             // Cast to managed table and set
-            var managedTable = table as dynamic; // Use dynamic to avoid generic constraint issues
-            managedTable[entity.Index] = (dynamic)componentObj;
+            table.SetRawObject(entity.Index, componentObj);
             
             // Update component mask
             ref var header2 = ref _entityIndex.GetHeader(entity.Index);
@@ -1326,8 +1325,7 @@ namespace Fdp.Kernel
                 throw new InvalidOperationException($"Component {componentType.Name} not registered. Call RegisterManagedComponent first.");
             
             // Cast to managed table and set
-            var managedTable = table as dynamic;
-            managedTable[entity.Index] = (dynamic)componentObj;
+            table.SetRawObject(entity.Index, componentObj);
             
             // Update component mask
             ref var header2 = ref _entityIndex.GetHeader(entity.Index);
@@ -1351,8 +1349,7 @@ namespace Fdp.Kernel
                 return; // Component not registered, nothing to remove
             
             // Cast to managed table and clear
-            var managedTable = table as dynamic;
-            managedTable[entity.Index] = null;
+            table.ClearRaw(entity.Index);
             
             // Clear component mask bit
             ref var header2 = ref _entityIndex.GetHeader(entity.Index);

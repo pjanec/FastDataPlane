@@ -41,7 +41,10 @@ namespace Fdp.Tests
             
             // Collect with ForEach
             var resultsForEach = new List<Entity>();
-            query.ForEach(e => resultsForEach.Add(e));
+            foreach (var e in query)
+            {
+                resultsForEach.Add(e);
+            }
             
             // Collect with ForEachChunked
             var resultsChunked = new List<Entity>();
@@ -128,7 +131,10 @@ namespace Fdp.Tests
             
             // Sequential
             var seqResults = new List<Entity>();
-            query.ForEach(e => seqResults.Add(e));
+            foreach (var e in query)
+            {
+                seqResults.Add(e);
+            }
             
             // Parallel
             var parResults = new System.Collections.Concurrent.ConcurrentBag<Entity>();
@@ -172,14 +178,14 @@ namespace Fdp.Tests
             });
             
             // Verify all updates
-            query.ForEach(e =>
+            foreach (var e in query)
             {
                 ref var pos = ref repo.GetComponentRW<Position>(e);
                 ref var hp = ref repo.GetComponentRW<Health>(e);
                 
                 Assert.Equal(e.Index, pos.X);
                 Assert.Equal(e.Index * 10, hp.Value);
-            });
+            }
         }
         
         // ================================================
@@ -205,7 +211,10 @@ namespace Fdp.Tests
             
             // Both should process same number of entities
             int countRegular = 0;
-            query.ForEach(e => countRegular++);
+            foreach (var e in query)
+            {
+                countRegular++;
+            }
             
             int countChunked = 0;
             query.ForEachChunked(e => countChunked++);
