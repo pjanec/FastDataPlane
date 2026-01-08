@@ -46,6 +46,26 @@ namespace Fdp.Kernel
             _excludeMask.SetBit(ComponentType<T>.ID);
             return this;
         }
+
+        /// <summary>
+        /// Requires entity to have managed component T.
+        /// Can be chained multiple times for AND logic.
+        /// </summary>
+        public QueryBuilder WithManaged<T>() where T : class
+        {
+            _includeMask.SetBit(ManagedComponentType<T>.ID);
+            return this;
+        }
+
+        /// <summary>
+        /// Requires entity to NOT have managed component T.
+        /// Can be chained multiple times.
+        /// </summary>
+        public QueryBuilder WithoutManaged<T>() where T : class
+        {
+            _excludeMask.SetBit(ManagedComponentType<T>.ID);
+            return this;
+        }
         
         /// <summary>
         /// Requires entity to have Local Authority over component T.
