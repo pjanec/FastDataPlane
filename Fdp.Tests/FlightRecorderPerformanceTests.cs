@@ -43,7 +43,8 @@ namespace Fdp.Tests
         }
 
         [MessagePackObject]
-        public class UnitStats
+        [MessagePackObject]
+        public record UnitStats
         {
             [Key(0)]
             public string Name { get; set; } = "";

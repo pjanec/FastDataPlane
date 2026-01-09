@@ -28,7 +28,7 @@ namespace Fdp.Tests
 
         // Test managed components
         [MessagePackObject]
-        public class PlayerInfo
+        public record PlayerInfo
         {
             [Key(0)]
             public string Name { get; set; } = string.Empty;
@@ -41,7 +41,7 @@ namespace Fdp.Tests
         }
 
         [MessagePackObject]
-        public class InventoryData
+        public record InventoryData
         {
             [Key(0)]
             public string[] Items { get; set; } = Array.Empty<string>();

@@ -47,7 +47,7 @@ namespace Fdp.Tests
         }
 
         [MessagePackObject]
-        public class SoldierData
+        public record SoldierData
         {
             [Key(0)]
             public string Name { get; set; } = "";
@@ -67,7 +67,7 @@ namespace Fdp.Tests
 
         // Heavy components (vehicles with multi-part systems)
         [MessagePackObject]
-        public class VehicleData
+        public record VehicleData
         {
             [Key(0)]
             public string Type { get; set; } = "";
@@ -86,7 +86,7 @@ namespace Fdp.Tests
         }
 
         [MessagePackObject]
-        public class WheelState
+        public record WheelState
         {
             [Key(0)]
             public float Health { get; set; }
@@ -99,7 +99,7 @@ namespace Fdp.Tests
         }
 
         [MessagePackObject]
-        public class WeaponSystem
+        public record WeaponSystem
         {
             [Key(0)]
             public string Type { get; set; } = "";

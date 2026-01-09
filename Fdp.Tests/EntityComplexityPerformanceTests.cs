@@ -46,7 +46,7 @@ namespace Fdp.Tests
 
         // Heavy managed components
         [MessagePackObject]
-        public class GameState
+        public record GameState
         {
             [Key(0)]
             public string PlayerName { get; set; } = "";
@@ -62,7 +62,7 @@ namespace Fdp.Tests
         }
 
         [MessagePackObject]
-        public class AIBehavior
+        public record AIBehavior
         {
             [Key(0)]
             public string State { get; set; } = "Idle";

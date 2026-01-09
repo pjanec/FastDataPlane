@@ -21,7 +21,7 @@ namespace Fdp.Tests
             public int FrameCount;
         }
         
-        public class GlobalSettings
+        public record GlobalSettings
         {
             public string GameName { get; set; } = string.Empty;
             public int Version { get; set; }

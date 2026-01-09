@@ -30,7 +30,7 @@ namespace Fdp.Tests
         public struct Health { public int Value; }
         
         [MessagePackObject]
-        public class UnitData
+        public record UnitData
         {
             [Key(0)]
             public string UnitType { get; set; } = string.Empty;

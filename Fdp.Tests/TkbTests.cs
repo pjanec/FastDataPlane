@@ -19,7 +19,7 @@ namespace Fdp.Tests
             public int Max;
         }
 
-        public class Inventory
+        public record Inventory
         {
             public string[] Items = Array.Empty<string>();
         }

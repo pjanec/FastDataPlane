@@ -17,7 +17,7 @@ namespace Fdp.Tests
         private readonly string _testFilePath;
         
         // Test managed component
-        public class TestManagedComponent
+        public record TestManagedComponent
         {
             [MessagePack.Key(0)]
             public string Name { get; set; } = "";
