@@ -14,7 +14,8 @@ namespace Fdp.Kernel
         private long _lastTimestamp;
         private double _accumulatedTotalTime;
         private double _accumulatedUnscaledTotalTime;
-        private ulong _frameCount;
+        private long _frameCount;
+        private long _startWallTicks;
 
         // Configuration
         public float TimeScale { get; set; } = 1.0f;
@@ -28,16 +29,22 @@ namespace Fdp.Kernel
         {
             _repo = repo ?? throw new ArgumentNullException(nameof(repo));
             _timeProvider = timeProvider ?? TimeProvider.System;
+            _startWallTicks = _timeProvider.GetTimestamp();
             Reset();
         }
 
         public void Reset()
         {
             _lastTimestamp = _timeProvider.GetTimestamp();
+            _startWallTicks = _lastTimestamp; // Reset start time on Reset? Or keep original? Usually reset for simulation restart.
             _accumulatedTotalTime = 0;
             _accumulatedUnscaledTotalTime = 0;
             _frameCount = 0;
-            _repo.SetSingletonUnmanaged(new GlobalTime { TimeScale = 1.0f });
+            _repo.SetSingletonUnmanaged(new GlobalTime 
+            { 
+                TimeScale = 1.0f,
+                StartWallTicks = _startWallTicks
+            });
         }
 
         /// <summary>
@@ -100,7 +107,7 @@ namespace Fdp.Kernel
         /// <summary>
         /// Forcefully sets the time state (e.g. when seeking in a replay).
         /// </summary>
-        public void SnapTo(double totalTime, ulong frameCount)
+        public void SnapTo(double totalTime, long frameCount)
         {
             _accumulatedTotalTime = totalTime;
             _frameCount = frameCount;
@@ -120,8 +127,9 @@ namespace Fdp.Kernel
                 UnscaledDeltaTime = unscaledDt,
                 TotalTime = _accumulatedTotalTime,
                 UnscaledTotalTime = _accumulatedUnscaledTotalTime,
-                FrameCount = _frameCount,
-                TimeScale = TimeScale
+                FrameNumber = _frameCount,
+                TimeScale = TimeScale,
+                StartWallTicks = _startWallTicks
             });
         }
 

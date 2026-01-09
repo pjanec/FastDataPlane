@@ -70,7 +70,19 @@ namespace Fdp.Kernel
         private static readonly object _lock = new object();
         private static readonly Dictionary<Type, int> _typeToId = new Dictionary<Type, int>();
         private static readonly List<Type> _idToType = new List<Type>();
+        private static readonly List<bool> _isSnapshotable = new List<bool>();
         private static int _nextId = 0;
+        
+        /// <summary>
+        /// Checks if a type is a C# record (immutable by design).
+        /// Records have compiler-generated EqualityContract property.
+        /// </summary>
+        public static bool IsRecordType(Type type)
+        {
+            // C# records (both record class and record struct) have EqualityContract
+            return type.GetProperty("EqualityContract", 
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic) != null;
+        }
         
         /// <summary>
         /// Registers a component type and returns its ID.
@@ -105,8 +117,56 @@ namespace Fdp.Kernel
                 int id = _nextId++;
                 _typeToId[type] = id;
                 _idToType.Add(type);
+                _isSnapshotable.Add(true); // Default: snapshotable
                 
                 return id;
+            }
+        }
+        
+        /// <summary>
+        /// Sets whether a component type should be included in snapshots.
+        /// Must be called AFTER registration.
+        /// </summary>
+        public static void SetSnapshotable(int typeId, bool snapshotable)
+        {
+            lock (_lock)
+            {
+                if (typeId < 0 || typeId >= _isSnapshotable.Count)
+                    throw new ArgumentOutOfRangeException(nameof(typeId));
+                
+                _isSnapshotable[typeId] = snapshotable;
+            }
+        }
+        
+        /// <summary>
+        /// Checks if a component type is snapshotable.
+        /// Returns true by default for registered types.
+        /// </summary>
+        public static bool IsSnapshotable(int typeId)
+        {
+            lock (_lock)
+            {
+                if (typeId < 0 || typeId >= _isSnapshotable.Count)
+                    return false;
+                
+                return _isSnapshotable[typeId];
+            }
+        }
+        
+        /// <summary>
+        /// Gets all component type IDs that are snapshotable.
+        /// </summary>
+        public static int[] GetSnapshotableTypeIds()
+        {
+            lock (_lock)
+            {
+                var result = new List<int>();
+                for (int i = 0; i < _isSnapshotable.Count; i++)
+                {
+                    if (_isSnapshotable[i])
+                        result.Add(i);
+                }
+                return result.ToArray();
             }
         }
         
@@ -170,6 +230,7 @@ namespace Fdp.Kernel
             {
                 _typeToId.Clear();
                 _idToType.Clear();
+                _isSnapshotable.Clear();
                 _nextId = 0;
             }
         }

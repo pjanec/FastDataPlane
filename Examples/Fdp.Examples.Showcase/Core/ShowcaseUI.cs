@@ -42,7 +42,7 @@ namespace Fdp.Examples.Showcase.Core
                 ref var time = ref _game.Repo.GetSingletonUnmanaged<GlobalTime>();
                 
                 ImGui.Text($"Time: {time.TotalTime:F2}s");
-                ImGui.Text($"Frame: {time.FrameCount}");
+                ImGui.Text($"Frame: {time.FrameNumber}");
                 ImGui.Separator();
                 
                 // Count entities

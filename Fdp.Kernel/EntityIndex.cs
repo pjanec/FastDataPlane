@@ -324,6 +324,11 @@ namespace Fdp.Kernel
                        header.ComponentMask.BitwiseAnd(mask);
                    }
                 }
+                
+                // Invalidate version so next sync re-fetches full headers (in case mask changes/widens)
+                // This ensures that if we filter out components now, we can get them back later if the mask changes.
+                // This forces a header copy every frame for filtered repositories, which is the correct trade-off for correctness.
+                _headers.IncrementChunkVersion(chunkIndex);
             }
         }
         

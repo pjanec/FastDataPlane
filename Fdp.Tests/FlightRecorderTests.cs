@@ -759,5 +759,79 @@ namespace Fdp.Tests
             
             Assert.Equal(entityCount, replayRepo.EntityCount);
         }
+        [TransientComponent]
+        struct TransientPosAttr { public float X; }
+
+        struct TransientPosExplicit { public float X; }
+
+        struct PersistentPos { public float X; }
+
+        [Fact]
+        public void RecordFrame_ExcludesTransient_ViaAttribute()
+        {
+             using var recordRepo = new EntityRepository();
+             recordRepo.RegisterComponent<TransientPosAttr>();
+             recordRepo.RegisterComponent<PersistentPos>();
+             
+             // Verify Attribute Detection Logic matches assumption
+             Assert.True(typeof(TransientPosAttr).IsDefined(typeof(TransientComponentAttribute), false), "Attribute Check Failed");
+             var id = ComponentType<TransientPosAttr>.ID;
+             // Ensure it is false BEFORE recording
+             Assert.False(ComponentTypeRegistry.IsSnapshotable(id), "Snapshotable Flag Failed");
+             
+             var e = recordRepo.CreateEntity();
+             recordRepo.AddComponent(e, new TransientPosAttr { X=1 });
+             recordRepo.AddComponent(e, new PersistentPos { X=2 });
+             recordRepo.Tick();
+             
+             using (var recorder = new AsyncRecorder(_testFilePath))
+             {
+                 recorder.CaptureKeyframe(recordRepo);
+             }
+             
+             using var replayRepo = new EntityRepository();
+             replayRepo.RegisterComponent<TransientPosAttr>();
+             replayRepo.RegisterComponent<PersistentPos>();
+             
+             using (var reader = new RecordingReader(_testFilePath))
+             {
+                 reader.ReadNextFrame(replayRepo);
+             }
+             
+             var replayE = new Entity(e.Index, e.Generation);
+             Assert.True(replayRepo.HasUnmanagedComponent<PersistentPos>(replayE));
+             Assert.False(replayRepo.HasUnmanagedComponent<TransientPosAttr>(replayE));
+        }
+
+        [Fact]
+        public void RecordFrame_ExcludesTransient_ViaExplicit()
+        {
+             using var recordRepo = new EntityRepository();
+             recordRepo.RegisterComponent<TransientPosExplicit>(snapshotable: false);
+             recordRepo.RegisterComponent<PersistentPos>();
+             
+             var e = recordRepo.CreateEntity();
+             recordRepo.AddComponent(e, new TransientPosExplicit { X=1 });
+             recordRepo.AddComponent(e, new PersistentPos { X=2 });
+             recordRepo.Tick();
+             
+             using (var recorder = new AsyncRecorder(_testFilePath))
+             {
+                 recorder.CaptureKeyframe(recordRepo);
+             }
+             
+             using var replayRepo = new EntityRepository();
+             replayRepo.RegisterComponent<TransientPosExplicit>();
+             replayRepo.RegisterComponent<PersistentPos>();
+             
+             using (var reader = new RecordingReader(_testFilePath))
+             {
+                 reader.ReadNextFrame(replayRepo);
+             }
+             
+             var replayE = new Entity(e.Index, e.Generation);
+             Assert.True(replayRepo.HasUnmanagedComponent<PersistentPos>(replayE));
+             Assert.False(replayRepo.HasUnmanagedComponent<TransientPosExplicit>(replayE));
+        }
     }
 }

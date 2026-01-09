@@ -386,20 +386,92 @@ namespace Fdp.Kernel
         /// <summary>
         /// Registers a component type (auto-detects Managed vs Unmanaged).
         /// </summary>
-        public void RegisterComponent<T>()
+        /// <param name="snapshotable">If false, excludes from all snapshots (GDB, SoD, Flight Recorder). 
+        /// If null, auto-detects based on convention:
+        /// <list type="bullet">
+        /// <item>Structs: Default true</item>
+        /// <item>Records: Default true</item>
+        /// <item>Classes: Must have [TransientComponent] or throw</item>
+        /// </list>
+        /// </param>
+        public void RegisterComponent<T>(bool? snapshotable = null)
         {
+            Type type = typeof(T);
+
             if (ComponentTypeHelper.IsUnmanaged<T>())
             {
                 UnsafeShim.RegisterUnmanaged<T>(this);
+                
+                // Unmanaged structs: Default is snapshotable=true.
+                // Allow attribute or explicit override to set to false.
+                bool finalSnapshotable = snapshotable ?? !type.IsDefined(typeof(TransientComponentAttribute), false);
+                
+                int typeId = ComponentTypeRegistry.GetId(type);
+                if (typeId >= 0)
+                {
+                    ComponentTypeRegistry.SetSnapshotable(typeId, finalSnapshotable);
+                }
             }
             else
             {
                 UnsafeShim.RegisterManaged<T>(this);
+                int typeId = ComponentTypeRegistry.GetId(type);
+                
+                // Managed Convention Logic
+                
+                // Priority 1: Explicit parameter (highest priority)
+                if (snapshotable.HasValue)
+                {
+                    ComponentTypeRegistry.SetSnapshotable(typeId, snapshotable.Value);
+                }
+                else
+                {
+                    // Priority 2: Attribute check
+                    bool hasTransientAttr = type.IsDefined(typeof(TransientComponentAttribute), false);
+                    
+                    if (hasTransientAttr)
+                    {
+                        // Explicitly marked transient
+                        ComponentTypeRegistry.SetSnapshotable(typeId, false);
+                    }
+                    else
+                    {
+                        // Priority 3: Convention-based detection
+                        bool isRecord = ComponentTypeRegistry.IsRecordType(type);
+                        
+                        if (isRecord)
+                        {
+                            // Record → immutable by design → snapshotable
+                            ComponentTypeRegistry.SetSnapshotable(typeId, true);
+                        }
+                        else
+                        {
+                            // Class without [TransientComponent] → ERROR
+                            throw new InvalidOperationException(
+                                $"Component class '{type.Name}' must be marked with [TransientComponent] attribute.\n" +
+                                $"Classes are inherently mutable and unsafe for background threads (shallow copy).\n\n" +
+                                $"Solutions:\n" +
+                                $"  1. Add [TransientComponent] attribute if this is main-thread-only mutable state:\n" +
+                                $"       [TransientComponent]\n" +
+                                $"       public class {type.Name} {{ ... }}\n\n" +
+                                $"  2. Convert to 'record' if this is immutable data:\n" +
+                                $"       public record {type.Name}(...);\n\n" +
+                                $"  3. Pass 'snapshotable: false' explicitly during registration:\n" +
+                                $"       RegisterComponent<{type.Name}>(snapshotable: false);");
+                        }
+                    }
+                }
             }
         }
 
         /// <summary>
-        /// Sets a component value. Updates version/dirty flags.
+        /// Register a managed component type with convention-based safety.
+        /// Wrapper around RegisterComponent for explicit managed registration.
+        /// </summary>
+        public void RegisterManagedComponent<T>(bool? snapshotable = null) where T : class
+        {
+            RegisterComponent<T>(snapshotable);
+        }
         /// Works for both struct (Unmanaged) and class (Managed) components.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -736,7 +808,7 @@ namespace Fdp.Kernel
         /// Registers a managed component type (classes, strings, etc.).
         /// Tier 2 storage uses GC-managed arrays.
         /// </summary>
-        internal void RegisterManagedComponent<T>() where T : class
+        internal void RegisterManagedComponentInternal<T>() where T : class
         {
             Type type = typeof(T);
             if (_componentTables.ContainsKey(type))

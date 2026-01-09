@@ -31,14 +31,14 @@ namespace Fdp.Tests
             ref var time = ref _repo.GetSingletonUnmanaged<GlobalTime>();
             Assert.Equal(0.1f, time.DeltaTime);
             Assert.Equal(0.1, time.TotalTime, precision: 6);
-            Assert.Equal(1ul, time.FrameCount);
+            Assert.Equal(1, time.FrameNumber);
             
             system.Step(0.2f);
             
             time = ref _repo.GetSingletonUnmanaged<GlobalTime>();
             Assert.Equal(0.2f, time.DeltaTime);
             Assert.Equal(0.3, time.TotalTime, precision: 6);
-            Assert.Equal(2ul, time.FrameCount);
+            Assert.Equal(2, time.FrameNumber);
         }
         
         [Fact]
@@ -57,7 +57,7 @@ namespace Fdp.Tests
             ref var time = ref _repo.GetSingletonUnmanaged<GlobalTime>();
             Assert.Equal(0.1f, time.DeltaTime);
             Assert.Equal(0.1, time.TotalTime, precision: 4);
-            Assert.Equal(1ul, time.FrameCount);
+            Assert.Equal(1, time.FrameNumber);
             
             // Advance clock by 50ms
             clock.Advance(TimeSpan.FromMilliseconds(50));
@@ -66,7 +66,7 @@ namespace Fdp.Tests
             time = ref _repo.GetSingletonUnmanaged<GlobalTime>();
             Assert.Equal(0.05f, time.DeltaTime);
             Assert.Equal(0.15, time.TotalTime, precision: 4);
-            Assert.Equal(2ul, time.FrameCount);
+            Assert.Equal(2, time.FrameNumber);
         }
         
         [Fact]

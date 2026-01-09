@@ -259,7 +259,7 @@ namespace Fdp.Kernel.Internal
                 var flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
 
                 _register = (RegisterDelegate)Delegate.CreateDelegate(typeof(RegisterDelegate), null, 
-                    repoType.GetMethod(nameof(EntityRepository.RegisterManagedComponent), flags)!.MakeGenericMethod(typeT));
+                    repoType.GetMethod(nameof(EntityRepository.RegisterManagedComponentInternal), flags)!.MakeGenericMethod(typeT));
 
                 _add = (AddManagedDelegate<T>)Delegate.CreateDelegate(typeof(AddManagedDelegate<T>), null, 
                     repoType.GetMethod(nameof(EntityRepository.AddManagedComponent), flags)!.MakeGenericMethod(typeT));

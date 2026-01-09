@@ -138,5 +138,90 @@ namespace Fdp.Tests
              // Target is 2ms BUT for "30% dirty". This is 100% dirty.
              Assert.True(sw.ElapsedMilliseconds < 50, $"Time: {sw.ElapsedMilliseconds}");
         }
+        [TransientComponent]
+        struct TransientData { public int Val; }
+
+        struct PersistentData { public int Val; }
+
+        [Fact]
+        public void SyncFrom_Default_ExcludesTransient()
+        {
+             using var source = new EntityRepository();
+             using var dest = new EntityRepository();
+             
+             source.RegisterComponent<TransientData>(); // Auto-detected as Transient
+             source.RegisterComponent<PersistentData>();
+             
+             var e = source.CreateEntity();
+             source.AddComponent(e, new TransientData { Val=1 });
+             source.AddComponent(e, new PersistentData { Val=2 });
+             
+             dest.SyncFrom(source);
+             
+             var destE = new Entity(e.Index, e.Generation);
+             Assert.False(dest.HasComponent<TransientData>(destE));
+             Assert.True(dest.HasComponent<PersistentData>(destE));
+        }
+
+        [Fact]
+        public void SyncFrom_ExplicitMask_ExcludesTransient_UnlessOverridden()
+        {
+             using var source = new EntityRepository();
+             using var dest = new EntityRepository();
+             
+             source.RegisterComponent<TransientData>();
+             
+             var e = source.CreateEntity();
+             source.AddComponent(e, new TransientData { Val=1 });
+             
+             // Create mask matching TransientData
+             var mask = new BitMask256();
+             mask.SetBit(ComponentType<TransientData>.ID);
+             
+             // 1. Sync with mask (Should Exclude by default safety rule)
+             dest.SyncFrom(source, mask: mask);
+             var destE = new Entity(e.Index, e.Generation);
+             Assert.False(dest.HasComponent<TransientData>(destE));
+             
+             // 2. Sync with mask AND includeTransient=true (Should Include)
+             dest.SyncFrom(source, mask: mask, includeTransient: true);
+             Assert.True(dest.HasComponent<TransientData>(destE));
+        }
+
+        [Fact]
+        public void SyncFrom_IncludeTransient_IncludesTransient()
+        {
+             using var source = new EntityRepository();
+             using var dest = new EntityRepository();
+             
+             source.RegisterComponent<TransientData>();
+             
+             var e = source.CreateEntity();
+             source.AddComponent(e, new TransientData { Val=1 });
+             
+             // Sync with includeTransient=true (no mask)
+             dest.SyncFrom(source, includeTransient: true);
+             
+             var destE = new Entity(e.Index, e.Generation);
+             Assert.True(dest.HasComponent<TransientData>(destE));
+        }
+
+        [Fact]
+        public void SyncFrom_ExcludeTypes_FiltersSpecificTypes()
+        {
+             using var source = new EntityRepository();
+             using var dest = new EntityRepository();
+             
+             source.RegisterComponent<PersistentData>();
+             
+             var e = source.CreateEntity();
+             source.AddComponent(e, new PersistentData { Val=2 });
+             
+             // Sync with excludeTypes
+             dest.SyncFrom(source, excludeTypes: new Type[] { typeof(PersistentData) });
+             
+             var destE = new Entity(e.Index, e.Generation);
+             Assert.False(dest.HasComponent<PersistentData>(destE));
+        }
     }
 }
