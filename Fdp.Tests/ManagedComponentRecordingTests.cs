@@ -23,7 +23,8 @@ namespace Fdp.Tests
 
         // Test class for managed component
         [MessagePackObject]
-        public class SquadName
+
+        public record SquadName
         {
             [Key(0)]
             public string? Name { get; set; }
@@ -61,7 +62,7 @@ namespace Fdp.Tests
             
             // Assert
             Assert.True(replayRepo.HasManagedComponent<SquadName>(e), "Managed component should be restored");
-            var comp = replayRepo.GetComponentRW<SquadName>(e);
+            var comp = replayRepo.GetComponentRO<SquadName>(e);
             Assert.NotNull(comp);
             Assert.Equal("Alpha", comp.Name);
         }

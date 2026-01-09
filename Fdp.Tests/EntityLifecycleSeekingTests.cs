@@ -32,7 +32,8 @@ namespace Fdp.Tests
         public struct Position { public float X, Y, Z; }
         
         [MessagePackObject]
-        public class UnitName
+
+        public record UnitName
         {
             [Key(0)]
             public string Name { get; set; } = string.Empty;

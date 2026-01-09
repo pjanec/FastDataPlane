@@ -53,6 +53,17 @@ namespace Fdp.Kernel.Tests
              // Update time for the "Frame"
              _timeSystem.Step(1.0f);
 
+             if (_repo.HasSingleton<GlobalTime>())
+             {
+                 var gt = _repo.GetSingletonUnmanaged<GlobalTime>();
+                 if (gt.DeltaTime != 1.0f)
+                     throw new Exception($"GlobalTime.DeltaTime is {gt.DeltaTime}, expected 1.0f");
+             }
+             else
+             {
+                 throw new Exception("GlobalTime Singleton missing!");
+             }
+
              // Use the real system logic!
              _validationSystem.InternalUpdate();
         }
@@ -95,6 +106,7 @@ namespace Fdp.Kernel.Tests
             // 2. Simulate Physics Module (Consuming Event)
             // It sees the event (we skip event read for brevity)
             _repo.AddComponent(entity, new RigidBody { Mass = 10f });
+            desc = ref _repo.GetComponentRW<LifecycleDescriptor>(entity);
             desc.AckedModulesMask |= Modules.Physics;
 
             // Run Validation -> Should NOT promote yet (Network missing)
@@ -103,6 +115,7 @@ namespace Fdp.Kernel.Tests
 
             // 3. Simulate Network Module
             _repo.AddComponent(entity, new NetIdentity { NetworkId = 999 });
+            desc = ref _repo.GetComponentRW<LifecycleDescriptor>(entity);
             desc.AckedModulesMask |= Modules.Network;
 
             // Run Validation -> Should PROMOTE

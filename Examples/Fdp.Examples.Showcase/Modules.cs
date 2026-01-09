@@ -25,7 +25,13 @@ namespace Fdp.Examples.Showcase.Modules
         public void Load(EntityRepository repo)
         {
             repo.RegisterComponent<UnitStats>();
-            repo.RegisterComponent<CombatHistory>(); // Managed component for testing
+
+			// Explicitly force snapshotting for this mutable class
+			// WARNING: Only safe if you don't use background modules reading this component
+			//          In this demo we are not creating any other snapshot but those for the FlightRecorder
+			//          so using snapshotable=true for mutable class is safe.
+			repo.RegisterComponent<CombatHistory>(snapshotable: true);
+
             repo.RegisterComponent<CombatState>();
             repo.RegisterComponent<Corpse>();
         }

@@ -173,7 +173,9 @@ namespace Fdp.Kernel.Serialization
                          // Check if unmanaged or managed?
                          // `ComponentTypeRegistry` might help.
                          var method = typeof(EntityRepository).GetMethod(nameof(EntityRepository.RegisterComponent))!.MakeGenericMethod(type);
-                         method.Invoke(repo, null);
+                         // RegisterComponent has optional parameter (bool? snapshotable = null)
+                         // We must provide it when invoking via reflection
+                         method.Invoke(repo, new object?[] { null });
                          
                          // Now we should have it
                          repo.TryGetTable(type, out table);

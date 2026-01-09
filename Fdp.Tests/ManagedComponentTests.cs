@@ -8,13 +8,13 @@ namespace Fdp.Tests
     public class ManagedComponentTests
     {
         // Simple test class
-        public class PlayerName
+        public record PlayerName
         {
             public string Name { get; set; } = string.Empty;
             public int Level { get; set; }
         }
         
-        public class InventoryData
+        public record InventoryData
         {
             public System.Collections.Generic.List<string> Items { get; set; } = new();
         }

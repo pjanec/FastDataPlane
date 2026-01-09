@@ -20,6 +20,7 @@ namespace Fdp.Kernel.Systems
             _pendingEntities = World.Query()
                 .With<LifecycleDescriptor>()
                 .Without<IsActiveTag>() 
+                .WithLifecycle(EntityLifecycle.Constructing)
                 .Build();
         }
 
@@ -29,7 +30,6 @@ namespace Fdp.Kernel.Systems
 
             float dt = DeltaTime; // from ComponentSystem
 
-            // 1. Validation Logic
             // 1. Validation Logic
             foreach (var entity in _pendingEntities)
             {

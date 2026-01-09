@@ -426,14 +426,15 @@ namespace Fdp.Tests
             Assert.Equal(1, system.UpdateCount);
         }
         
-        [Fact]
-        public void SystemAttributes_UpdateBefore_InvalidType_ThrowsException()
-        {
-            Assert.Throws<ArgumentException>(() =>
-            {
-                var attr = new Fdp.Kernel.UpdateBeforeAttribute(typeof(string));
-            });
-        }
+        // commented out, as the behavior was relaxed to allow usage mu modulehost modules that do not inherit from ComponentSystem
+        //[Fact]
+        //public void SystemAttributes_UpdateBefore_InvalidType_ThrowsException()
+        //{
+        //    Assert.Throws<ArgumentException>(() =>
+        //    {
+        //        var attr = new Fdp.Kernel.UpdateBeforeAttribute(typeof(string));
+        //    });
+        //}
 
 		// commented out, as the behavior was relaxed to allow usage mu modulehost modules that do not inherit from ComponentSystem
 		//[Fact]

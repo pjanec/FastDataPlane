@@ -523,7 +523,6 @@ namespace Fdp.Tests
     
     // Test component for managed component integration tests
     [MessagePack.MessagePackObject]
-    [MessagePack.MessagePackObject]
     public record TestManagedComponent
     {
         [MessagePack.Key(0)]

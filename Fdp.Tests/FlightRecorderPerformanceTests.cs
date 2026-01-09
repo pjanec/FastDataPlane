@@ -43,7 +43,6 @@ namespace Fdp.Tests
         }
 
         [MessagePackObject]
-        [MessagePackObject]
         public record UnitStats
         {
             [Key(0)]
