@@ -124,9 +124,10 @@ namespace Fdp.Kernel.FlightRecorder
                        SanitizeScratchBuffer(_scratchBuffer, bytes, System.Runtime.CompilerServices.Unsafe.SizeOf<EntityHeader>(), new ReadOnlySpan<bool>(_livenessBuffer, 0, indexCapacity));
                        
                        // 2. Filter Component Masks (Remove transient bits)
+                       // 2. Filter Component Masks (Remove transient bits)
                        // Ideally we compute this once per frame
-                       var snapshotableMask = GetSnapshotableMask();
-                       SanitizeHeadersMask(_scratchBuffer, bytes, snapshotableMask);
+                       var recordableMask = GetRecordableMask();
+                       SanitizeHeadersMask(_scratchBuffer, bytes, recordableMask);
                        
                        actualChunkCount++;
                        writer.Write(c);
@@ -145,7 +146,7 @@ namespace Fdp.Kernel.FlightRecorder
             foreach (var kvp in componentTables)
             {
                 var table = kvp.Value;
-                if (!ComponentTypeRegistry.IsSnapshotable(table.ComponentTypeId)) continue;
+                if (!ComponentTypeRegistry.IsRecordable(table.ComponentTypeId)) continue;
                 
                 // Only support unmanaged for now -> REMOVED because we now support managed.
                 // if (!(table is IUnmanagedComponentTable unmanagedTable)) continue;
@@ -322,8 +323,8 @@ namespace Fdp.Kernel.FlightRecorder
                     SanitizeScratchBuffer(_scratchBuffer, bytes, System.Runtime.CompilerServices.Unsafe.SizeOf<EntityHeader>(), new ReadOnlySpan<bool>(_livenessBuffer, 0, indexCapacity));
                     
                     // Filter Component Masks
-                    var snapshotableMask = GetSnapshotableMask();
-                    SanitizeHeadersMask(_scratchBuffer, bytes, snapshotableMask);
+                    var recordableMask = GetRecordableMask();
+                    SanitizeHeadersMask(_scratchBuffer, bytes, recordableMask);
                     
                     actualChunkCount++;
                     writer.Write(c);
@@ -338,7 +339,7 @@ namespace Fdp.Kernel.FlightRecorder
             foreach (var kvp in componentTables)
             {
                 var table = kvp.Value;
-                if (!ComponentTypeRegistry.IsSnapshotable(table.ComponentTypeId)) continue;
+                if (!ComponentTypeRegistry.IsRecordable(table.ComponentTypeId)) continue;
                 if (table.GetType().IsGenericType && 
                     table.GetType().GetGenericTypeDefinition() == typeof(ManagedComponentTable<>))
                 {
@@ -462,10 +463,10 @@ namespace Fdp.Kernel.FlightRecorder
             }
         }
 
-        private BitMask256 GetSnapshotableMask()
+        private BitMask256 GetRecordableMask()
         {
             var mask = new BitMask256();
-            var ids = ComponentTypeRegistry.GetSnapshotableTypeIds();
+            var ids = ComponentTypeRegistry.GetRecordableTypeIds();
             foreach (var id in ids) mask.SetBit(id);
             return mask;
         }
@@ -680,7 +681,7 @@ namespace Fdp.Kernel.FlightRecorder
 
             foreach (var table in tables)
             {
-                if (!ComponentTypeRegistry.IsSnapshotable(table.ComponentTypeId)) continue;
+                if (!ComponentTypeRegistry.IsRecordable(table.ComponentTypeId)) continue;
 
                 // Check version (Singletons are always in Chunk 0)
                 if (table.GetVersionForEntity(0) <= prevTick) 

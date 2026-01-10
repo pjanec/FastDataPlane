@@ -48,7 +48,7 @@ namespace Fdp.Tests.Benchmarks
         public void Benchmark_SetManagedComponent_Performance()
         {
             var repo = new EntityRepository();
-            repo.RegisterManagedComponent<string>(snapshotable: false);
+            repo.RegisterManagedComponent<string>(DataPolicy.Transient);
             
             const int iterations = 100_000;
             var entities = new Entity[iterations];
@@ -81,7 +81,7 @@ namespace Fdp.Tests.Benchmarks
         {
             var repo = new EntityRepository();
             repo.RegisterComponent<TestComponent>(); // Unmanaged
-            repo.RegisterManagedComponent<string>(snapshotable: false); // Managed
+            repo.RegisterManagedComponent<string>(DataPolicy.Transient); // Managed
             
             const int batchSize = 1000;
             var entity = repo.CreateEntity();

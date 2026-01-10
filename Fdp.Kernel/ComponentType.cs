@@ -71,6 +71,9 @@ namespace Fdp.Kernel
         private static readonly Dictionary<Type, int> _typeToId = new Dictionary<Type, int>();
         private static readonly List<Type> _idToType = new List<Type>();
         private static readonly List<bool> _isSnapshotable = new List<bool>();
+        private static readonly List<bool> _isRecordable = new List<bool>();
+        private static readonly List<bool> _isSaveable = new List<bool>();
+        private static readonly List<bool> _needsClone = new List<bool>();
         private static int _nextId = 0;
         
         /// <summary>
@@ -118,6 +121,9 @@ namespace Fdp.Kernel
                 _typeToId[type] = id;
                 _idToType.Add(type);
                 _isSnapshotable.Add(true); // Default: snapshotable
+                _isRecordable.Add(true);   // Default: recordable
+                _isSaveable.Add(true);     // Default: saveable
+                _needsClone.Add(false);    // Default: shallow copy
                 
                 return id;
             }
@@ -167,6 +173,114 @@ namespace Fdp.Kernel
                         result.Add(i);
                 }
                 return result.ToArray();
+            }
+        }
+
+        /// <summary>
+        /// Sets whether a component type should be included in FlightRecorder.
+        /// </summary>
+        public static void SetRecordable(int typeId, bool value)
+        {
+            lock (_lock)
+            {
+                if (typeId < 0 || typeId >= _isRecordable.Count)
+                    throw new ArgumentOutOfRangeException(nameof(typeId));
+                _isRecordable[typeId] = value;
+            }
+        }
+
+        /// <summary>
+        /// Checks if a component type is recordable.
+        /// </summary>
+        public static bool IsRecordable(int typeId)
+        {
+            lock (_lock)
+            {
+                if (typeId < 0 || typeId >= _isRecordable.Count)
+                    return false;
+                return _isRecordable[typeId];
+            }
+        }
+
+        /// <summary>
+        /// Gets all component type IDs that are recordable.
+        /// </summary>
+        public static IEnumerable<int> GetRecordableTypeIds()
+        {
+            lock (_lock)
+            {
+                for (int i = 0; i < _isRecordable.Count; i++)
+                {
+                    if (_isRecordable[i])
+                        yield return i;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Sets whether a component type should be included in SaveGame.
+        /// </summary>
+        public static void SetSaveable(int typeId, bool value)
+        {
+            lock (_lock)
+            {
+                if (typeId < 0 || typeId >= _isSaveable.Count)
+                    throw new ArgumentOutOfRangeException(nameof(typeId));
+                _isSaveable[typeId] = value;
+            }
+        }
+
+        /// <summary>
+        /// Checks if a component type is saveable.
+        /// </summary>
+        public static bool IsSaveable(int typeId)
+        {
+            lock (_lock)
+            {
+                if (typeId < 0 || typeId >= _isSaveable.Count)
+                    return false;
+                return _isSaveable[typeId];
+            }
+        }
+
+        /// <summary>
+        /// Gets all component type IDs that are saveable.
+        /// </summary>
+        public static IEnumerable<int> GetSaveableTypeIds()
+        {
+            lock (_lock)
+            {
+                for (int i = 0; i < _isSaveable.Count; i++)
+                {
+                    if (_isSaveable[i])
+                        yield return i;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Sets whether a component type needs deep cloning for snapshots.
+        /// </summary>
+        public static void SetNeedsClone(int typeId, bool value)
+        {
+            lock (_lock)
+            {
+                if (typeId < 0 || typeId >= _needsClone.Count)
+                    throw new ArgumentOutOfRangeException(nameof(typeId));
+                _needsClone[typeId] = value;
+            }
+        }
+
+        /// <summary>
+        /// Checks if a component type needs deep cloning.
+        /// </summary>
+        public static bool NeedsClone(int typeId)
+        {
+            lock (_lock)
+            {
+                if (typeId < 0 || typeId >= _needsClone.Count)
+                    return false;
+                return _needsClone[typeId];
             }
         }
         
@@ -231,6 +345,9 @@ namespace Fdp.Kernel
                 _typeToId.Clear();
                 _idToType.Clear();
                 _isSnapshotable.Clear();
+                _isRecordable.Clear();
+                _isSaveable.Clear();
+                _needsClone.Clear();
                 _nextId = 0;
             }
         }

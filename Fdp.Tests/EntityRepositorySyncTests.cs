@@ -138,7 +138,7 @@ namespace Fdp.Tests
              // Target is 2ms BUT for "30% dirty". This is 100% dirty.
              Assert.True(sw.ElapsedMilliseconds < 50, $"Time: {sw.ElapsedMilliseconds}");
         }
-        [TransientComponent]
+        [DataPolicy(DataPolicy.Transient)]
         struct TransientData { public int Val; }
 
         struct PersistentData { public int Val; }
@@ -149,7 +149,7 @@ namespace Fdp.Tests
              using var source = new EntityRepository();
              using var dest = new EntityRepository();
              
-             source.RegisterComponent<TransientData>(); // Auto-detected as Transient
+             source.RegisterComponent<TransientData>(); // Marked as Transient via Attribute
              source.RegisterComponent<PersistentData>();
              
              var e = source.CreateEntity();

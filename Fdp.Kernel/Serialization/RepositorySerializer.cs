@@ -80,6 +80,9 @@ namespace Fdp.Kernel.Serialization
             // Iterate known registered types
             foreach(var type in ComponentTypeRegistry.GetAllTypes())
             {
+                int typeId = ComponentTypeRegistry.GetId(type);
+                if (!ComponentTypeRegistry.IsSaveable(typeId)) continue;
+
                 if(repo.TryGetTable(type, out var table))
                 {
                      // Use the Type Name as the persistent key
@@ -144,41 +147,29 @@ namespace Fdp.Kernel.Serialization
                 // Backward Compat: If type was deleted/renamed, type is null. We just SKIP it.
                 if (type != null)
                 {
-                    // Ensure table exists via Registration logic if needed?
-                    // User said: "Implicitly registers the component if new" 
-                    // But `repo.GetTableByType` (or TryGetTable) might return null if not registered.
-                    // We need to ensuring it's registered. `repo.RegisterComponent<type>`? No, that requires generic T.
-                    // Reflection time or specific method on Repo.
-                    // `ComponentTypeRegistry.GetOrRegister(type)` handles registry, but `repo` allocates `Table` on demand only if generic method is called?
-                    // `repo.GetTable<T>(true)` or `repo.GetManagedTable<T>(true)`.
-                    // Since we have `Type`, we might need reflection to call `repo.RegisterComponent<T>()` or direct table creation.
-                    // However, `TryGetTable` returns the table if it exists.
-                    // If it doesn't exist, we must create it.
-                    // Fdp usually creates tables lazily specifically via `SetComponent`.
-                    // But here we are bulk loading.
+                    // Check DataPolicy compliance (IsSaveable)
+                    // We must register the type first to know its policy (unless we check attribute manually)
+                    // But we can registers it, check policy, and if not saveable, just don't deserialize data?
+                    // Actually, if it's in the file, we can probably load it. 
+                    // But adhering to policy is safer.
                     
-                    // Hack: We can use reflection to invoke `repo.GetTable<T>(true)`?
-                    // Or add a non-generic `EnsureTable(Type)` method to repo.
-                    // Since I can't modify Repo too much right now, I'll use reflection for the generic `Deserialize` call?
-                    // Wait, `IComponentTable` has `Deserialize`. I validly have an `IComponentTable` ONLY if I have the table instance.
-                    // If the table doesn't exist in `_componentTables`, I can't call Deserialize on it.
-                    
-                    // So I MUST create the table.
-                    // `repo` has `_componentTables`. I can't access it directly.
-                    // But I can use `repo.RegisterComponent<T>` via reflection.
-                    
+                    // Ensurance logic:
                     if (!repo.TryGetTable(type, out var table))
                     {
                          // Register it to create the table
-                         // Check if unmanaged or managed?
-                         // `ComponentTypeRegistry` might help.
+                         // RegisterComponent<T>(DataPolicy? policyOverride = null)
                          var method = typeof(EntityRepository).GetMethod(nameof(EntityRepository.RegisterComponent))!.MakeGenericMethod(type);
-                         // RegisterComponent has optional parameter (bool? snapshotable = null)
-                         // We must provide it when invoking via reflection
                          method.Invoke(repo, new object?[] { null });
                          
-                         // Now we should have it
                          repo.TryGetTable(type, out table);
+                    }
+                    
+                    // Verify Saveable status
+                    int typeId = ComponentTypeRegistry.GetId(type);
+                    if (typeId >= 0 && !ComponentTypeRegistry.IsSaveable(typeId))
+                    {
+                        // Skip loading this component because it is now marked as NoSave
+                        continue;
                     }
                     
                     if (table != null)

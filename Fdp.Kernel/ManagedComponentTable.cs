@@ -1,4 +1,5 @@
 using System;
+using Fdp.Kernel.FlightRecorder;
 
 namespace Fdp.Kernel
 {
@@ -235,8 +236,17 @@ namespace Fdp.Kernel
         /// Uses shallow copy (Array.Copy) to copy references.
         /// Version tracking avoids unnecessary copies.
         /// </summary>
+        /// <summary>
+        /// Synchronizes dirty chunks from a source table.
+        /// Uses shallow copy (Array.Copy) for normal components.
+        /// Uses deep clone for components marked with DataPolicy.SnapshotViaClone.
+        /// </summary>
         public void SyncDirtyChunks(ManagedComponentTable<T> source)
         {
+            // Check if this type requires cloning
+            int typeId = ComponentTypeRegistry.GetId(typeof(T));
+            bool needsClone = ComponentTypeRegistry.NeedsClone(typeId);
+            
             // Assuming matching configurations by architecture design
             int loopMax = Math.Min(_chunks.Length, source._chunks.Length);
             
@@ -270,10 +280,28 @@ namespace Fdp.Kernel
                     _chunks[i] = new T[_chunkSize];
                 }
                 
-                // Shallow Copy
-                // Copies references. This relies on Managed Components being IMMUTABLE records/classes.
-                // SrcChunk is guaranteed not null here.
-                Array.Copy(srcChunk, _chunks[i], _chunkSize);
+                if (needsClone)
+                {
+                    // ━━━ SLOW PATH: Deep Clone ━━━
+                    for (int k = 0; k < _chunkSize; k++)
+                    {
+                        var srcVal = srcChunk[k];
+                        if (srcVal != null)
+                        {
+                            _chunks[i][k] = FdpAutoSerializer.DeepClone(srcVal);
+                        }
+                        else
+                        {
+                            _chunks[i][k] = null!;
+                        }
+                    }
+                }
+                else
+                {
+                    // ━━━ FAST PATH: Shallow Copy ━━━
+                    // This relies on components being immutable records or safe by design.
+                    Array.Copy(srcChunk, _chunks[i], _chunkSize);
+                }
 
                 // Update version
                 _chunkVersions[i] = srcVer;

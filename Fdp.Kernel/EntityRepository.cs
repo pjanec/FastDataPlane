@@ -386,81 +386,131 @@ namespace Fdp.Kernel
         /// <summary>
         /// Registers a component type (auto-detects Managed vs Unmanaged).
         /// </summary>
-        /// <param name="snapshotable">If false, excludes from all snapshots (GDB, SoD, Flight Recorder). 
-        /// If null, auto-detects based on convention:
+        /// <param name="policyOverride">Nullable override logic. If null, auto-detects based on convention:
         /// <list type="bullet">
-        /// <item>Structs: Default true</item>
-        /// <item>Records: Default true</item>
-        /// <item>Classes: Must have [TransientComponent] or throw</item>
+        /// <item>Structs: Default true (Snapshotable)</item>
+        /// <item>Records: Default true (Snapshotable)</item>
+        /// <item>Classes: Default to DataPolicy.NoSnapshot (Safe safety rail)</item>
         /// </list>
         /// </param>
-        public void RegisterComponent<T>(bool? snapshotable = null)
+        /// <summary>
+        /// Registers a component type with specific data policy override.
+        /// </summary>
+        /// <param name="policyOverride">Overrides the [DataPolicy] attribute on the type.</param>
+        public void RegisterComponent<T>(DataPolicy? policyOverride = null)
         {
             Type type = typeof(T);
-
+            
             if (ComponentTypeHelper.IsUnmanaged<T>())
             {
+                // ━━━ UNMANAGED (Struct) ━━━
                 UnsafeShim.RegisterUnmanaged<T>(this);
                 
-                // Unmanaged structs: Default is snapshotable=true.
-                // Allow attribute or explicit override to set to false.
-                bool finalSnapshotable = snapshotable ?? !type.IsDefined(typeof(TransientComponentAttribute), false);
-                
                 int typeId = ComponentTypeRegistry.GetId(type);
-                if (typeId >= 0)
-                {
-                    ComponentTypeRegistry.SetSnapshotable(typeId, finalSnapshotable);
-                }
-            }
-            else
-            {
-                UnsafeShim.RegisterManaged<T>(this);
-                int typeId = ComponentTypeRegistry.GetId(type);
+                if (typeId < 0) return; // Registration failed
                 
-                // Managed Convention Logic
-                
-                // Priority 1: Explicit parameter (highest priority)
-                if (snapshotable.HasValue)
+                DataPolicy effectivePolicy;
+
+                // Priority 1: Explicit override
+                if (policyOverride.HasValue)
                 {
-                    ComponentTypeRegistry.SetSnapshotable(typeId, snapshotable.Value);
+                    effectivePolicy = policyOverride.Value;
                 }
                 else
                 {
-                    // Priority 2: Attribute check
-                    bool hasTransientAttr = type.IsDefined(typeof(TransientComponentAttribute), false);
-                    
-                    if (hasTransientAttr)
+                    // Priority 2: Attribute
+                    var attr = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<DataPolicyAttribute>(type);
+                    if (attr != null)
                     {
-                        // Explicitly marked transient
-                        ComponentTypeRegistry.SetSnapshotable(typeId, false);
+                        effectivePolicy = attr.Policy;
                     }
                     else
                     {
-                        // Priority 3: Convention-based detection
-                        bool isRecord = ComponentTypeRegistry.IsRecordType(type);
-                        
-                        if (isRecord)
-                        {
-                            // Record → immutable by design → snapshotable
-                            ComponentTypeRegistry.SetSnapshotable(typeId, true);
-                        }
-                        else
-                        {
-                            // Class without [TransientComponent] → ERROR
-                            throw new InvalidOperationException(
-                                $"Component class '{type.Name}' must be marked with [TransientComponent] attribute.\n" +
-                                $"Classes are inherently mutable and unsafe for background threads (shallow copy).\n\n" +
-                                $"Solutions:\n" +
-                                $"  1. Add [TransientComponent] attribute if this is main-thread-only mutable state:\n" +
-                                $"       [TransientComponent]\n" +
-                                $"       public class {type.Name} {{ ... }}\n\n" +
-                                $"  2. Convert to 'record' if this is immutable data:\n" +
-                                $"       public record {type.Name}(...);\n\n" +
-                                $"  3. Pass 'snapshotable: false' explicitly during registration:\n" +
-                                $"       RegisterComponent<{type.Name}>(snapshotable: false);");
-                        }
+                        // Priority 3: Default for Structs
+                        effectivePolicy = DataPolicy.Default;
                     }
                 }
+                
+                bool snapshot = !effectivePolicy.HasFlag(DataPolicy.NoSnapshot);
+                bool record = !effectivePolicy.HasFlag(DataPolicy.NoRecord);
+                bool save = !effectivePolicy.HasFlag(DataPolicy.NoSave);
+                bool clone = effectivePolicy.HasFlag(DataPolicy.SnapshotViaClone);
+                
+                ComponentTypeRegistry.SetSnapshotable(typeId, snapshot);
+                ComponentTypeRegistry.SetRecordable(typeId, record);
+                ComponentTypeRegistry.SetSaveable(typeId, save);
+                ComponentTypeRegistry.SetNeedsClone(typeId, clone);  // Structs usually don't need clone, but flag is respected (though memcpy is usually sufficient)
+            }
+            else
+            {
+                // ━━━ MANAGED (Class/Record) ━━━
+                UnsafeShim.RegisterManaged<T>(this);
+                int typeId = ComponentTypeRegistry.GetId(type);
+                if (typeId < 0) return;
+                
+                // Priority 1: Explicit override parameter (highest priority)
+                if (policyOverride.HasValue)
+                {
+                    DataPolicy policy = policyOverride.Value;
+                    
+                    bool snapshot = !policy.HasFlag(DataPolicy.NoSnapshot);
+                    bool record = !policy.HasFlag(DataPolicy.NoRecord);
+                    bool save = !policy.HasFlag(DataPolicy.NoSave);
+                    bool clone = policy.HasFlag(DataPolicy.SnapshotViaClone);
+                    
+                    // If SnapshotViaClone is set, force snapshot=true
+                    if (clone) snapshot = true;
+                    
+                    ComponentTypeRegistry.SetSnapshotable(typeId, snapshot);
+                    ComponentTypeRegistry.SetRecordable(typeId, record);
+                    ComponentTypeRegistry.SetSaveable(typeId, save);
+                    ComponentTypeRegistry.SetNeedsClone(typeId, clone);
+                    return;
+                }
+                
+                // Priority 2: DataPolicy attribute
+                var dataPolicyAttr = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<DataPolicyAttribute>(type);
+                
+                DataPolicy effectivePolicy;
+                
+                if (dataPolicyAttr != null)
+                {
+                    effectivePolicy = dataPolicyAttr.Policy;
+                }
+                else
+                {
+                    // Priority 3: Convention-based defaults
+                    bool isRecord = ComponentTypeRegistry.IsRecordType(type);
+                    
+                    if (isRecord)
+                    {
+                        // Record → Safe everywhere
+                        effectivePolicy = DataPolicy.Default;  // All enabled
+                    }
+                    else
+                    {
+                        // Mutable Class → Auto-default to NoSnapshot
+                        effectivePolicy = DataPolicy.NoSnapshot;
+                        
+                        #if DEBUG
+                        // Console.WriteLine($"WARNING: Mutable class '{type.Name}' registered without [DataPolicy]. Defaulting to NoSnapshot.");
+                        #endif
+                    }
+                }
+                
+                // Apply flags
+                bool finalSnapshot = !effectivePolicy.HasFlag(DataPolicy.NoSnapshot);
+                bool finalRecord = !effectivePolicy.HasFlag(DataPolicy.NoRecord);
+                bool finalSave = !effectivePolicy.HasFlag(DataPolicy.NoSave);
+                bool finalClone = effectivePolicy.HasFlag(DataPolicy.SnapshotViaClone);
+                
+                // If SnapshotViaClone is set, force snapshot=true
+                if (finalClone) finalSnapshot = true;
+                
+                ComponentTypeRegistry.SetSnapshotable(typeId, finalSnapshot);
+                ComponentTypeRegistry.SetRecordable(typeId, finalRecord);
+                ComponentTypeRegistry.SetSaveable(typeId, finalSave);
+                ComponentTypeRegistry.SetNeedsClone(typeId, finalClone);
             }
         }
 
@@ -468,9 +518,9 @@ namespace Fdp.Kernel
         /// Register a managed component type with convention-based safety.
         /// Wrapper around RegisterComponent for explicit managed registration.
         /// </summary>
-        public void RegisterManagedComponent<T>(bool? snapshotable = null) where T : class
+        public void RegisterManagedComponent<T>(DataPolicy? policyOverride = null) where T : class
         {
-            RegisterComponent<T>(snapshotable);
+            RegisterComponent<T>(policyOverride);
         }
         /// Works for both struct (Unmanaged) and class (Managed) components.
         /// </summary>

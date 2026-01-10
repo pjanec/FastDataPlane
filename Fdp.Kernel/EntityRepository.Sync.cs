@@ -86,7 +86,7 @@ namespace Fdp.Kernel
                     if (method != null)
                     {
                         // Invoke with null for optional parameter 'snapshotable'
-                        method.Invoke(this, new object[] { null });
+                        method.Invoke(this, new object[] { null! });
                         myTable = _componentTables[type];
                     }
                     else
@@ -127,6 +127,32 @@ namespace Fdp.Kernel
                     mask.SetBit(id);
             }
             
+            return mask;
+        }
+
+        /// <summary>
+        /// Builds a component mask containing only recordable component types.
+        /// Used by FlightRecorder to determine which components to serialize to .fdp files.
+        /// </summary>
+        public BitMask256 GetRecordableMask()
+        {
+            var mask = new BitMask256();
+            var recordableIds = ComponentTypeRegistry.GetRecordableTypeIds();
+            foreach (var id in recordableIds)
+                mask.SetBit(id);
+            return mask;
+        }
+
+        /// <summary>
+        /// Builds a component mask containing only saveable component types.
+        /// Used by SaveGame/Checkpoint system to determine which components to persist.
+        /// </summary>
+        public BitMask256 GetSaveableMask()
+        {
+            var mask = new BitMask256();
+            var saveableIds = ComponentTypeRegistry.GetSaveableTypeIds();
+            foreach (var id in saveableIds)
+                mask.SetBit(id);
             return mask;
         }
     }

@@ -759,7 +759,7 @@ namespace Fdp.Tests
             
             Assert.Equal(entityCount, replayRepo.EntityCount);
         }
-        [TransientComponent]
+        [DataPolicy(DataPolicy.Transient)]
         struct TransientPosAttr { public float X; }
 
         struct TransientPosExplicit { public float X; }
@@ -774,10 +774,10 @@ namespace Fdp.Tests
              recordRepo.RegisterComponent<PersistentPos>();
              
              // Verify Attribute Detection Logic matches assumption
-             Assert.True(typeof(TransientPosAttr).IsDefined(typeof(TransientComponentAttribute), false), "Attribute Check Failed");
+             Assert.True(typeof(TransientPosAttr).IsDefined(typeof(DataPolicyAttribute), false), "Attribute Check Failed");
              var id = ComponentType<TransientPosAttr>.ID;
              // Ensure it is false BEFORE recording
-             Assert.False(ComponentTypeRegistry.IsSnapshotable(id), "Snapshotable Flag Failed");
+             Assert.False(ComponentTypeRegistry.IsRecordable(id), "Recordable Flag Failed");
              
              var e = recordRepo.CreateEntity();
              recordRepo.AddComponent(e, new TransientPosAttr { X=1 });
@@ -807,7 +807,7 @@ namespace Fdp.Tests
         public void RecordFrame_ExcludesTransient_ViaExplicit()
         {
              using var recordRepo = new EntityRepository();
-             recordRepo.RegisterComponent<TransientPosExplicit>(snapshotable: false);
+             recordRepo.RegisterComponent<TransientPosExplicit>(DataPolicy.Transient);
              recordRepo.RegisterComponent<PersistentPos>();
              
              var e = recordRepo.CreateEntity();

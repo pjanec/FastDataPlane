@@ -29,8 +29,8 @@ namespace Fdp.Examples.Showcase.Modules
 			// Explicitly force snapshotting for this mutable class
 			// WARNING: Only safe if you don't use background modules reading this component
 			//          In this demo we are not creating any other snapshot but those for the FlightRecorder
-			//          so using snapshotable=true for mutable class is safe.
-			repo.RegisterComponent<CombatHistory>(snapshotable: true);
+			//          so using DataPolicy.Default (Snapshot=True) for mutable class is safe here.
+			repo.RegisterComponent<CombatHistory>(DataPolicy.Default);
 
             repo.RegisterComponent<CombatState>();
             repo.RegisterComponent<Corpse>();
