@@ -17,9 +17,15 @@ namespace Fdp.Kernel
         Active = 1,
         
         /// <summary>
+        /// <summary>
         /// Entity is scheduled for destruction and is being cleaned up by modules.
         /// </summary>
         TearDown = 2,
+        
+        /// <summary>
+        /// Entity created from network state, awaiting EntityMaster
+        /// </summary>
+        Ghost = 4,
         
         /// <summary>
         /// Special value for queries to include all states.

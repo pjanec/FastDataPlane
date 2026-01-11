@@ -15,7 +15,7 @@ namespace Fdp.Kernel.Tkb
         public string Name { get; }
 
         // We use delegates to abstract the type-specific SetComponent calls.
-        private readonly List<Action<EntityRepository, Entity>> _applicators = new();
+        private readonly List<Action<EntityRepository, Entity, bool>> _applicators = new();
 
         public TkbTemplate(string name)
         {
@@ -31,8 +31,12 @@ namespace Fdp.Kernel.Tkb
         /// </summary>
         public void AddComponent<T>(T component) where T : unmanaged
         {
-            _applicators.Add((repo, entity) =>
+            _applicators.Add((repo, entity, preserve) =>
             {
+                if (preserve && repo.HasComponent<T>(entity))
+                {
+                    return;
+                }
                 repo.AddComponent(entity, component);
             });
         }
@@ -45,8 +49,12 @@ namespace Fdp.Kernel.Tkb
         {
             if (factory == null) throw new ArgumentNullException(nameof(factory));
 
-            _applicators.Add((repo, entity) =>
+            _applicators.Add((repo, entity, preserve) =>
             {
+                if (preserve && repo.HasManagedComponent<T>(entity))
+                {
+                    return;
+                }
                 var instance = factory();
                 repo.SetManagedComponent(entity, instance);
             });
@@ -55,11 +63,14 @@ namespace Fdp.Kernel.Tkb
         /// <summary>
         /// Applies all components in this template to the target entity.
         /// </summary>
-        public void ApplyTo(EntityRepository repo, Entity entity)
+        /// <param name="repo">The repository to modify.</param>
+        /// <param name="entity">The target entity.</param>
+        /// <param name="preserveExisting">If true, existing components on the entity will NOT be overwritten.</param>
+        public void ApplyTo(EntityRepository repo, Entity entity, bool preserveExisting = false)
         {
             foreach (var apply in _applicators)
             {
-                apply(repo, entity);
+                apply(repo, entity, preserveExisting);
             }
         }
     }
