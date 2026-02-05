@@ -231,6 +231,15 @@ namespace Fdp.Kernel
         }
 
         /// <summary>
+        /// Gets the lifecycle state of an entity.
+        /// </summary>
+        public EntityLifecycle GetLifecycleState(Entity entity)
+        {
+            if (!IsAlive(entity)) throw new InvalidOperationException($"Entity {entity} is not alive");
+            return _entityIndex.GetHeader(entity.Index).LifecycleState;
+        }
+
+        /// <summary>
         /// Returns the list of entities destroyed since the last ClearDestructionLog().
         /// Used by the Recorder to write the "Destroyed" block.
         /// </summary>
@@ -875,7 +884,7 @@ namespace Fdp.Kernel
         /// Checks if entity has a managed component.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal bool HasManagedComponent<T>(Entity entity) where T : class
+        public bool HasManagedComponent<T>(Entity entity) where T : class
         {
             if (!IsAlive(entity))
                 return false;
@@ -931,7 +940,7 @@ namespace Fdp.Kernel
         /// <summary>
         /// Sets (or adds) a managed component.
         /// </summary>
-        internal void SetManagedComponent<T>(Entity entity, T value) where T : class
+        public void SetManagedComponent<T>(Entity entity, T value) where T : class
         {
             #if FDP_PARANOID_MODE
             if (!IsAlive(entity))
