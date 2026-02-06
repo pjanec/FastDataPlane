@@ -101,6 +101,21 @@ namespace Fdp.Kernel
                 return new Entity(index, header.Generation);
             }
         }
+
+        /// <summary>
+        /// Reserves a range of entity IDs at the start of the index.
+        /// Useful for ID partitioning strategies.
+        /// </summary>
+        public void ReserveIdRange(int maxId)
+        {
+            lock (_createLock)
+            {
+                if (maxId > _maxIssuedIndex)
+                {
+                    _maxIssuedIndex = maxId;
+                }
+            }
+        }
         
         /// <summary>
         /// Destroys an entity and recycles its index.

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Fdp.Kernel.FlightRecorder.Metadata;
 
 namespace Fdp.Kernel.FlightRecorder
 {
@@ -24,6 +25,8 @@ namespace Fdp.Kernel.FlightRecorder
         private Task? _workerTask;
         private readonly FileStream _outputStream;
         private readonly RecorderSystem _recorderSystem;
+        private readonly RecordingMetadata _metadata;
+        private readonly string _filePath;
         
         // Stats
         public int DroppedFrames { get; private set; }
@@ -32,10 +35,24 @@ namespace Fdp.Kernel.FlightRecorder
         // Error propagation for tests
         public Exception? LastError { get; private set; }
         
+        /// <summary>
+        /// ID threshold below which entities are NOT recorded.
+        /// Passthrough to underlying RecorderSystem.
+        /// </summary>
+        public int MinRecordableId 
+        { 
+            get => _recorderSystem.MinRecordableId; 
+            set => _recorderSystem.MinRecordableId = value; 
+        }
+
         private bool _disposed;
         
-        public AsyncRecorder(string filePath)
+        public AsyncRecorder(string filePath, RecordingMetadata? metadata = null)
         {
+            _filePath = filePath;
+            _metadata = metadata ?? new RecordingMetadata();
+            if (_metadata.Timestamp == default) _metadata.Timestamp = DateTime.UtcNow;
+
             _frontBuffer = new byte[BUFFER_SIZE];
             _backBuffer = new byte[BUFFER_SIZE];
             _writeBuffer = new byte[BUFFER_SIZE + 4]; // Pre-allocate for length prefix
@@ -238,6 +255,18 @@ namespace Fdp.Kernel.FlightRecorder
             _workerTask?.Wait();
             _outputStream?.Dispose();
             
+            try
+            {
+                _metadata.TotalFrames = RecordedFrames;
+                _metadata.Duration = DateTime.UtcNow - _metadata.Timestamp;
+                var json = MetadataSerializer.Serialize(_metadata);
+                File.WriteAllText(_filePath + ".meta.json", json);
+            }
+            catch
+            {
+                // Best effort metadata write
+            }
+
             _disposed = true;
             
             if (LastError != null)

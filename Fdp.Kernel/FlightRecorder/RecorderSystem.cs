@@ -23,6 +23,13 @@ namespace Fdp.Kernel.FlightRecorder
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, ManagedRecorderDelegate> _managedRecorders = new();
         
         /// <summary>
+        /// ID threshold below which entities are NOT recorded.
+        /// Defaults to 0 (records everything).
+        /// Set to FdpConfig.SYSTEM_ID_RANGE to exclude system entities.
+        /// </summary>
+        public int MinRecordableId { get; set; } = 0;
+
+        /// <summary>
         /// Records a delta frame containing only changed data since prevTick.
         /// Writes to the provided BinaryWriter.
         /// </summary>
@@ -90,6 +97,8 @@ namespace Fdp.Kernel.FlightRecorder
             
             for (int c = 0; c < indexTotalChunks; c++)
             {
+               if ((c + 1) * indexCapacity <= MinRecordableId) continue;
+
                // Check if chunk has ACTIVE entities
                int pop = entityIndex.GetChunkPopulation(c);
                // Structural change check: Did headers change?
@@ -226,6 +235,7 @@ namespace Fdp.Kernel.FlightRecorder
                 {
                     int startId = c * capacity;
                     if (startId > maxIndex) break; // Optimization using maxIndex
+                    if (startId + capacity <= MinRecordableId) continue;
                     
                     // Check if chunk changed
                     bool changed = HasChunkChanged(table, c, capacity, prevTick) || 
@@ -311,6 +321,8 @@ namespace Fdp.Kernel.FlightRecorder
             
             for (int c = 0; c < maxChunkToCheck; c++)
             {
+                if ((c + 1) * indexCapacity <= MinRecordableId) continue;
+                
                 int pop = entityIndex.GetChunkPopulation(c);
                 if (pop == 0) continue;
 
@@ -372,6 +384,8 @@ namespace Fdp.Kernel.FlightRecorder
                     int startId = c * capacity;
                     if (startId > maxIndex) break;
                     
+                    if (startId + capacity <= MinRecordableId) continue;
+
                     // Check population of this entity range
                     if (!HasActiveEntities(entityIndex, startId, capacity)) continue;
                     
@@ -451,7 +465,7 @@ namespace Fdp.Kernel.FlightRecorder
             int end = startId + count;
             for (int i = startId; i < end; i++)
             {
-                if (i <= max)
+                if (i >= MinRecordableId && i <= max)
                 {
                     ref var header = ref index.GetHeader(i);
                     liveness[i - startId] = header.IsActive;

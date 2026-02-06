@@ -17,6 +17,17 @@ namespace Fdp.Kernel
         /// MUST be 64KB (65536) for Windows VirtualAlloc alignment.
         /// </summary>
         public const int CHUNK_SIZE_BYTES = 64 * 1024; // 64KB
+
+        /// <summary>
+        /// Range of IDs reserved for system entities that should not be recorded.
+        /// App can set minimal for the recorder to avoid recording them.
+        /// Entities in this range (0 to SYSTEM_ID_RANGE) should be .
+        /// </summary>
+        // must be set to max capacity of a chunk - recorder writes whole chunks;
+        //   to avoid overwriting the entity table of next chunk
+        // chunk capacity depend on component size, using max byte size is safe
+        // (smallest component size is 1 byte)
+		public const int SYSTEM_ID_RANGE = CHUNK_SIZE_BYTES;
         
         /// <summary>
         /// Maximum number of component types supported.

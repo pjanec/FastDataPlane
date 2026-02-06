@@ -168,6 +168,45 @@ namespace Fdp.Kernel
         // ================================================
         
         /// <summary>
+        /// Reserves a range of entity IDs at the start of the index.
+        /// Useful for ID partitioning strategies.
+        /// </summary>
+        public void ReserveIdRange(int maxId)
+        {
+            _entityIndex.ReserveIdRange(maxId);
+        }
+
+        /// <summary>
+        /// Forces the creation of an entity at a specific ID and generation.
+        /// Used by the Replay system to hydrate recorded entities or deterministic ghosts.
+        /// Only use this when you guarantee the ID is free or you intend to overwrite it.
+        /// </summary>
+        public Entity HydrateEntity(int id, int generation)
+        {
+             // 1. Delegate to Index to handle allocation/state
+             _entityIndex.ForceRestoreEntity(id, true, generation, default);
+             
+             // 2. Set default metadata
+             ref var header = ref _entityIndex.GetHeader(id);
+             header.LifecycleState = EntityLifecycle.Active;
+             header.LastChangeTick = _globalVersion;
+             
+             var entity = new Entity(id, (ushort)generation);
+
+             // 3. Emit Event
+             if (_lifecycleStream != null)
+             {
+                _lifecycleStream.Write(new EntityLifecycleEvent {
+                    Entity = entity,
+                    Type = LifecycleEventType.Created,
+                    Generation = generation
+                });
+             }
+             
+             return entity;
+        }
+
+        /// <summary>
         /// Creates a new entity.
         /// Thread-safe.
         /// </summary>
