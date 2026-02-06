@@ -11,7 +11,7 @@ namespace Fdp.Kernel
     /// Supports both unmanaged (Tier 1) and managed (Tier 2) events.
     /// Uses double-buffering: events published in Frame N are consumed in Frame N+1.
     /// </summary>
-    public class FdpEventBus : IDisposable
+    public class FdpEventBus : IDisposable, IEventBus
     {
         // Separate dictionaries for native and managed streams
         // ConcurrentDictionary allows lock-free lazy initialization
