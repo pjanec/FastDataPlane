@@ -596,6 +596,26 @@ namespace Fdp.Kernel.FlightRecorder
         /// Writes all events from the event bus to the recorder.
         /// Zero-allocation on hot path.
         /// </summary>
+        // Caching for Event Filtering
+        private readonly Dictionary<int, bool> _eventPolicyCache = new();
+
+        private bool ShouldRecordEvent(Type eventType, int typeId)
+        {
+            if (_eventPolicyCache.TryGetValue(typeId, out bool shouldRecord))
+                return shouldRecord;
+
+            var attr = (Fdp.Kernel.DataPolicyAttribute?)Attribute.GetCustomAttribute(eventType, typeof(Fdp.Kernel.DataPolicyAttribute));
+
+            shouldRecord = true;
+            if (attr != null && attr.Policy.HasFlag(Fdp.Kernel.DataPolicy.NoRecord))
+            {
+                shouldRecord = false;
+            }
+
+            _eventPolicyCache[typeId] = shouldRecord;
+            return shouldRecord;
+        }
+
         private void WriteEvents(BinaryWriter writer, FdpEventBus? eventBus)
         {
             if (eventBus == null)
@@ -609,10 +629,20 @@ namespace Fdp.Kernel.FlightRecorder
             // Get all streams with pending events (Zero-Alloc using population)
             eventBus.PopulatePendingStreams(_cachedNativeStreams);
             
-            writer.Write(_cachedNativeStreams.Count);
+            // Filter Unmanaged
+            int validCount = 0;
+            foreach(var s in _cachedNativeStreams) {
+                Type? type = (s as IEventStreamInspector)?.EventType;
+                if (ShouldRecordEventInternal(type, s.EventTypeId)) validCount++;
+            }
+            
+            writer.Write(validCount);
 
             foreach (var stream in _cachedNativeStreams)
             {
+                Type? type = (stream as IEventStreamInspector)?.EventType;
+                if (!ShouldRecordEventInternal(type, stream.EventTypeId)) continue;
+
                 writer.Write(stream.EventTypeId);
                 writer.Write(stream.ElementSize);  // CRITICAL: Store element size for replay!
 
@@ -627,10 +657,18 @@ namespace Fdp.Kernel.FlightRecorder
             // Write managed events with type name for auto-recreation
             eventBus.PopulatePendingManagedStreams(_cachedManagedStreams);
             
-            writer.Write(_cachedManagedStreams.Count);
+            // Filter Managed
+            int validManagedCount = 0;
+            foreach (var streamInfo in _cachedManagedStreams) {
+                if (ShouldRecordEventInternal(streamInfo.EventType, streamInfo.TypeId)) validManagedCount++;
+            }
+            
+            writer.Write(validManagedCount);
             
             foreach (var streamInfo in _cachedManagedStreams)
             {
+                if (!ShouldRecordEventInternal(streamInfo.EventType, streamInfo.TypeId)) continue;
+
                 writer.Write(streamInfo.TypeId);
                 writer.Write(0);  // ElementSize = 0 indicates Managed
                 
@@ -682,6 +720,18 @@ namespace Fdp.Kernel.FlightRecorder
             }
         }
 
+
+        private bool ShouldRecordEventInternal(Type? type, int typeId)
+        {
+             if (type == null) return true;
+             
+             var attr = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<DataPolicyAttribute>(type);
+             if (attr != null)
+             {
+                 return !attr.Policy.HasFlag(DataPolicy.NoRecord);
+             }
+             return true;
+        }
 
         private void RecordSingletons(EntityRepository repo, BinaryWriter writer, uint prevTick)
         {
