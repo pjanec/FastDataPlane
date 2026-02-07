@@ -939,10 +939,10 @@ namespace Fdp.Kernel
              if (_componentTables.TryGetValue(typeof(T), out var table))
              {
                  bool exists = ((ManagedComponentTable<T>)table).GetRO(entity.Index) != null;
-                 // Debug hook for troubleshooting DescriptorOwnership
-                 if (!exists && typeof(T).Name == "DescriptorOwnership" && entity.Index == 65538) {
-                     System.Console.WriteLine($"[REPO-DEBUG] HasManagedComponent<DescriptorOwnership>(65538) -> Table Found, Value is NULL. MaskSet={header.ComponentMask.IsSet(ManagedComponentType<T>.ID)}");
-                 }
+                 //// Debug hook for troubleshooting DescriptorOwnership
+                 //if (!exists && typeof(T).Name == "DescriptorOwnership" && entity.Index == 65538) {
+                 //    System.Console.WriteLine($"[REPO-DEBUG] HasManagedComponent<DescriptorOwnership>(65538) -> Table Found, Value is NULL. MaskSet={header.ComponentMask.IsSet(ManagedComponentType<T>.ID)}");
+                 //}
                  return exists;
              }
             
