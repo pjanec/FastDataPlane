@@ -929,7 +929,24 @@ namespace Fdp.Kernel
                 return false;
             
             ref var header = ref _entityIndex.GetHeader(entity.Index);
-            return header.ComponentMask.IsSet(ManagedComponentType<T>.ID);
+            if (header.ComponentMask.IsSet(ManagedComponentType<T>.ID))
+                return true;
+
+            // FIXME: remove this, suspicious code!!!
+
+            // Fallback: Check the storage table directly if the mask isn't set (or ID is out of range).
+            // This handles ID >= 256 AND cases where mask might be desynchronized.
+             if (_componentTables.TryGetValue(typeof(T), out var table))
+             {
+                 bool exists = ((ManagedComponentTable<T>)table).GetRO(entity.Index) != null;
+                 // Debug hook for troubleshooting DescriptorOwnership
+                 if (!exists && typeof(T).Name == "DescriptorOwnership" && entity.Index == 65538) {
+                     System.Console.WriteLine($"[REPO-DEBUG] HasManagedComponent<DescriptorOwnership>(65538) -> Table Found, Value is NULL. MaskSet={header.ComponentMask.IsSet(ManagedComponentType<T>.ID)}");
+                 }
+                 return exists;
+             }
+            
+            return false;
         }
         
         /// <summary>
