@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
+using FDP.Kernel.Logging;
 
 namespace Fdp.Kernel.FlightRecorder
 {
@@ -491,27 +492,57 @@ namespace Fdp.Kernel.FlightRecorder
             {
                 // Read compressed size
                 // Format: [CompLen: 4][UncompLen: 4][Tick: 8][Type: 1][CompressedData...]
-                if (_fileStream.Position >= _fileStream.Length) return false;
+                if (_fileStream.Position >= _fileStream.Length) 
+                {
+                    Console.WriteLine($"[KERNEL-DEBUG] ReadNextFrame: EOF at {_fileStream.Position}/{_fileStream.Length}");
+                    return false;
+                }
                 
+                // Read compSize
+                if (_fileStream.Position + 4 > _fileStream.Length)
+                {
+                     Console.WriteLine($"[KERNEL-DEBUG] ReadNextFrame: Not enough bytes for compSize at {_fileStream.Position}");
+                     return false;
+                }
+
                 int compSize = _reader.ReadInt32();
                 
                 if (compSize <= 0)
                 {
+                    Console.WriteLine($"[KERNEL-DEBUG] ReadNextFrame: Invalid compSize {compSize} at {_fileStream.Position - 4}/{_fileStream.Length}");
                     return false; // Invalid or end of file
                 }
                 
+                // Read uncompSize
+                if (_fileStream.Position + 4 > _fileStream.Length)
+                {
+                    Console.WriteLine($"[KERNEL-DEBUG] ReadNextFrame: Not enough bytes for uncompSize");
+                    return false;
+                }
                 int uncompSize = _reader.ReadInt32();
                 
                 // Skip duplicated metadata (Tick + Type) which is only for indexing
                 // The actual Tick/Type is also inside the compressed payload
                 const int HEADER_METADATA_SIZE = 9; // 8 bytes Tick + 1 byte Type
+                if (_fileStream.Position + HEADER_METADATA_SIZE > _fileStream.Length)
+                {
+                    Console.WriteLine($"[KERNEL-DEBUG] ReadNextFrame: Not enough bytes for metadata at {_fileStream.Position}");
+                    return false;
+                }
                 _fileStream.Position += HEADER_METADATA_SIZE;
                 
                 // Read compressed data
+                if (_fileStream.Position + compSize > _fileStream.Length)
+                {
+                    Console.WriteLine($"[KERNEL-DEBUG] ReadNextFrame: Truncated compressed data. Needed {compSize}, Avail {_fileStream.Length - _fileStream.Position}");
+                    return false;
+                }
+
                 byte[] compressedData = _reader.ReadBytes(compSize);
                 
                 if (compressedData.Length != compSize)
                 {
+                    Console.WriteLine($"[KERNEL-DEBUG] ReadNextFrame: Read mismatch. Asked {compSize}, Got {compressedData.Length}");
                     return false; // Truncated or incomplete frame
                 }
                 
@@ -521,8 +552,9 @@ namespace Fdp.Kernel.FlightRecorder
                 {
                     K4os.Compression.LZ4.LZ4Codec.Decode(compressedData, 0, compressedData.Length, rawFrame, 0, uncompSize);
                 }
-                catch
+                catch (Exception ex)
                 {
+                   Console.WriteLine($"[KERNEL-DEBUG] Decompression failed: {ex.Message}");
                    return false; // Decompression failed (corrupted data)
                 }
                 
@@ -537,10 +569,12 @@ namespace Fdp.Kernel.FlightRecorder
             }
             catch (EndOfStreamException)
             {
+                Console.WriteLine("[KERNEL-DEBUG] EndOfStreamException caught.");
                 return false;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"[KERNEL-DEBUG] General Exception in ReadNextFrame: {ex}");
                 return false; // Any other error during read/decode
             }
         }
