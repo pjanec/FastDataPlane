@@ -839,6 +839,25 @@ namespace Fdp.Kernel
 
 
         /// <summary>
+        /// Sets whether this peer has authority over the specified component by Type ID.
+        /// Throws if component is missing from entity's component mask.
+        /// </summary>
+        public void SetAuthority(Entity entity, int typeId, bool hasAuthority)
+        {
+            if (!IsAlive(entity)) throw new InvalidOperationException($"Entity {entity} is not alive");
+            
+            ref var header = ref _entityIndex.GetHeader(entity.Index);
+            
+            if (!header.ComponentMask.IsSet(typeId))
+                 throw new InvalidOperationException($"Cannot set authority for TypeID {typeId}: Entity does not have component.");
+
+            if (hasAuthority)
+                header.AuthorityMask.SetBit(typeId);
+            else
+                header.AuthorityMask.ClearBit(typeId);
+        }
+
+        /// <summary>
         /// Sets whether this peer has authority over the specified component.
         /// Throws if component is missing.
         /// </summary>
