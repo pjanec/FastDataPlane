@@ -842,7 +842,7 @@ namespace Fdp.Kernel
         /// Sets whether this peer has authority over the specified component.
         /// Throws if component is missing.
         /// </summary>
-        internal void SetAuthority<T>(Entity entity, bool hasAuthority) where T : unmanaged
+        public void SetAuthority<T>(Entity entity, bool hasAuthority) where T : unmanaged
         {
             if (!IsAlive(entity)) throw new InvalidOperationException($"Entity {entity} is not alive");
             // Verify component type is registered
