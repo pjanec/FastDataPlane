@@ -69,6 +69,13 @@ namespace Fdp.Kernel
         void ClearRaw(int index);
 
         /// <summary>
+        /// Gets a raw pointer to the component data for the entity.
+        /// Only supported for Unmanaged components (ComponentTable{T}).
+        /// Throws NotSupportedException for Managed components.
+        /// </summary>
+        unsafe void* GetRawPointer(int entityIndex);
+
+        /// <summary>
         /// Synchronizes data from a source table of the same type.
         /// </summary>
         void SyncFrom(IComponentTable source);

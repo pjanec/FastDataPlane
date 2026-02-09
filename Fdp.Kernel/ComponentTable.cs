@@ -73,6 +73,12 @@ namespace Fdp.Kernel
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe void* GetRawPointer(int entityIndex)
+        {
+            return Unsafe.AsPointer(ref _data.GetRefRW(entityIndex, 0));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref T GetRW(int entityIndex, uint version)
         {
             return ref _data.GetRefRW(entityIndex, version);

@@ -26,6 +26,16 @@ namespace ModuleHost.Core.Abstractions
         void PublishEvent<T>(in T evt) where T : unmanaged;
         
         /// <summary>
+        /// Sets an unmanaged component using raw pointer and type ID.
+        /// </summary>
+        unsafe void SetComponentRaw(Entity entity, int typeId, void* ptr, int size);
+
+        /// <summary>
+        /// Sets a managed component using object reference and type ID.
+        /// </summary>
+        void SetManagedComponentRaw(Entity entity, int typeId, object obj);
+
+        /// <summary>
         /// Sets the lifecycle state of the entity (Constructing, Active, TearDown).
         /// </summary>
         void SetLifecycleState(Entity entity, EntityLifecycle state);

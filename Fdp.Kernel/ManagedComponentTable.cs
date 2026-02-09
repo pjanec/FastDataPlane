@@ -354,6 +354,11 @@ namespace Fdp.Kernel
             }
         }
 
+        public unsafe void* GetRawPointer(int entityIndex)
+        {
+            throw new NotSupportedException("Cannot get raw pointer for managed component");
+        }
+
         public void SyncFrom(IComponentTable source)
         {
              if (source is ManagedComponentTable<T> typedSource)

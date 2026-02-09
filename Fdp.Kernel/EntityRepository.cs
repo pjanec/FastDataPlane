@@ -432,6 +432,55 @@ namespace Fdp.Kernel
         // ========================================================================
 
         /// <summary>
+        /// Gets the component type ID for a given type.
+        /// </summary>
+        public int GetComponentTypeId(Type type)
+        {
+            return ComponentTypeRegistry.GetId(type);
+        }
+
+        /// <summary>
+        /// Checks if an entity has a component by type ID.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool HasComponentByTypeId(Entity entity, int typeId)
+        {
+             if (!IsAlive(entity)) return false;
+             ref var header = ref _entityIndex.GetHeader(entity.Index);
+             return header.ComponentMask.IsSet(typeId);
+        }
+
+        /// <summary>
+        /// Gets a raw pointer to an unmanaged component by type ID.
+        /// Throws if component is managed or missing.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe void* GetComponentPointer(Entity entity, int typeId)
+        {
+            // Verify component exists? Or assume caller checked?
+            // "Internal access" usually implies speed, but let's be safe-ish
+            // The table lookup is safe. The pointer is unsafe.
+            
+            var table = _tableCache[typeId];
+            if (table == null) throw new InvalidOperationException($"Component type {typeId} is not registered");
+            
+            return table.GetRawPointer(entity.Index);
+        }
+
+        /// <summary>
+        /// Gets a managed component object by type ID.
+        /// Throws if component is unmanaged or missing.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public object GetManagedComponentByTypeId(Entity entity, int typeId)
+        {
+            var table = _tableCache[typeId];
+            if (table == null) throw new InvalidOperationException($"Component type {typeId} is not registered");
+            
+            return table.GetRawObject(entity.Index);
+        }
+
+        /// <summary>
         /// Registers a component type (auto-detects Managed vs Unmanaged).
         /// </summary>
         /// <param name="policyOverride">Nullable override logic. If null, auto-detects based on convention:

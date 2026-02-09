@@ -206,6 +206,39 @@ namespace Fdp.Kernel
             WriteComponent(evt);
         }
 
+        public void SetComponentRaw(Entity entity, int typeId, void* ptr, int size)
+        {
+            if (size > MaxComponentSize)
+                throw new ArgumentException($"Component size {size} exceeds maximum {MaxComponentSize}");
+
+            EnsureCapacity(1 + 8 + 4 + 4 + size); // OpCode + Entity + TypeID + Size + Data
+            
+            _buffer[_position++] = (byte)OpCode.SetUnmanagedComponent;
+            WriteEntity(entity);
+            WriteInt(typeId);
+            WriteInt(size);
+            
+            // Raw copy
+            fixed (byte* dest = &_buffer[_position])
+            {
+                Unsafe.CopyBlock(dest, ptr, (uint)size);
+            }
+            _position += size;
+        }
+
+        public void SetManagedComponentRaw(Entity entity, int typeId, object obj)
+        {
+            int objectIndex = _managedObjects.Count;
+            _managedObjects.Add(obj);
+            
+            EnsureCapacity(1 + 8 + 4 + 4); // OpCode + Entity + TypeID + ObjectIndex
+            
+            _buffer[_position++] = (byte)OpCode.SetManagedComponent;
+            WriteEntity(entity);
+            WriteInt(typeId);
+            WriteInt(objectIndex);
+        }
+
         /// <summary>
         /// Records a PublishManagedEvent command.
         /// Use this for class-based events.
