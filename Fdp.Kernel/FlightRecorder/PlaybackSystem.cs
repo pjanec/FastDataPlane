@@ -113,6 +113,65 @@ namespace Fdp.Kernel.FlightRecorder
             // After applying all chunk data, we need to synchronize the EntityIndex
             // Metadata (ActiveCount, MaxIssuedIndex, etc.) needs to be rebuilt from the restored headers
             repo.GetEntityIndex().RebuildMetadata();
+            
+            // 5. MANAGED COMPONENT MASK REPAIR (defensive)
+            // In the normal case, EntityIndex chunks are written first by the recorder,
+            // so masks are already correct after restoration in step 4 above.
+            // However, SetChunk() does NOT update EntityHeader.ComponentMask, so if a
+            // delta frame contains a managed chunk update without a corresponding
+            // EntityIndex update, masks could drift. This scan ensures correctness.
+            RepairManagedComponentMasks(repo);
+        }
+
+        /// <summary>
+        /// Defensive repair of ComponentMask bits for managed components after chunk restoration.
+        /// In the normal path, EntityIndex chunks already carry correct masks from the recording.
+        /// This method acts as a safety net: it scans all managed tables and ensures mask bits
+        /// match actual data (non-null = set, null = clear).
+        /// Protects against edge cases where a delta frame updates managed data without a
+        /// corresponding EntityIndex chunk (no structural change on the entity that frame).
+        /// Must be called AFTER EntityIndex chunks and managed chunks are both restored,
+        /// and AFTER RebuildMetadata() has run.
+        /// </summary>
+        private void RepairManagedComponentMasks(EntityRepository repo)
+        {
+            var componentTables = repo.GetRegisteredComponentTypes();
+            var entityIndex = repo.GetEntityIndex();
+            int maxIndex = entityIndex.MaxIssuedIndex;
+            
+            if (maxIndex < 0) return;
+            
+            foreach (var kvp in componentTables)
+            {
+                var table = kvp.Value;
+                
+                // Only process managed component tables
+                if (!table.GetType().IsGenericType ||
+                    table.GetType().GetGenericTypeDefinition() != typeof(ManagedComponentTable<>))
+                    continue;
+                
+                int typeId = table.ComponentTypeId;
+                
+                for (int i = 0; i <= maxIndex; i++)
+                {
+                    ref var header = ref entityIndex.GetHeader(i);
+                    if (!header.IsActive) continue;
+                    
+                    // Check if the managed table has non-null data for this entity
+                    object rawObj = table.GetRawObject(i);
+                    
+                    if (rawObj != null)
+                    {
+                        // Data exists → ensure mask bit is set
+                        header.ComponentMask.SetBit(typeId);
+                    }
+                    else
+                    {
+                        // No data → ensure mask bit is clear
+                        header.ComponentMask.ClearBit(typeId);
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -313,9 +372,9 @@ namespace Fdp.Kernel.FlightRecorder
                  
                  table.SetChunk(chunkIndex, chunkData, 0);
                  
-                 // NOTE: ComponentMask synchronization is deferred to RepairManagedComponentMasks()
-                 // which runs after ALL chunks (including EntityIndex) have been restored.
-                 // Doing it here would cause IndexOutOfRangeException if EntityIndex chunks aren't loaded yet.
+                 // NOTE: ComponentMask bits are normally correct from the EntityIndex chunk
+                 // (restored earlier in the same ApplyFrame call). RepairManagedComponentMasks()
+                 // runs as a defensive pass after all chunks are restored to catch edge cases.
              }
         }
         

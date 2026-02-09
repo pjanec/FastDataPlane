@@ -984,7 +984,18 @@ namespace Fdp.Kernel
             _componentTables[type] = table;
             
             // Type ID is auto-assigned via ManagedComponentType<T>.ID
-            _ = ManagedComponentType<T>.ID; // Ensure it's registered
+            int typeId = ManagedComponentType<T>.ID;
+            
+            // Update _tableCache so GetManagedComponentByTypeId can find this table
+            if (typeId < _tableCache.Length)
+            {
+                _tableCache[typeId] = table;
+            }
+            else
+            {
+                Array.Resize(ref _tableCache, typeId + 1);
+                _tableCache[typeId] = table;
+            }
         }
         
         /// <summary>
