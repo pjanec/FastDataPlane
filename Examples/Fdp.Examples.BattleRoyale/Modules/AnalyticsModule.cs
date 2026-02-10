@@ -11,6 +11,8 @@ public class AnalyticsModule : IModule
     public string Name => "Analytics";
     public ExecutionPolicy Policy => ExecutionPolicy.SlowBackground(1);
     
+    public void RegisterSystems(ISystemRegistry registry) { }
+
     private readonly Dictionary<Vector2Int, int> _killHeatmap = new();
     
     public void Tick(ISimulationView view, float deltaTime)

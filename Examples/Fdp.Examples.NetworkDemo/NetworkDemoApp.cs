@@ -109,6 +109,7 @@ namespace Fdp.Examples.NetworkDemo
             
             // Common Setup
             World = new EntityRepository();
+            EntityMap = new FDP.Toolkit.Replication.Services.NetworkEntityMap();
             DemoComponentRegistry.Register(World);
             // Ensure Combat events are registered (Fix for CombatSystemTests)
             World.RegisterEvent<FireInteractionEvent>();
@@ -169,142 +170,80 @@ namespace Fdp.Examples.NetworkDemo
             }
 
             // --- 3. Modules Registration ---
-            var elm = new EntityLifecycleModule(tkb, Array.Empty<int>()); 
-            Kernel.RegisterModule(elm);
 
             // Hoist WGS84 for Shared Use
             var wgs84 = new WGS84Transform();
             wgs84.SetOrigin(52.52, 13.405, 0);
 
-            // Create Shared NetworkEntityMap and Translators
-            EntityMap = new FDP.Toolkit.Replication.Services.NetworkEntityMap();
-            var entityMap = EntityMap;
+            // A. Infrastructure (Toolkit)
+            var elm = new EntityLifecycleModule(tkb, Array.Empty<int>()); 
+            Kernel.RegisterModule(elm);
 
+            if (!isReplay)
+            {
+                Kernel.RegisterModule(new ReplicationLogicModule());
+            }
+
+            // B. Network (Cyclone)
             if (enableNetwork && participant != null && idAllocator != null)
             {
                 var allTranslators = new List<Fdp.Interfaces.IDescriptorTranslator>();
                 
-                // 1. Geodetic (OPTIMIZED: Fast/Direct)
-                allTranslators.Add(new Fdp.Examples.NetworkDemo.Translators.FastGeodeticTranslator(participant, wgs84, entityMap));
+                // 1. Geodetic
+                allTranslators.Add(new Fdp.Examples.NetworkDemo.Translators.FastGeodeticTranslator(participant, wgs84, EntityMap));
                 
-                // 1.1 OwnershipUpdate (Manual)
+                // 1.1 Ownership
                 allTranslators.Add(new Fdp.Examples.NetworkDemo.Translators.OwnershipUpdateTranslator(nodeMapper, participant));
                 
-                // Fire Event Translator
-                allTranslators.Add(new Fdp.Examples.NetworkDemo.Translators.FireEventTranslator(participant, entityMap));
+                // Fire Event
+                allTranslators.Add(new Fdp.Examples.NetworkDemo.Translators.FireEventTranslator(participant, EntityMap));
                 
-                // 2. Auto-generated (Reflection)
+                // 2. Auto-generated
                 var (autoTranslators, _) = ReplicationBootstrap.CreateAutoTranslators(
                     participant,
                     typeof(NetworkDemoApp).Assembly,
-                    entityMap
+                    EntityMap
                 );
                 allTranslators.AddRange(autoTranslators);
-                
-                // Providers already registered globally via DiscoverProviders
-                // foreach (var (pOrdinal, pInstance) in autoProviders) ...
 
                 var networkModule = new CycloneNetworkModule(
                     participant, nodeMapper, idAllocator, topology, elm, serializationRegistry,
                     allTranslators,
-                    entityMap
+                    EntityMap
                 );
                 Kernel.RegisterModule(networkModule);
             }
             
-            // var geoModule = new GeographicModule(wgs84);
-            // Kernel.RegisterModule(geoModule);
-
-            // --- 4. Mode Specific Setup ---
-            
-            recorder = null;
-
+            // C. Application Modules
             if (!isReplay)
             {
-                // === LIVE MODE ===
-                
-                // Reserve System IDs
-                World.ReserveIdRange(FdpConfig.SYSTEM_ID_RANGE);
-                
-                FdpLog<NetworkDemoApp>.Info($"[Init] Reserved ID range 0-{FdpConfig.SYSTEM_ID_RANGE}");
-                
-                // Register Systems
+                // Input
                 IInputSource inputSource;
                 try {
                     inputSource = Console.IsInputRedirected ? new NullInputSource() : new ConsoleInputSource();
                 } catch {
                     inputSource = new NullInputSource();
                 }
-
-                // --- GROUP 1: GLOBAL SYSTEMS ---
-                // Hardware/User Input
-                Kernel.RegisterGlobalSystem(new TimeInputSystem(inputSource, eventBus));
-                Kernel.RegisterGlobalSystem(new OwnershipInputSystem(localInternalId, eventBus));
-                Kernel.RegisterGlobalSystem(new Fdp.Examples.NetworkDemo.Systems.CombatInputSystem(instanceId, eventBus));
-                Kernel.RegisterGlobalSystem(new ChatSystem(instanceId)); 
-
-                // Bridges
-                Kernel.RegisterGlobalSystem(new Fdp.Examples.NetworkDemo.Systems.PacketBridgeSystem(eventBus, instanceId == 100, localInternalId));
-                Kernel.RegisterGlobalSystem(new TimeSyncSystem(eventBus, instanceId == 100));
-
-                // Lifecycle (Must run before simulation to setup entities)
-                Kernel.RegisterGlobalSystem(new LifecycleSystem(elm));
-                Kernel.RegisterGlobalSystem(new BlueprintApplicationSystem(tkb));
                 
-                // Post Simulation
-                Kernel.RegisterGlobalSystem(new TransformSyncSystem());
+                Kernel.RegisterModule(new GameInputModule(inputSource, eventBus, localInternalId));
+                Kernel.RegisterModule(new GameLogicModule(localInternalId, eventBus));
+                Kernel.RegisterModule(new RadarModule(eventBus));
                 
-                // Setup Recorder
+                // Recorder
                 recorder = new AsyncRecorder(recordingPath);
-                var recorderSys = new RecorderTickSystem(recorder, World);
-                recorderSys.SetMinRecordableId(FdpConfig.SYSTEM_ID_RANGE);
-                Kernel.RegisterGlobalSystem(recorderSys);
-                
-                // --- GROUP 2: MODULE SYSTEMS ---
-                
-                // 1. Game Logic Module
-                var gameLogic = new GameLogicModule();
-                
-                // Core Physics
-                gameLogic.AddSystem(new PhysicsSystem());
-                gameLogic.AddSystem(new RefactoredPlayerInputSystem()); // Processes velocity changes
-                
-                // Combat
-                gameLogic.AddSystem(new CombatFeedbackSystem(localInternalId, eventBus));
-                gameLogic.AddSystem(new DamageControlModule()); 
-
-                // Sensing
-                gameLogic.AddSystem(new RadarModule(eventBus)); 
-
-                Kernel.RegisterModule(gameLogic);
-
-                // 2. Replication Logic Module
-                var replicationLogic = new ReplicationLogicModule(World);
-                // (Systems are added in constructor of ReplicationLogicModule)
-                Kernel.RegisterModule(replicationLogic);
-
-                // Time Controller
-                var timeController = new MasterTimeController(eventBus, null);
-                Kernel.SetTimeController(timeController);
-
-                var timeConfig = new FDP.Toolkit.Time.Controllers.TimeControllerConfig { LocalNodeId = localInternalId };
-                timeConfig.SyncConfig.PauseBarrierFrames = 10; // Reduced barrier for test speed
-
-                if (instanceId == 100)
-                {
-                     var slaveSet = new System.Collections.Generic.HashSet<int>(peerInternalIds);
-                     _timeCoordinator = new FDP.Toolkit.Time.Controllers.DistributedTimeCoordinator(
-                        eventBus, Kernel, timeConfig, slaveSet);
-                }
-                else
-                {
-                     _slaveListener = new FDP.Toolkit.Time.Controllers.SlaveTimeModeListener(eventBus, Kernel, timeConfig);
-                }
+                Kernel.RegisterModule(new RecordingModule(recorder, World));
             }
             else
             {
-                // === REPLAY MODE ===
-                
+                // Replay Mode: Just smoothing, no recording
+                Kernel.RegisterModule(new RecordingModule(null, World));
+            }
+
+            // D. Bridge (Control <-> Simulation)
+            replaySystem = null;
+
+            if (isReplay)
+            {
                 string metaPath = recordingPath + ".meta";
                 Fdp.Examples.NetworkDemo.Configuration.RecordingMetadata meta;
                 try 
@@ -318,29 +257,46 @@ namespace Fdp.Examples.NetworkDemo
                     meta = new Fdp.Examples.NetworkDemo.Configuration.RecordingMetadata { MaxEntityId = 1_000_000 };
                 }
 
-                // Reserve recorded ID range to prevent conflicts
                 World.ReserveIdRange((int)meta.MaxEntityId);
                 
-                // Replay Bridge
-                // HACK: Replay files for this demo use fixed IDs (100->1, 200->2) IF dealing with legacy artifacts.
-                //// We need to match the recorded authority ID, not the dynamically assigned localInternalId (which is always 1)
-                //int replayAuthId = (instanceId == 200) ? 2 : 1; 
-                // However, for fresh recordings generated by the current codebase, localInternalId is always 1 for the recorder.
-                // We force replayAuthId to -1 (Observer) to ensure ALL recorded entities (Owned + Proxy) are replayed.
-                int replayAuthId = -1; 
-                replaySystem = new ReplayBridgeSystem(recordingPath, replayAuthId);
+                replaySystem = new ReplayBridgeSystem(recordingPath, -1);
                 replaySystem.RegisterDynamicType<SquadChat>(DemoDescriptors.SquadChat);
-                Kernel.RegisterGlobalSystem(replaySystem);
-                
-                // Keep Network Receive Active
-                Kernel.RegisterGlobalSystem(new TransformSyncSystem());
-                
-                // Stepping Controller (TimeScale = 1 to auto-play)
-                var dummyTime = new GlobalTime { TimeScale = 1 };
-                Kernel.SetTimeController(new SteppingTimeController(dummyTime));
                 
                 FdpLog<NetworkDemoApp>.Info("[Mode] REPLAY - Playback active (Physics Disabled)");
             }
+            else
+            {
+                World.ReserveIdRange(FdpConfig.SYSTEM_ID_RANGE);
+                FdpLog<NetworkDemoApp>.Info($"[Init] Reserved ID range 0-{FdpConfig.SYSTEM_ID_RANGE}");
+            }
+
+            Kernel.RegisterModule(new BridgeModule(eventBus, replaySystem, localInternalId, instanceId == 100));
+
+            // Time Controller setup
+            ModuleHost.Core.Time.ITimeController timeController;
+            if (isReplay)
+            {
+                timeController = new SteppingTimeController(new GlobalTime { TimeScale = 1 });
+            }
+            else
+            {
+                timeController = new MasterTimeController(eventBus, null);
+
+                var timeConfig = new FDP.Toolkit.Time.Controllers.TimeControllerConfig { LocalNodeId = localInternalId };
+                timeConfig.SyncConfig.PauseBarrierFrames = 10;
+
+                if (instanceId == 100)
+                {
+                     var slaveSet = new System.Collections.Generic.HashSet<int>(peerInternalIds);
+                     _timeCoordinator = new FDP.Toolkit.Time.Controllers.DistributedTimeCoordinator(
+                        eventBus, Kernel, timeConfig, slaveSet);
+                }
+                else
+                {
+                     _slaveListener = new FDP.Toolkit.Time.Controllers.SlaveTimeModeListener(eventBus, Kernel, timeConfig);
+                }
+            }
+            Kernel.SetTimeController(timeController);
 
             // --- 5. Initialization ---
 

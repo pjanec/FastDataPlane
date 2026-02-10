@@ -13,6 +13,8 @@ public class FlightRecorderModule : IModule
     public string Name => "FlightRecorder";
     public ExecutionPolicy Policy => ExecutionPolicy.FastReplica();
     
+    public void RegisterSystems(ISystemRegistry registry) { }
+
     public class FrameSnapshot
     {
         public uint Tick;

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using Xunit;
 using Fdp.Examples.NetworkDemo.Modules;
+using Fdp.Examples.NetworkDemo.Systems;
 using Fdp.Examples.NetworkDemo.Events;
 using Fdp.Examples.NetworkDemo.Components;
 using ModuleHost.Core.Abstractions;
@@ -49,11 +50,11 @@ namespace Fdp.Examples.NetworkDemo.Tests.Modules
         }
 
         [Fact]
-        public void RadarModule_DetectsNearbyEntites_PublishesEvent()
+        public void RadarSystem_DetectsNearbyEntites_PublishesEvent()
         {
             // Arrange
             var mockBus = new MockEventBus();
-            var module = new RadarModule(mockBus);
+            var system = new RadarSystem(mockBus);
 
             // Create target entity
             var e = _world.CreateEntity();
@@ -61,12 +62,8 @@ namespace Fdp.Examples.NetworkDemo.Tests.Modules
             _world.AddComponent(e, new NetworkIdentity { Value = 123 });
 
             // Act
-            // First run, accumulating time
-            module.Execute(_world, 0.5f); 
-            Assert.Empty(mockBus.PublishedEvents); // 0.5 < 1.0 scan interval
-
-            // Second run, triggering scan
-            module.Execute(_world, 0.6f); // Total 1.1
+            // Execute system directly (timing is handled by ModuleHost Kernel via Policy)
+            system.Execute(_world, 0.1f);
 
             // Assert
             Assert.Single(mockBus.PublishedEvents);

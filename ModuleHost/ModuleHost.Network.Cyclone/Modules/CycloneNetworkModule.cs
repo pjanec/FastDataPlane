@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using CycloneDDS.Runtime;
 using Fdp.Kernel;
 using FDP.Kernel.Logging;
-using Fdp.Interfaces; // Use Fdp Interface
+using Fdp.Interfaces; 
 using ModuleHost.Core.Abstractions;
 using ModuleHost.Core.Network;
 using ModuleHost.Core.Network.Interfaces;
@@ -15,20 +15,14 @@ using ModuleHost.Network.Cyclone.Topics;
 using ModuleHost.Network.Cyclone.Systems;
 using ModuleHost.Network.Cyclone.Providers;
 using FDP.Toolkit.Replication.Components;
-using FDP.Toolkit.Replication.Services; // For NetworkEntityMap
+using FDP.Toolkit.Replication.Services; 
 
-using NetworkEntityMap = FDP.Toolkit.Replication.Services.NetworkEntityMap; // Alias to force Toolkit Map
-using IDescriptorTranslator = Fdp.Interfaces.IDescriptorTranslator; // Alias to force Fdp Interface
-// using IDataReader removed
-// using IDataWriter removed
+using NetworkEntityMap = FDP.Toolkit.Replication.Services.NetworkEntityMap; 
+using IDescriptorTranslator = Fdp.Interfaces.IDescriptorTranslator;
 using INetworkTopology = Fdp.Interfaces.INetworkTopology;
 
 namespace ModuleHost.Network.Cyclone.Modules
 {
-    /// <summary>
-    /// Master module for CycloneDDS networking.
-    /// Wires up all services, translators, and systems required for distributed simulation.
-    /// </summary>
     public class CycloneNetworkModule : IModule
     {
         public string Name => "CycloneNetwork";
@@ -50,7 +44,7 @@ namespace ModuleHost.Network.Cyclone.Modules
         // Dynamic / Custom Translators
         private readonly List<IDescriptorTranslator> _customTranslators = new();
         
-        private NetworkGatewayModule _gatewayModule;
+        private NetworkGatewaySystem _gatewaySystem;
 
         public CycloneNetworkModule(
             DdsParticipant participant,
@@ -90,7 +84,7 @@ namespace ModuleHost.Network.Cyclone.Modules
                 _customTranslators.AddRange(customTranslators);
             }
             
-            _gatewayModule = new NetworkGatewayModule(101, _nodeMapper.LocalNodeId, _topology, _elm);
+            _gatewaySystem = new NetworkGatewaySystem(101, _nodeMapper.LocalNodeId, _topology, _elm);
         }
 
         public void RegisterSystems(ISystemRegistry registry)
@@ -109,27 +103,15 @@ namespace ModuleHost.Network.Cyclone.Modules
                 allTranslators.ToArray()
             ));
 
-            // Register Cleanup System (Lifecycle)
-            // Cleanup system usually uses writer to send kill msg.
-            // Wait, CycloneNetworkCleanupSystem might need writer or simplified.
-            // I'll check its definition next. Assuming it takes translator or writer.
-            // Assuming it needs update, so I'll comment out or check what it needs.
-            // If it takes a writer, I can't pass it easily as I don't expose it from translator?
-            // "Update CycloneNetworkCleanupSystem: Call Dispose(netId) instead of _masterWriter.Dispose()."
-            // So it probably takes "IDescriptorTranslator masterTranslator" now?
-            // This replace block covers RegisterSystems, so I need to know what to put there.
-            
-            // Let's assume for now I pass _masterTranslator and will fix CleanupSystem if needed.
              registry.RegisterSystem(new CycloneNetworkCleanupSystem(_masterTranslator));
             
             // Register Gateway
-             if (_gatewayModule is IModuleSystem ms)
-                registry.RegisterSystem(ms);
+             registry.RegisterSystem(_gatewaySystem);
         }
 
         public void Tick(ISimulationView view, float deltaTime)
         {
-             _gatewayModule.Tick(view, deltaTime);
+             // Empty - Systems are registered
         }
     }
 

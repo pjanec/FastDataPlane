@@ -14,6 +14,8 @@ public class NetworkSyncModule : IModule
     public string Name => "NetworkSync";
     public ExecutionPolicy Policy => ExecutionPolicy.FastReplica();
     
+    public void RegisterSystems(ISystemRegistry registry) { }
+
     private readonly Dictionary<Entity, Position> _lastPositions = new();
     private int _totalUpdates = 0;
     

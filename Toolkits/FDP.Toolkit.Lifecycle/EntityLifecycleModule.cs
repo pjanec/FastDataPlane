@@ -61,6 +61,7 @@ namespace FDP.Toolkit.Lifecycle
         
         public void RegisterSystems(ISystemRegistry registry)
         {
+            registry.RegisterSystem(new BlueprintApplicationSystem(_tkb));
             registry.RegisterSystem(new LifecycleSystem(this));
         }
         

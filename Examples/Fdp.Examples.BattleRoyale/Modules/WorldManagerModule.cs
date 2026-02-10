@@ -10,6 +10,8 @@ public class WorldManagerModule : IModule
     public string Name => "WorldManager";
     public ExecutionPolicy Policy => ExecutionPolicy.SlowBackground(1);
     
+    public void RegisterSystems(ISystemRegistry registry) { }
+
     public void Tick(ISimulationView view, float deltaTime)
     {
         var cmd = view.GetCommandBuffer();

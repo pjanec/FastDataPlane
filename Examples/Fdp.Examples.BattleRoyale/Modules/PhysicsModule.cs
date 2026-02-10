@@ -14,6 +14,8 @@ public class PhysicsModule : IModule
     public string Name => "Physics";
     public ExecutionPolicy Policy => ExecutionPolicy.FastReplica();
     
+    public void RegisterSystems(ISystemRegistry registry) { }
+
     public IEnumerable<Type> GetRequiredComponents()
     {
         yield return typeof(Position);

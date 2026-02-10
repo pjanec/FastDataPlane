@@ -1,51 +1,27 @@
-using System;
-using System.Numerics;
-using Fdp.Examples.NetworkDemo.Components;
-using Fdp.Examples.NetworkDemo.Events;
-using Fdp.Kernel;
-using FDP.Toolkit.Replication.Components;
 using ModuleHost.Core.Abstractions;
+using Fdp.Examples.NetworkDemo.Systems;
+using Fdp.Kernel;
 
 namespace Fdp.Examples.NetworkDemo.Modules
 {
-    [ExecutionPolicy(ExecutionMode.SlowBackground, priority: 1)]
-    [UpdateInPhase(SystemPhase.PostSimulation)]
-    [SnapshotPolicy(SnapshotMode.OnDemand)]
-    public class RadarModule : IModuleSystem
+    public class RadarModule : IModule
     {
-        private readonly IEventBus _eventBus;
-        private float _scanInterval = 1.0f; // 1Hz scan rate
-        private float _accumulator = 0.0f;
-        
-        public RadarModule(IEventBus eventBus)
+        public string Name => "Radar";
+        // Runs 5 times a second, on a background thread
+        public ExecutionPolicy Policy => ExecutionPolicy.SlowBackground(5);
+
+        private readonly IEventBus _bus;
+
+        public RadarModule(IEventBus bus)
         {
-            _eventBus = eventBus;
+            _bus = bus;
         }
-        
-        public void Execute(ISimulationView view, float dt)
+
+        public void RegisterSystems(ISystemRegistry registry)
         {
-            _accumulator += dt;
-            if (_accumulator < _scanInterval) return;
-            
-            _accumulator = 0;
-            
-            // Scan for entities within range
-            var query = view.Query()
-                .With<NetworkIdentity>()
-                .With<DemoPosition>()
-                .Build();
-            
-            foreach (var entity in query) {
-                var pos = view.GetComponentRO<DemoPosition>(entity);
-                // Simulate radar detection
-                if (Vector3.Distance(pos.Value, Vector3.Zero) < 1000f) {
-                    _eventBus.Publish(new RadarContactEvent {
-                        EntityId = view.GetComponentRO<NetworkIdentity>(entity).Value,
-                        Position = pos.Value,
-                        Timestamp = DateTime.UtcNow
-                    });
-                }
-            }
+            registry.RegisterSystem(new RadarSystem(_bus));
         }
+
+        public void Tick(ISimulationView view, float dt) { }
     }
 }

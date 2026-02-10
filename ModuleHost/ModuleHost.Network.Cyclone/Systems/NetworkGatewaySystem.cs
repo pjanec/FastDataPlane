@@ -10,21 +10,12 @@ using ModuleHost.Core.Network;
 using Fdp.Interfaces;
 using INetworkTopology = Fdp.Interfaces.INetworkTopology;
 
-namespace ModuleHost.Network.Cyclone.Modules
+namespace ModuleHost.Network.Cyclone.Systems
 {
-    /// <summary>
-    /// Network Gateway Module that participates in EntityLifecycleManagement.
-    /// For entities with ReliableInit flag, this module withholds its construction
-    /// ACK until peer nodes confirm entity activation.
-    /// 
-    /// NOTE: This is a COPY of ModuleHost.Core.Network.NetworkGatewayModule for the
-    /// Cyclone-specific network implementation. The original in Core will be removed
-    /// in a later phase of the extraction.
-    /// </summary>
-    public class NetworkGatewayModule : IModule
+    [UpdateInPhase(SystemPhase.BeforeSync)]
+    public class NetworkGatewaySystem : IModuleSystem
     {
-        public string Name => "NetworkGateway";
-        
+        private readonly int _gatewayModuleId;
         private readonly int _localNodeId;
         private readonly INetworkTopology _topology;
         private readonly EntityLifecycleModule _elm;
@@ -34,56 +25,38 @@ namespace ModuleHost.Network.Cyclone.Modules
         
         // Track when entities entered pending state (for timeout)
         private readonly Dictionary<Entity, uint> _pendingStartFrame;
-        
-        public int ModuleId { get; }
-        public ExecutionPolicy Policy => ExecutionPolicy.Synchronous();
-        
-        public void RegisterSystems(ISystemRegistry registry) { }
 
-        public NetworkGatewayModule(
-            int moduleId,
+        public NetworkGatewaySystem(
+            int gatewayModuleId,
             int localNodeId,
             INetworkTopology topology,
             EntityLifecycleModule elm)
         {
-            ModuleId = moduleId;
+            _gatewayModuleId = gatewayModuleId;
             _localNodeId = localNodeId;
             _topology = topology ?? throw new ArgumentNullException(nameof(topology));
             _elm = elm ?? throw new ArgumentNullException(nameof(elm));
+            
             _pendingPeerAcks = new Dictionary<Entity, HashSet<int>>();
             _pendingStartFrame = new Dictionary<Entity, uint>();
             
             // Register with ELM so we receive ConstructionOrder events
-            _elm.RegisterModule(ModuleId);
-        }
-        
-        public void Tick(ISimulationView view, float deltaTime)
-        {
-            Tick(view, deltaTime, null);
+            _elm.RegisterModule(_gatewayModuleId);
         }
 
-        public void Tick(ISimulationView view, float deltaTime, uint? frameOverride)
+        public void Execute(ISimulationView view, float deltaTime)
         {
             uint currentFrame = 0;
-            
-            if (frameOverride.HasValue)
-            {
-                currentFrame = frameOverride.Value;
-            }
-            else if (view is EntityRepository repo)
+            if (view is EntityRepository repo)
             {
                 currentFrame = repo.GlobalVersion;
             }
             
             var cmd = view.GetCommandBuffer();
             
-            // Process ConstructionOrder events from ELM
+            // Ported logic
             ProcessConstructionOrders(view, cmd, currentFrame);
-            
-            // Handle DestructionOrder to clean up pending state
             ProcessDestructionOrders(view);
-            
-            // Check for timeouts on pending ACKs
             CheckPendingAckTimeouts(cmd, currentFrame);
         }
         
@@ -96,35 +69,34 @@ namespace ModuleHost.Network.Cyclone.Modules
                 // Only handle entities with PendingNetworkAck component
                 if (!view.HasComponent<PendingNetworkAck>(evt.Entity))
                 {
-                    if (FdpLog<NetworkGatewayModule>.IsDebugEnabled)
-                        FdpLog<NetworkGatewayModule>.Debug($"Entity {evt.Entity.Index} missing PendingNetworkAck. ACKing.");
+                    if (FdpLog<NetworkGatewaySystem>.IsDebugEnabled)
+                        FdpLog<NetworkGatewaySystem>.Debug($"Entity {evt.Entity.Index} missing PendingNetworkAck. ACKing.");
                     // Fast mode - ACK immediately
-                    _elm.AcknowledgeConstruction(evt.Entity, ModuleId, currentFrame, cmd);
+                    _elm.AcknowledgeConstruction(evt.Entity, _gatewayModuleId, currentFrame, cmd);
                     continue;
                 }
                 
                 // Reliable mode - determine peers and wait for their ACKs
-                // NetworkSpawnerSystem populates PendingNetworkAck with ExpectedType
                 var pendingInfo = view.GetComponentRO<PendingNetworkAck>(evt.Entity);
                 
                 var expectedPeers = _topology.GetExpectedPeers((long)pendingInfo.ExpectedType);
                 var peerSet = new HashSet<int>(expectedPeers);
                 
-                if (FdpLog<NetworkGatewayModule>.IsDebugEnabled)
-                    FdpLog<NetworkGatewayModule>.Debug($"Entity {evt.Entity.Index}: Reliable mode. Peers: {string.Join(",", peerSet)}");
+                if (FdpLog<NetworkGatewaySystem>.IsDebugEnabled)
+                    FdpLog<NetworkGatewaySystem>.Debug($"Entity {evt.Entity.Index}: Reliable mode. Peers: {string.Join(",", peerSet)}");
 
                 if (peerSet.Count == 0)
                 {
-                    if (FdpLog<NetworkGatewayModule>.IsDebugEnabled)
-                        FdpLog<NetworkGatewayModule>.Debug($"Entity {evt.Entity.Index}: No peers. ACKing.");
+                    if (FdpLog<NetworkGatewaySystem>.IsDebugEnabled)
+                        FdpLog<NetworkGatewaySystem>.Debug($"Entity {evt.Entity.Index}: No peers. ACKing.");
                     // No peers to wait for - ACK immediately
-                    _elm.AcknowledgeConstruction(evt.Entity, ModuleId, currentFrame, cmd);
+                    _elm.AcknowledgeConstruction(evt.Entity, _gatewayModuleId, currentFrame, cmd);
                     cmd.RemoveComponent<PendingNetworkAck>(evt.Entity);
                 }
                 else
                 {
-                    if (FdpLog<NetworkGatewayModule>.IsDebugEnabled)
-                        FdpLog<NetworkGatewayModule>.Debug($"Entity {evt.Entity.Index}: Waiting for ACKs.");
+                    if (FdpLog<NetworkGatewaySystem>.IsDebugEnabled)
+                        FdpLog<NetworkGatewaySystem>.Debug($"Entity {evt.Entity.Index}: Waiting for ACKs.");
                     // Wait for peer ACKs
                     _pendingPeerAcks[evt.Entity] = peerSet;
                     _pendingStartFrame[evt.Entity] = currentFrame;
@@ -132,9 +104,6 @@ namespace ModuleHost.Network.Cyclone.Modules
             }
         }
         
-        /// <summary>
-        /// Called by EntityLifecycleStatusTranslator when a peer status message arrives.
-        /// </summary>
         public void ReceiveLifecycleStatus(Entity entity, int nodeId, EntityLifecycle state, IEntityCommandBuffer cmd, uint currentFrame)
         {
             if (!_pendingPeerAcks.TryGetValue(entity, out var pendingPeers))
@@ -151,7 +120,7 @@ namespace ModuleHost.Network.Cyclone.Modules
             // Check if all peers have ACKed
             if (pendingPeers.Count == 0)
             {
-                _elm.AcknowledgeConstruction(entity, ModuleId, currentFrame, cmd);
+                _elm.AcknowledgeConstruction(entity, _gatewayModuleId, currentFrame, cmd);
                 cmd.RemoveComponent<PendingNetworkAck>(entity);
                 
                 _pendingPeerAcks.Remove(entity);
@@ -170,15 +139,14 @@ namespace ModuleHost.Network.Cyclone.Modules
                 
                 if (currentFrame - startFrame > NetworkConstants.RELIABLE_INIT_TIMEOUT_FRAMES)
                 {
-                    Console.Error.WriteLine($"[NetworkGatewayModule] Entity {entity.Index}: Timeout waiting for peer ACKs");
+                    Console.Error.WriteLine($"[NetworkGatewaySystem] Entity {entity.Index}: Timeout waiting for peer ACKs");
                     timedOut.Add(entity);
                 }
             }
             
             foreach (var entity in timedOut)
             {
-                // Timeout - ACK anyway to prevent blocking forever
-                _elm.AcknowledgeConstruction(entity, ModuleId, currentFrame, cmd);
+                _elm.AcknowledgeConstruction(entity, _gatewayModuleId, currentFrame, cmd);
                 cmd.RemoveComponent<PendingNetworkAck>(entity);
                 
                 _pendingPeerAcks.Remove(entity);

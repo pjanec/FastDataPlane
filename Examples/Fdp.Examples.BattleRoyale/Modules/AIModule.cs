@@ -11,6 +11,8 @@ public class AIModule : IModule
     public string Name => "AI";
     public ExecutionPolicy Policy => ExecutionPolicy.SlowBackground(10);
     
+    public void RegisterSystems(ISystemRegistry registry) { }
+
     public IEnumerable<Type> GetRequiredComponents()
     {
         yield return typeof(Position);

@@ -1,7 +1,5 @@
-using System.Collections.Generic;
-using Fdp.Examples.NetworkDemo.Systems;
-using Fdp.Examples.NetworkDemo.Modules;
 using ModuleHost.Core.Abstractions;
+using Fdp.Examples.NetworkDemo.Systems;
 using Fdp.Kernel;
 
 namespace Fdp.Examples.NetworkDemo.Modules
@@ -10,18 +8,24 @@ namespace Fdp.Examples.NetworkDemo.Modules
     {
         public string Name => "GameLogic";
         public ExecutionPolicy Policy => ExecutionPolicy.Synchronous();
-        
-        private readonly List<IModuleSystem> _systems = new();
 
-        public void AddSystem(IModuleSystem sys) => _systems.Add(sys);
+        private readonly int _localNodeId;
+        private readonly FdpEventBus _bus; 
 
-        public void Tick(ISimulationView view, float dt)
+        public GameLogicModule(int localNodeId, FdpEventBus bus)
         {
-            // Execute all game logic systems in order
-            foreach (var sys in _systems)
-            {
-                sys.Execute(view, dt);
-            }
+            _localNodeId = localNodeId;
+            _bus = bus;
         }
+
+        public void RegisterSystems(ISystemRegistry registry)
+        {
+            registry.RegisterSystem(new PhysicsSystem());
+            registry.RegisterSystem(new RefactoredPlayerInputSystem());
+            registry.RegisterSystem(new DamageControlModule()); 
+            registry.RegisterSystem(new CombatFeedbackSystem(_localNodeId, _bus));
+        }
+
+        public void Tick(ISimulationView view, float dt) { }
     }
 }

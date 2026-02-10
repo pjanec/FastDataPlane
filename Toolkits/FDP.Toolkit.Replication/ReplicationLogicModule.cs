@@ -2,50 +2,44 @@ using System.Collections.Generic;
 using FDP.Toolkit.Replication.Systems;
 using ModuleHost.Core.Abstractions;
 using Fdp.Kernel;
+using System;
 
 namespace FDP.Toolkit.Replication
 {
     public class ReplicationLogicModule : IModule
     {
         public string Name => "ReplicationLogic";
-        public ExecutionPolicy Policy => ExecutionPolicy.Synchronous(); // Runs every frame
+        // Runs every frame on main thread
+        public ExecutionPolicy Policy => ExecutionPolicy.Synchronous();
         
-        private readonly List<ComponentSystem> _componentSystems = new();
-        private readonly List<IModuleSystem> _moduleSystems = new();
-
-        public ReplicationLogicModule(EntityRepository world)
+        // No constructor args needed - systems are wrappers
+        public void RegisterSystems(ISystemRegistry registry)
         {
-            // Standard Replication Pipeline (Component Systems)
-            AddComponentSystem(new GhostCreationSystem(), world);
-            AddComponentSystem(new GhostPromotionSystem(), world);
-            AddComponentSystem(new OwnershipIngressSystem(), world);
-            AddComponentSystem(new OwnershipEgressSystem(), world);
-            AddComponentSystem(new SmartEgressSystem(), world);
-            AddComponentSystem(new DisposalMonitoringSystem(), world);
-            AddComponentSystem(new SubEntityCleanupSystem(), world);
-        }
-        
-        private void AddComponentSystem(ComponentSystem sys, EntityRepository world)
-        {
-            sys.Create(world);
-            _componentSystems.Add(sys);
+            registry.RegisterSystem(new SimWrapper<GhostCreationSystem>());
+            registry.RegisterSystem(new SimWrapper<GhostPromotionSystem>());
+            registry.RegisterSystem(new SimWrapper<OwnershipIngressSystem>());
+            registry.RegisterSystem(new SimWrapper<OwnershipEgressSystem>());
+            registry.RegisterSystem(new SimWrapper<SmartEgressSystem>());
+            registry.RegisterSystem(new SimWrapper<SubEntityCleanupSystem>());
         }
 
-        // Allow injecting extra systems if needed
-        public void AddSystem(IModuleSystem sys) => _moduleSystems.Add(sys);
+        public void Tick(ISimulationView view, float dt) { }
 
-        public void Tick(ISimulationView view, float dt)
+        // Wrapper to bridge legacy ComponentSystem to IModuleSystem for Simulation Phase
+        [UpdateInPhase(SystemPhase.Simulation)]
+        private class SimWrapper<T> : IModuleSystem where T : ComponentSystem, new()
         {
-            // Execute component systems
-            foreach (var sys in _componentSystems)
+            private readonly T _sys = new T();
+            private bool _init;
+            
+            public void Execute(ISimulationView view, float dt)
             {
-                sys.Run();
-            }
-
-            // Execute module systems
-            foreach (var sys in _moduleSystems)
-            {
-                sys.Execute(view, dt);
+                if (!_init)
+                {
+                    _sys.Create((EntityRepository)view);
+                    _init = true;
+                }
+                _sys.Run();
             }
         }
     }
