@@ -1,0 +1,954 @@
+// File: ModuleHost.Core/ModuleHostKernel.cs
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Linq;
+using Fdp.Kernel;
+using FDP.Kernel.Logging;
+using ModuleHost.Core.Abstractions;
+using ModuleHost.Core.Providers;
+using ModuleHost.Core.Scheduling;
+using ModuleHost.Core.Resilience;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using ModuleHost.Core.Time;
+
+[assembly: InternalsVisibleTo("ModuleHost.Core.Tests")]
+[assembly: InternalsVisibleTo("ModuleHost.Tests")]
+
+namespace ModuleHost.Core
+{
+    public struct ModuleStats
+    {
+        public string ModuleName;
+        public int ExecutionCount;
+        public CircuitState CircuitState;
+        public int FailureCount;
+    }
+
+    /// <summary>
+    /// Central orchestrator for module execution.
+    /// Manages module registration, provider assignment, and execution pipeline.
+    /// </summary>
+    public sealed class ModuleHostKernel : IDisposable
+    {
+        private readonly EntityRepository _liveWorld;
+        private readonly EventAccumulator _eventAccumulator;
+        private readonly List<ModuleEntry> _modules = new();
+        private SnapshotPool? _snapshotPool;
+        
+        // Scheduling
+        private readonly SystemScheduler _globalScheduler = new();
+        private bool _initialized = false;
+        
+        private uint _currentFrame = 0;
+        
+        // Time Control
+        private ITimeController? _timeController;
+        private float _initialTimeScale = 1.0f;
+        
+        // Public Accessor for GlobalTime
+        public GlobalTime CurrentTime { get; private set; }
+
+        public ModuleHostKernel(EntityRepository liveWorld, EventAccumulator eventAccumulator)
+        {
+            _liveWorld = liveWorld ?? throw new ArgumentNullException(nameof(liveWorld));
+            _eventAccumulator = eventAccumulator ?? throw new ArgumentNullException(nameof(eventAccumulator));
+        }
+
+        /// <summary>
+        /// Sets the time controller implementation.
+        /// Must be called before Initialize().
+        /// </summary>
+        public void SetTimeController(ITimeController controller)
+        {
+             if (_initialized)
+                throw new InvalidOperationException("Cannot set time controller after initialization");
+             _timeController = controller ?? throw new ArgumentNullException(nameof(controller));
+             // Apply any pending timescale
+             _timeController.SetTimeScale(_initialTimeScale);
+        }
+        
+        /// <summary>
+        /// Phases that are actually executed for global systems by the kernel's Update loop.
+        /// SystemPhase.Simulation is only executed for module systems on background threads.
+        /// </summary>
+        private static readonly HashSet<SystemPhase> _validGlobalPhases = new()
+        {
+            SystemPhase.Input,
+            SystemPhase.BeforeSync,
+            SystemPhase.PostSimulation,
+            SystemPhase.Export
+        };
+        
+        /// <summary>
+        /// Register a global system (runs on main thread).
+        /// </summary>
+        public void RegisterGlobalSystem<T>(T system) where T : IModuleSystem
+        {
+            if (_initialized)
+                throw new InvalidOperationException("Cannot register systems after Initialize() called");
+            
+            // Validate that the system's phase will actually be executed for global systems.
+            // SystemPhase.Simulation is only run for module systems (background threads),
+            // so a global system marked with it would silently never execute.
+            // Use system.GetType() (not typeof(T)) to get the concrete type even when
+            // called polymorphically, e.g. RegisterGlobalSystem<IModuleSystem>(concreteInstance).
+            var concreteType = system.GetType();
+            var phaseAttr = (UpdateInPhaseAttribute?)Attribute.GetCustomAttribute(
+                concreteType, typeof(UpdateInPhaseAttribute), inherit: true);
+            
+            if (phaseAttr != null && !_validGlobalPhases.Contains(phaseAttr.Phase))
+            {
+                throw new InvalidOperationException(
+                    $"System '{concreteType.Name}' is marked with [UpdateInPhase(SystemPhase.{phaseAttr.Phase})] " +
+                    $"but is being registered as a global system. " +
+                    $"The kernel only executes phases [{string.Join(", ", _validGlobalPhases)}] for global systems. " +
+                    $"SystemPhase.Simulation is reserved for module systems running on background threads. " +
+                    $"Use SystemPhase.PostSimulation instead, or register this system within a module.");
+            }
+            
+            _globalScheduler.RegisterSystem(system);
+        }
+        
+        /// <summary>
+        /// Sets the simulation time scale.
+        /// </summary>
+        public void SetTimeScale(float scale)
+        {
+            if (_timeController != null)
+            {
+                _timeController.SetTimeScale(scale);
+            }
+            else
+            {
+                _initialTimeScale = scale;
+            }
+        }
+        
+        /// <summary>
+        /// Access to system scheduler for profiling/debugging.
+        /// </summary>
+        public SystemScheduler SystemScheduler => _globalScheduler;
+        
+        /// <summary>
+        /// Initialize kernel: build execution orders, validate dependencies.
+        /// Must be called after all modules/systems registered, before Update().
+        /// </summary>
+        public void Initialize()
+        {
+            if (_initialized)
+                throw new InvalidOperationException("Already initialized");
+            
+            // Create global pool
+            _snapshotPool = new SnapshotPool(_schemaSetup, warmupCount: 10);
+            
+            // Validate Time Controller
+            if (_timeController == null)
+            {
+                throw new InvalidOperationException("TimeController not set. Use SetTimeController() to inject an implementation (e.g. from FDP.Toolkit.Time).");
+            }
+            
+            // Auto-assign providers to modules
+            AutoAssignProviders();
+            
+            // Modules register their systems
+            foreach (var entry in _modules)
+            {
+                entry.Module.RegisterSystems(_globalScheduler);
+            }
+            
+            // Build dependency graphs and sort
+            _globalScheduler.BuildExecutionOrders();
+            
+            // Throws CircularDependencyException if cycles detected
+            
+            _initialized = true;
+        }
+
+        private void AutoAssignProviders()
+        {
+            // Modules can manually set provider; only auto-assign if null
+            var modulesNeedingProvider = _modules.Where(m => m.Provider == null).ToList();
+            
+            if (modulesNeedingProvider.Count == 0)
+                return;
+            
+            // Validate policies AND Cache component masks
+            foreach (var entry in modulesNeedingProvider)
+            {
+                try
+                {
+                    entry.Module.Policy.Validate();
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException(
+                        $"Module '{entry.Module.Name}' has invalid execution policy: {ex.Message}", ex);
+                }
+                
+                // Cache component mask for optimization
+                entry.ComponentMask = GetComponentMask(entry.Module);
+            }
+            
+            // Group by execution characteristics
+            var groups = modulesNeedingProvider
+                .GroupBy(m => new
+                {
+                    m.Module.Policy.Mode,
+                    m.Module.Policy.Strategy,
+                    Frequency = m.Module.Policy.TargetFrequencyHz
+                });
+            
+            foreach (var group in groups)
+            {
+                var key = group.Key;
+                var moduleList = group.ToList();
+                
+                switch (key.Strategy)
+                {
+                    case DataStrategy.Direct:
+                        // No provider needed - direct world access
+                        foreach (var entry in moduleList)
+                        {
+                            entry.Provider = null!; 
+                        }
+                        break;
+                    
+                    case DataStrategy.GDB:
+                        // All modules in group share ONE persistent replica
+                        var unionMask = CalculateUnionMask(moduleList);
+                        
+                        var gdbProvider = new DoubleBufferProvider(
+                            _liveWorld,
+                            _eventAccumulator,
+                            unionMask,
+                            _schemaSetup
+                        );
+                        
+                        foreach (var entry in moduleList)
+                        {
+                            entry.Provider = gdbProvider;
+                        }
+                        break;
+                    
+                    case DataStrategy.SoD:
+                        if (moduleList.Count == 1)
+                        {
+                            // Single module: OnDemandProvider
+                            var entry = moduleList[0];
+                            // Use cached mask
+                            var mask = entry.ComponentMask;
+                            
+                            entry.Provider = new OnDemandProvider(
+                                _liveWorld,
+                                _eventAccumulator,
+                                mask,
+                                _schemaSetup,
+                                initialPoolSize: 5
+                            );
+                        }
+                        else
+                        {
+                            // Convoy: SharedSnapshotProvider
+                            var unionMaskSoD = CalculateUnionMask(moduleList);
+                            
+                            var sharedProvider = new SharedSnapshotProvider(
+                                _liveWorld,
+                                _eventAccumulator,
+                                unionMaskSoD,
+                                _snapshotPool!
+                            );
+                            
+                            foreach (var entry in moduleList)
+                            {
+                                entry.Provider = sharedProvider;
+                            }
+                        }
+                        break;
+                }
+            }
+            
+            // Final check: Ensure all non-Direct modules have providers
+            foreach (var entry in _modules)
+            {
+                if (entry.Provider == null && entry.Module.Policy.Strategy != DataStrategy.Direct)
+                {
+                    // Fallback (should not happen if logic covers all cases)
+                    // If we missed caching for some reason (e.g. manually added?) - recalculate or use cache?
+                    // Safe to call GetComponentMask again if cache is empty, but we set it above.
+                    // But if module was NOT in modulesNeedingProvider (already had provider), we skipped loop.
+                    // But then provider is not null.
+                    
+                    // What if provider set manually but we want to optimize?
+                    // We only touch modulesNeedingProvider.
+                    
+                    if (entry.ComponentMask.IsEmpty() && !entry.Module.Policy.Strategy.ToString().Contains("Direct")) 
+                    {
+                         // If mask not set, compute it. 
+                         // Note: IsEmpty() might be expensive or ambiguous (0 components required).
+                         // But we can just call GetComponentMask, it's safe.
+                         entry.ComponentMask = GetComponentMask(entry.Module);
+                    }
+                    
+                     var mask = entry.ComponentMask;
+                     entry.Provider = new OnDemandProvider(_liveWorld, _eventAccumulator, mask, _schemaSetup);
+                }
+            }
+        }
+
+        private BitMask256 CalculateUnionMask(List<ModuleEntry> modules)
+        {
+            var unionMask = new BitMask256();
+            
+            foreach (var entry in modules)
+            {
+                unionMask.BitwiseOr(entry.ComponentMask);
+            }
+            
+            return unionMask;
+        }
+
+        private BitMask256 GetComponentMask(IModule module)
+        {
+            var requiredComponents = module.GetRequiredComponents();
+            
+            // Default: sync all components (conservative)
+            if (requiredComponents == null || !requiredComponents.Any())
+            {
+                return CreateFullMask();
+            }
+            
+            // Optimized: sync only required components
+            var mask = new BitMask256();
+            foreach (var componentType in requiredComponents)
+            {
+                int typeId = ComponentTypeRegistry.GetId(componentType);
+                if (typeId >= 0 && typeId < 256)
+                {
+                    mask.SetBit(typeId);
+                }
+                else
+                {
+                    // Log warning: Component type not registered
+                    FdpLog<ModuleHostKernel>.Warn($"Warning: Module '{module.Name}' requires unregistered component: {componentType.Name}");
+                }
+            }
+            
+            return mask;
+        }
+        
+        private BitMask256 CreateFullMask()
+        {
+            var mask = new BitMask256();
+            for (int i = 0; i < 256; i++)
+            {
+                mask.SetBit(i);
+            }
+            return mask;
+        }
+
+        /// <summary>
+        /// Registers a module with optional provider override.
+        /// If provider is null, default will be assigned during Initialize().
+        /// </summary>
+        public void RegisterModule(IModule module, ISnapshotProvider? provider = null)
+        {
+            if (module == null) throw new ArgumentNullException(nameof(module));
+            
+            if (_initialized)
+                throw new InvalidOperationException("Cannot register modules after initialization");
+            
+            var policy = module.Policy;
+            
+            // Validate locally to ensure defaults (like FailureThreshold) are set.
+            // We suppress exceptions here because specific validation errors (like Mode mismatches)
+            // should be handled during Initialize() phase or AutoAssignProviders(), 
+            // consistent with previous behavior.
+            try { policy.Validate(); } catch { }
+
+            var entry = new ModuleEntry
+            {
+                Module = module,
+                Provider = provider!, 
+                FramesSinceLastRun = 0,
+                
+                // Initialize resilience components from locally validated Policy
+                MaxExpectedRuntimeMs = policy.MaxExpectedRuntimeMs,
+                FailureThreshold = policy.FailureThreshold,
+                CircuitResetTimeoutMs = policy.CircuitResetTimeoutMs,
+                
+                CircuitBreaker = new ModuleCircuitBreaker(
+                    failureThreshold: policy.FailureThreshold,
+                    resetTimeoutMs: policy.CircuitResetTimeoutMs
+                )
+            };
+            
+            _modules.Add(entry);
+        }
+        
+        /// <summary>
+        /// Main update loop.
+        /// Drives the TimeController to advance simulation time, then executes the frame.
+        /// </summary>
+        public void Update()
+        {
+            if (!_initialized)
+                throw new InvalidOperationException("Must call Initialize() before Update()");
+            
+            // 1. Advance Time via Controller
+            GlobalTime globalTime = _timeController!.Update();
+            CurrentTime = globalTime;
+            
+            // 2. Execute Frame with calculated delta
+            UpdateInternal(globalTime.DeltaTime, globalTime);
+        }
+
+        /// <summary>
+        /// Legacy/Manual update loop.
+        /// Allows driving the kernel with an external delta time.
+        /// Note: TimeController will still be updated but its delta might be ignored or conflicted 
+        /// if using master mode with manual dt.
+        /// Use Update() (no args) for standard TimeController-driven execution.
+        /// </summary>
+        public void Update(float deltaTime)
+        {
+            // Create a synthetic GlobalTime if called manually
+            var time = new GlobalTime
+            {
+                 DeltaTime = deltaTime,
+                 TotalTime = _liveWorld.SimulationTime + deltaTime, // Approx
+                 FrameNumber = (long)_currentFrame + 1,
+                 TimeScale = 1.0f
+            };
+            
+            // Note: If we use this legacy path, we might desync the _timeController state.
+            // Ideally we should push this dt to controller?
+            // But controller usually measures wall clock.
+            // We'll proceed with internal update logic.
+            
+            UpdateInternal(deltaTime, time);
+        }
+        
+        private void UpdateInternal(float deltaTime, GlobalTime globalTime)
+        {
+            if (!_initialized)
+                throw new InvalidOperationException("Must call Initialize() before Update()");
+            
+            // 1. ADVANCE TIME
+            _liveWorld.Tick(); // Increment version
+            _liveWorld.SetSimulationTime((float)globalTime.TotalTime); // Update repository time
+            _liveWorld.SetSingletonUnmanaged(globalTime); // Update GlobalTime singleton for components
+            
+            CurrentTime = globalTime;
+            _currentFrame = (uint)globalTime.FrameNumber;
+            
+            // ═══════════ PHASE: Input ═══════════
+            _globalScheduler.ExecutePhase(SystemPhase.Input, _liveWorld, deltaTime);
+            
+            // ═══════════ PHASE: BeforeSync ═══════════
+            _globalScheduler.ExecutePhase(SystemPhase.BeforeSync, _liveWorld, deltaTime);
+            
+            // FLUSH LIVE WORLD BUFFERS
+            if (_liveWorld._perThreadCommandBuffer != null)
+            {
+                foreach (var cmdBuffer in _liveWorld._perThreadCommandBuffer.Values)
+                {
+                    if (cmdBuffer.HasCommands)
+                    {
+                        cmdBuffer.Playback(_liveWorld);
+                    }
+                }
+            }
+            
+            // 3. EVENT SWAP (Critical: Make Input events visible)
+            _liveWorld.Bus.SwapBuffers();
+            
+            // 4. SYNC & CAPTURE
+            // Capture event history
+            // Use GlobalVersion to align with SnapshotProvider logic which tracks GlobalVersion
+            _eventAccumulator.CaptureFrame(_liveWorld.Bus, _liveWorld.GlobalVersion);
+            
+            // Update Sync-Point Providers
+            foreach (var entry in _modules)
+            {
+                // Only update provider if it exists (Direct strategy has null)
+                entry.Provider?.Update();
+            }
+            
+            // ═══════════ HARVEST PHASE ═══════════
+            foreach (var entry in _modules)
+            {
+                // Harvest completed async tasks
+                if (entry.CurrentTask != null && entry.CurrentTask.IsCompleted)
+                {
+                    HarvestEntry(entry);
+                }
+            }
+            
+            // ═══════════ DISPATCH PHASE ═══════════
+            var tasksToWait = new List<Task>();
+            
+            foreach (var entry in _modules)
+            {
+                // Always accumulate time (logic time)
+                entry.AccumulatedDeltaTime += deltaTime;
+                
+                // If still running, let it continue (accumulating time for next run)
+                if (entry.CurrentTask != null)
+                {
+                    continue;
+                }
+                
+                // If idle, check frequency
+                bool shouldRun = ShouldRunThisFrame(entry);
+                
+                if (shouldRun)
+                {
+                    ISimulationView view;
+                    
+                    if (entry.Module.Policy.Strategy == DataStrategy.Direct)
+                    {
+                        // Direct access to live world (Synchronous only)
+                        view = _liveWorld;
+                    }
+                    else
+                    {
+                        if (entry.Provider == null)
+                        {
+                            // Should theoretically not happen if Validate() worked, but safe guard
+                             continue;
+                        }
+                        // Acquire view from provider
+                        view = entry.Provider.AcquireView();
+                    }
+                    
+                    entry.LeasedView = view;
+                    entry.LastView = view; // Keep for reference if needed
+                    
+                    // Consume accumulated time for this tick
+                    float moduleDelta = entry.AccumulatedDeltaTime;
+                    entry.AccumulatedDeltaTime = 0f;
+                    
+                    // Dispatch execution
+                    if (entry.Module.Policy.Mode == RunMode.Synchronous)
+                    {
+                        // Synchronous run (main thread)
+                        try
+                        {
+                            entry.Module.Tick(view, moduleDelta);
+                            System.Threading.Interlocked.Increment(ref entry.ExecutionCount);
+                            
+                            // Playback commands immediately for sync modules
+                            PlaybackCommands(entry);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"[ModuleHost] Sync Module '{entry.Module.Name}' exception: {ex}");
+                        }
+                        
+                        // Release view (no-op for Direct, but valid for completeness)
+                        // Actually Direct view is _liveWorld which doesn't need release.
+                        if (entry.Module.Policy.Strategy != DataStrategy.Direct)
+                        {
+                            entry.Provider?.ReleaseView(view);
+                        }
+                        entry.LeasedView = null;
+                        entry.CurrentTask = null; // No task
+                    }
+                    else
+                    {
+                        // Safe Execution (Async/FrameSynced)
+                        entry.CurrentTask = ExecuteModuleSafe(entry, view, moduleDelta);
+                    }
+                    
+                    entry.FramesSinceLastRun = 0;
+                    entry.LastRunTick = _liveWorld.GlobalVersion > 0 ? _liveWorld.GlobalVersion - 1 : 0; 
+                    
+                    // Check Policy: If FrameSynced, we must wait
+                    if (entry.Module.Policy.Mode == RunMode.FrameSynced)
+                    {
+                        if (entry.CurrentTask != null)
+                             tasksToWait.Add(entry.CurrentTask);
+                    }
+                }
+                else
+                {
+                    entry.FramesSinceLastRun++;
+                }
+            }
+            
+            // ═══════════ SYNC WAIT (Fast Modules) ═══════════
+            if (tasksToWait.Count > 0)
+            {
+                Task.WaitAll(tasksToWait.ToArray());
+                
+                // Harvest immediately
+                foreach (var entry in _modules)
+                {
+                    if (entry.CurrentTask != null && entry.Module.Policy.Mode == RunMode.FrameSynced)
+                    {
+                        HarvestEntry(entry);
+                    }
+                }
+            }
+            
+            // ═══════════ PHASE: PostSimulation ═══════════
+            _globalScheduler.ExecutePhase(SystemPhase.PostSimulation, _liveWorld, deltaTime);
+            
+            // ═══════════ PHASE: Export ═══════════
+            _globalScheduler.ExecutePhase(SystemPhase.Export, _liveWorld, deltaTime);
+            
+            _currentFrame++;
+        }
+
+        /// <summary>
+        /// Safely executes a module with timeout and exception handling.
+        /// Integrates with circuit breaker for resilience.
+        /// </summary>
+        private async Task ExecuteModuleSafe(ModuleEntry entry, ISimulationView view, float dt)
+        {
+            // 1. Check Circuit Breaker
+            if (entry.CircuitBreaker != null && !entry.CircuitBreaker.CanRun())
+            {
+                // Circuit is open - skip execution
+                // We must release the view!
+                // NOTE: If we return here, HarvestEntry won't be called because CurrentTask terminates early?
+                // Actually if ExecuteModuleSafe returns Task, and we await it.
+                // But if we return here 'early', the task completes.
+                // HarvestEntry checks 'IsCompleted'.
+                // AND HarvestEntry releases view.
+                // So returning here is Safe IF we ensure HarvestEntry runs.
+                // HarvestEntry runs in Update() loop.
+                return;
+            }
+            
+            // 2. Determine Timeout
+            int timeout = entry.MaxExpectedRuntimeMs;
+            if (timeout <= 0)
+            {
+                timeout = 1000; // Default safety timeout
+            }
+            
+            // 3. Create Cancellation Token (for cooperative cancellation)
+            using var cts = new CancellationTokenSource(timeout);
+            
+            // 4. Run Module with Timeout Race
+            // We return Exception? to avoid throwing on thread pool which might crash test runner
+            var tickTask = Task.Run<Exception?>(() => 
+            {
+                try
+                {
+                    entry.Module.Tick(view, dt);
+                    System.Threading.Interlocked.Increment(ref entry.ExecutionCount);
+                    return null; // Success
+                }
+                catch (Exception ex)
+                {
+                    return ex; // Return exception as result
+                }
+            }, cts.Token);
+            
+            var delayTask = Task.Delay(timeout);
+            var completedTask = await Task.WhenAny(tickTask, delayTask);
+            
+            // 5. Check Result
+            if (completedTask == tickTask)
+            {
+                // Module completed within timeout
+                Exception? result = null;
+                try
+                {
+                    result = await tickTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Cancelled
+                    entry.CircuitBreaker?.RecordFailure("Cancelled");
+                    Console.Error.WriteLine($"[ModuleHost][CANCELLED] Module '{entry.Module.Name}' was cancelled.");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    // Should be caught inside, but just in case
+                    result = ex;
+                }
+                
+                if (result == null)
+                {
+                    // Success - record in circuit breaker
+                    entry.CircuitBreaker?.RecordSuccess();
+                }
+                else
+                {
+                    // Exception occurred
+                    Exception ex = result;
+                    Console.Error.WriteLine($"[ModuleHost] Module '{entry.Module.Name}' threw exception: {ex.Message}");
+                    Console.Error.WriteLine(ex.StackTrace);
+                    
+                    entry.CircuitBreaker?.RecordFailure(ex.GetType().Name);
+                    
+                    Console.Error.WriteLine(
+                        $"[ModuleHost][CRASH] Module '{entry.Module.Name}' crashed: {ex.Message}");
+                }
+            }
+            else
+            {
+                // TIMEOUT
+                entry.CircuitBreaker?.RecordFailure("Timeout");
+                
+                Console.Error.WriteLine(
+                    $"[ModuleHost][TIMEOUT] Module '{entry.Module.Name}' timed out after {timeout}ms. " +
+                    $"Task abandoned (may continue running in background as zombie).");
+                
+                // Prevent unobserved task exception if the zombie task eventually faults
+                _ = tickTask.ContinueWith(t => 
+                {
+                     if (t.IsFaulted) { var _ = t.Exception; } 
+                }, TaskContinuationOptions.OnlyOnFaulted);
+            }
+        }
+
+        private void HarvestEntry(ModuleEntry entry)
+        {
+            // 1. Playback commands
+            PlaybackCommands(entry);
+            
+            // 2. Release view
+            if (entry.LeasedView != null)
+            {
+                entry.Provider?.ReleaseView(entry.LeasedView); // Null check just in case
+                entry.LeasedView = null;
+            }
+            
+            // 3. Handle faults
+            if (entry.CurrentTask?.IsFaulted == true)
+            {
+                Console.Error.WriteLine($"Module {entry.Module.Name} failed: {entry.CurrentTask.Exception}");
+            }
+            
+            // 4. Cleanup
+            entry.CurrentTask = null;
+        }
+
+        private void PlaybackCommands(ModuleEntry entry)
+        {
+            if (entry.LeasedView is EntityRepository repo)
+            {
+                if (repo._perThreadCommandBuffer != null)
+                {
+                    foreach (var cmdBuffer in repo._perThreadCommandBuffer.Values)
+                    {
+                        if (cmdBuffer.HasCommands)
+                        {
+                            FdpLog<ModuleHostKernel>.Trace($"[Playback] Playing commands for {entry.Module.Name}");
+                            cmdBuffer.Playback(_liveWorld);
+                        }
+                        else 
+                        {
+                            //Console.WriteLine($"[Playback] No commands for {entry.Module.Name}");
+                        }
+                    }
+                }
+            }
+        }
+        
+        public List<ModuleStats> GetExecutionStats()
+        {
+            var stats = new List<ModuleStats>();
+            foreach (var entry in _modules)
+            {
+                stats.Add(new ModuleStats
+                {
+                    ModuleName = entry.Module.Name,
+                    ExecutionCount = entry.ExecutionCount,
+                    CircuitState = entry.CircuitBreaker?.State ?? CircuitState.Closed,
+                    FailureCount = entry.CircuitBreaker?.FailureCount ?? 0
+                });
+                
+                entry.ExecutionCount = 0;
+            }
+            return stats;
+        }
+        
+        private bool ShouldRunThisFrame(ModuleEntry entry)
+        {
+            var policy = entry.Module.Policy;
+            
+            // 1. Reactive Check (Batch-02)
+            bool triggered = false;
+            
+            if (entry.Module.WatchEvents != null && entry.Module.WatchEvents.Count > 0)
+            {
+                foreach (var evt in entry.Module.WatchEvents)
+                {
+                    if (_liveWorld.Bus.HasEvent(evt))
+                    {
+                        triggered = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!triggered && entry.Module.WatchComponents != null && entry.Module.WatchComponents.Count > 0)
+            {
+                foreach (var comp in entry.Module.WatchComponents)
+                {
+                     if (_liveWorld.HasComponentChanged(comp, entry.LastRunTick))
+                     {
+                         triggered = true;
+                         break;
+                     }
+                }
+            }
+            
+            if (triggered) return true;
+            
+            // 2. Periodic Check
+            int targetHz = policy.TargetFrequencyHz;
+            if (targetHz <= 0) targetHz = 60; // 0 means every frame
+            
+            if (targetHz >= 60) return true;
+            
+            int framesToSkip = 60 / targetHz;
+            if (framesToSkip < 1) framesToSkip = 1;
+            
+            return (entry.FramesSinceLastRun + 1) >= framesToSkip;
+        }
+        
+        private Action<EntityRepository>? _schemaSetup;
+
+        /// <summary>
+        /// Sets the schema setup action used to initialize registered component types
+        /// on internal repositories (e.g. snapshots for SoD or replicas for GDB).
+        /// </summary>
+        public void SetSchemaSetup(Action<EntityRepository> setup)
+        {
+            _schemaSetup = setup;
+        }
+        
+        /// <summary>
+        /// Swap the time controller at runtime (e.g., pause/unpause in distributed systems).
+        /// Transfers state from old to new controller.
+        /// </summary>
+        public void SwapTimeController(ITimeController newController)
+        {
+            if (newController == null)
+                throw new ArgumentNullException(nameof(newController));
+            
+            if (!_initialized)
+                throw new InvalidOperationException("Cannot swap controller before Initialize()");
+            
+            // Get current state from old controller
+            var currentState = _timeController!.GetCurrentState();
+            float currentScale = _timeController!.GetTimeScale();
+            
+            // Seed new controller with current state
+            newController.SeedState(currentState);
+            newController.SetTimeScale(currentScale);
+            
+            // Dispose old controller
+            _timeController?.Dispose();
+            
+            // Install new controller
+            _timeController = newController;
+            
+            // Update CurrentTime property
+            CurrentTime = currentState;
+            
+            FdpLog<ModuleHostKernel>.Info($"[TimeController] Swapped to {newController.GetType().Name}, " +
+                             $"TotalTime={currentState.TotalTime:F3}s, Frame={currentState.FrameNumber}");
+        }
+        
+        /// <summary>
+        /// Get current time controller (for inspection/debugging).
+        /// </summary>
+        public ITimeController GetTimeController()
+        {
+            if (!_initialized)
+                throw new InvalidOperationException("Time controller not initialized yet");
+            
+            return _timeController!;
+        }
+
+        /// <summary>
+        /// Manually advance a single frame (Stepped/Paused mode).
+        /// </summary>
+        public void StepFrame(float deltaTime)
+        {
+            if (!_initialized) throw new InvalidOperationException("Not initialized");
+            
+            GlobalTime time;
+            
+            // Support different stepping controllers
+            if (_timeController is ISteppableTimeController steppable)
+            {
+                time = steppable.Step(deltaTime);
+            }
+            else
+            {
+                 throw new InvalidOperationException($"Current controller {_timeController?.GetType().Name} does not support manual stepping.");
+            }
+            
+            CurrentTime = time;
+            UpdateInternal(time.DeltaTime, time);
+        }
+        
+
+
+        public void Dispose()
+        {
+            // Wait for pending tasks to minimize access violations during shutdown
+            // especially for Slow/Async modules that might be accessing leased views.
+            var pendingTasks = _modules.Where(m => m.CurrentTask != null && !m.CurrentTask.IsCompleted)
+                                       .Select(m => m.CurrentTask!)
+                                       .ToArray();
+            
+            if (pendingTasks.Length > 0)
+            {
+                try 
+                {
+                    Task.WaitAll(pendingTasks, 1000); // Wait up to 1s
+                }
+                catch (AggregateException) { /* Ignore faults */ }
+                catch (TimeoutException) { /* Proceed anyway */ }
+            }
+
+            // Dispose all providers
+            foreach (var entry in _modules)
+            {
+                if (entry.Provider is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+            }
+            
+            _timeController?.Dispose();
+            _modules.Clear();
+        }
+        
+        internal class ModuleEntry
+        {
+            public IModule Module { get; set; } = null!;
+            public ISnapshotProvider Provider { get; set; } = null!;
+            public int FramesSinceLastRun { get; set; }
+            public ISimulationView? LastView { get; set; }
+            public int ExecutionCount; // Field for Interlocked
+            
+            // Async State (NEW - for World C)
+            public Task? CurrentTask { get; set; }
+            public ISimulationView? LeasedView { get; set; }
+            public float AccumulatedDeltaTime { get; set; }
+            public uint LastRunTick { get; set; }  // For reactive scheduling prep
+            
+            // Caching
+            public BitMask256 ComponentMask; 
+            
+            // NEW for BATCH-04: Resilience
+            public ModuleCircuitBreaker? CircuitBreaker { get; set; }
+            public int MaxExpectedRuntimeMs { get; set; }
+            public int FailureThreshold { get; set; }
+            public int CircuitResetTimeoutMs { get; set; }
+        }
+    }
+}

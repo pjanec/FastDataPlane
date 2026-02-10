@@ -1,0 +1,88 @@
+using System;
+using System.Collections.Generic;
+using Fdp.Kernel;
+using Fdp.Examples.NetworkDemo.Components;
+using Fdp.Examples.NetworkDemo.Events;
+using ModuleHost.Core.Abstractions;
+using ModuleHost.Core.Network;
+using FDP.Kernel.Logging;
+
+namespace Fdp.Examples.NetworkDemo.Systems
+{
+    [UpdateInPhase(SystemPhase.PostSimulation)]
+    public class CombatFeedbackSystem : IModuleSystem, IDisposable
+    {
+        private readonly int _localNodeId;
+        private readonly IEventBus _bus;
+
+        public CombatFeedbackSystem(int localNodeId, IEventBus bus)
+        {
+            _localNodeId = localNodeId;
+            _bus = bus;
+        }
+
+        public void Execute(ISimulationView view, float dt)
+        {
+            var ecb = view.GetCommandBuffer();
+
+            // 1. Process ECS Events (from EntityRepository)
+            var ecsEvents = view.ConsumeEvents<FireInteractionEvent>();
+            foreach (ref readonly var evt in ecsEvents)
+            {
+                ProcessEvent(evt, view, ecb);
+            }
+
+            // 2. Process Bus Events (from FdpEventBus/Translators)
+            if (_bus is FdpEventBus fdpBus)
+            {
+                var busEvents = fdpBus.Consume<FireInteractionEvent>();
+                foreach (ref readonly var evt in busEvents)
+                {
+                    ProcessEvent(evt, view, ecb);
+                }
+            }
+        }
+
+        private void ProcessEvent(FireInteractionEvent evt, ISimulationView view, ModuleHost.Core.Abstractions.IEntityCommandBuffer cmd)
+        {
+            FdpLog<CombatFeedbackSystem>.Info(
+                $"[Combat] Fire event: Attacker={evt.AttackerRoot.Index} " +
+                $"Target={evt.TargetRoot.Index} " +
+                $"Weapon={evt.WeaponInstanceId} " +
+                $"Damage={evt.Damage}");
+
+            if (view.HasComponent<NetworkOwnership>(evt.TargetRoot))
+            {
+                ref readonly var own = ref view.GetComponentRO<NetworkOwnership>(evt.TargetRoot);
+
+                if (own.PrimaryOwnerId == _localNodeId)
+                {
+                    if (view.HasComponent<Health>(evt.TargetRoot))
+                    {
+                        ref readonly var originalHealth = ref view.GetComponentRO<Health>(evt.TargetRoot);
+                        var health = originalHealth;
+
+                        health.Value -= evt.Damage;
+                        if (health.Value < 0) health.Value = 0;
+
+                        cmd.SetComponent(evt.TargetRoot, health);
+
+                        FdpLog<CombatFeedbackSystem>.Info(
+                            $"[Damage] Applied {evt.Damage} damage. " +
+                            $"Health: {health.Value}/{health.MaxValue}");
+                        
+                        if (health.Value <= 0)
+                        {
+                            FdpLog<CombatFeedbackSystem>.Warn("[Destroyed] Tank destroyed!");
+                        }
+                    }
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            // No resources to dispose currently
+        }
+    }
+}

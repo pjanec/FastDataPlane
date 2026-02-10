@@ -1,0 +1,90 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Fdp.Kernel;
+using ModuleHost.Core.Abstractions;
+
+namespace FDP.Toolkit.Lifecycle.Systems
+{
+    /// <summary>
+    /// Removes transient components from entities as soon as they become Active.
+    /// Ensures initialization data doesn't linger.
+    /// </summary>
+    [UpdateInPhase(SystemPhase.Simulation)]
+    public class LifecycleCleanupSystem : IModuleSystem
+    {
+        private List<int> _transientTypes;
+        private readonly MethodInfo _removeUnmanagedMethod;
+        private readonly MethodInfo _removeManagedMethod;
+
+        public LifecycleCleanupSystem()
+        {
+            _removeUnmanagedMethod = GetType().GetMethod(nameof(RemoveTransientUnmanaged), BindingFlags.NonPublic | BindingFlags.Instance);
+            _removeManagedMethod = GetType().GetMethod(nameof(RemoveTransientManaged), BindingFlags.NonPublic | BindingFlags.Instance);
+        }
+
+        private void InitializeTransientTypes()
+        {
+            if (_transientTypes != null) return;
+            _transientTypes = new List<int>();
+            
+            // Iterate all registered components
+            for (int id = 0; id < ComponentTypeRegistry.RegisteredCount; id++)
+            {
+                // Transient = !Snapshot & !Record & !Save
+                if (!ComponentTypeRegistry.IsSnapshotable(id) &&
+                    !ComponentTypeRegistry.IsRecordable(id) &&
+                    !ComponentTypeRegistry.IsSaveable(id))
+                {
+                    _transientTypes.Add(id);
+                }
+            }
+        }
+
+        public void Execute(ISimulationView view, float deltaTime)
+        {
+            InitializeTransientTypes();
+
+            var cmd = view.GetCommandBuffer();
+            
+            foreach (var typeId in _transientTypes)
+            {
+                var type = ComponentTypeRegistry.GetType(typeId);
+                if (type == null) continue;
+
+                if (type.IsValueType)
+                {
+                    // Unmanaged path
+                    // Note: This relies on reflection which has some overhead, 
+                    // but we only do it once per type per frame, not per entity.
+                    var generic = _removeUnmanagedMethod.MakeGenericMethod(type);
+                    generic.Invoke(this, new object[] { view, cmd });
+                }
+                else
+                {
+                    // Managed path
+                    var generic = _removeManagedMethod.MakeGenericMethod(type);
+                    generic.Invoke(this, new object[] { view, cmd });
+                }
+            }
+        }
+
+        private void RemoveTransientUnmanaged<T>(ISimulationView view, IEntityCommandBuffer cmd) where T : unmanaged
+        {
+             view.Query()
+                 .With<T>()
+                 .WithLifecycle(EntityLifecycle.Active)
+                 .Build()
+                 .ForEach(entity => cmd.RemoveComponent<T>(entity));
+        }
+
+        private void RemoveTransientManaged<T>(ISimulationView view, IEntityCommandBuffer cmd) where T : class
+        {
+             view.Query()
+                 .WithManaged<T>()
+                 .WithLifecycle(EntityLifecycle.Active)
+                 .Build()
+                 .ForEach(entity => cmd.RemoveManagedComponent<T>(entity));
+        }
+    }
+}

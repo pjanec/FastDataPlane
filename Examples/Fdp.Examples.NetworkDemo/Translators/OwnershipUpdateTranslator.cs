@@ -1,0 +1,126 @@
+using System;
+using System.Runtime.InteropServices;
+using Fdp.Kernel;
+using Fdp.Interfaces;
+using ModuleHost.Core.Abstractions;
+using FDP.Toolkit.Replication.Components;
+using ToolkitMsgs = FDP.Toolkit.Replication.Messages;
+using TopicMsgs = ModuleHost.Network.Cyclone.Topics;
+using ModuleHost.Core.Network; 
+using FDP.Kernel.Logging;
+using ModuleHost.Network.Cyclone.Services;
+using ModuleHost.Network.Cyclone;
+using ModuleHost.Network.Cyclone.Abstractions;
+using CycloneDDS.Runtime;
+
+namespace Fdp.Examples.NetworkDemo.Translators
+{
+    public class OwnershipUpdateTranslator : Fdp.Interfaces.IDescriptorTranslator, INetworkReplayTarget, IDisposable
+    {
+        private readonly NodeIdMapper _nodeMapper;
+        private readonly DdsReader<TopicMsgs.OwnershipUpdate> _reader;
+        private readonly DdsWriter<TopicMsgs.OwnershipUpdate> _writer;
+
+        public string TopicName => "OwnershipUpdate";
+        public long DescriptorOrdinal => -1; 
+        
+        public OwnershipUpdateTranslator(NodeIdMapper nodeMapper, DdsParticipant participant)
+        {
+            _nodeMapper = nodeMapper;
+             _reader = new DdsReader<TopicMsgs.OwnershipUpdate>(participant, TopicName);
+             _writer = new DdsWriter<TopicMsgs.OwnershipUpdate>(participant, TopicName);
+        }
+        
+        public void ApplyToEntity(Entity entity, object data, EntityRepository repo) { }
+
+        public void ScanAndPublish(ISimulationView view)
+        {
+            var toolkitEvents = view.ConsumeEvents<ToolkitMsgs.OwnershipUpdate>();
+            
+            foreach (var evt in toolkitEvents)
+            {
+                var (typeId, instanceId) = OwnershipExtensions.UnpackKey(evt.PackedKey);
+                
+                int newOwnerGlobalId = -1;
+                try 
+                {
+                    var extId = _nodeMapper.GetExternalId(evt.NewOwnerNodeId);
+                    newOwnerGlobalId = extId.AppInstanceId;
+                }
+                catch (Exception ex)
+                {
+                    FdpLog<OwnershipUpdateTranslator>.Error($"Failed to map Internal ID {evt.NewOwnerNodeId} to External ID: {ex.Message}");
+                    continue; 
+                }
+
+                var topicMsg = new TopicMsgs.OwnershipUpdate
+                {
+                    EntityId = evt.NetworkId.Value,
+                    DescrTypeId = typeId,
+                    InstanceId = instanceId,
+                    NewOwner = newOwnerGlobalId
+                };
+                
+                _writer.Write(topicMsg);
+            }
+        }
+
+         public void PollIngress(IEntityCommandBuffer cmd, ISimulationView view)
+        {
+            if (view is not EntityRepository repo) return; 
+
+            using var loan = _reader.Take();
+            foreach (var sample in loan)
+            {
+                if (sample.Info.InstanceState == CycloneDDS.Runtime.DdsInstanceState.Alive) // Fully qualified
+                {
+                    var topicMsg = sample.Data;
+                    
+                    int internalOwnerId = _nodeMapper.GetOrRegisterInternalId(new TopicMsgs.NetworkAppId { AppDomainId = 0, AppInstanceId = topicMsg.NewOwner });
+
+                    long packedKey = OwnershipExtensions.PackKey(topicMsg.DescrTypeId, topicMsg.InstanceId);
+                    
+                    var toolkitMsg = new ToolkitMsgs.OwnershipUpdate
+                    {
+                        NetworkId = new NetworkIdentity { Value = topicMsg.EntityId },
+                        PackedKey = packedKey,
+                        NewOwnerNodeId = internalOwnerId
+                    };
+                    
+                    repo.Bus.Publish(toolkitMsg);
+                }
+            }
+        }
+
+        public void InjectReplayData(ReadOnlySpan<byte> rawData, IEntityCommandBuffer cmd, ISimulationView view)
+        {
+            if (view is not EntityRepository repo) return;
+            
+            var replayMsgs = MemoryMarshal.Cast<byte, TopicMsgs.OwnershipUpdate>(rawData);
+            foreach (var topicMsg in replayMsgs)
+            {
+                // Logic duplicated from PollIngress loop
+                int internalOwnerId = _nodeMapper.GetOrRegisterInternalId(new TopicMsgs.NetworkAppId { AppDomainId = 0, AppInstanceId = topicMsg.NewOwner });
+
+                long packedKey = OwnershipExtensions.PackKey(topicMsg.DescrTypeId, topicMsg.InstanceId);
+                
+                var toolkitMsg = new ToolkitMsgs.OwnershipUpdate
+                {
+                    NetworkId = new NetworkIdentity { Value = topicMsg.EntityId },
+                    PackedKey = packedKey,
+                    NewOwnerNodeId = internalOwnerId
+                };
+                
+                repo.Bus.Publish(toolkitMsg);
+            }
+        }
+        
+        public void Dispose(long networkEntityId) { }
+        
+        public void Dispose()
+        {
+            _reader?.Dispose();
+            _writer?.Dispose();
+        }
+    }
+}

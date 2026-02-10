@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FDP.Interfaces\FDP.Interfaces.csproj" />
+    <ProjectReference Include="..\FDP\Fdp.Kernel\Fdp.Kernel.csproj" />
+  </ItemGroup>
+
+</Project>
