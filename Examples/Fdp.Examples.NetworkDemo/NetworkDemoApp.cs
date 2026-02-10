@@ -21,6 +21,7 @@ using ModuleHost.Core.Abstractions;
 using ModuleHost.Core.Network;
 using ModuleHost.Core.Network.Interfaces;
 using FDP.Toolkit.Lifecycle;
+using FDP.Toolkit.Lifecycle.Systems;
 using FDP.Toolkit.Lifecycle.Events;
 using Fdp.Toolkit.Tkb;
 using FDP.Toolkit.Replication;
@@ -234,34 +235,53 @@ namespace Fdp.Examples.NetworkDemo
                 } catch {
                     inputSource = new NullInputSource();
                 }
-                Kernel.RegisterGlobalSystem(new TimeInputSystem(inputSource, eventBus)); 
+
+                // --- GROUP 1: GLOBAL SYSTEMS ---
+                // Hardware/User Input
+                Kernel.RegisterGlobalSystem(new TimeInputSystem(inputSource, eventBus));
+                Kernel.RegisterGlobalSystem(new OwnershipInputSystem(localInternalId, eventBus));
+                Kernel.RegisterGlobalSystem(new Fdp.Examples.NetworkDemo.Systems.CombatInputSystem(instanceId, eventBus));
+                Kernel.RegisterGlobalSystem(new ChatSystem(instanceId)); 
+
+                // Bridges
+                Kernel.RegisterGlobalSystem(new Fdp.Examples.NetworkDemo.Systems.PacketBridgeSystem(eventBus, instanceId == 100, localInternalId));
+                Kernel.RegisterGlobalSystem(new TimeSyncSystem(eventBus, instanceId == 100));
+
+                // Lifecycle (Must run before simulation to setup entities)
+                Kernel.RegisterGlobalSystem(new LifecycleSystem(elm));
+                Kernel.RegisterGlobalSystem(new BlueprintApplicationSystem(tkb));
+                
+                // Post Simulation
                 Kernel.RegisterGlobalSystem(new TransformSyncSystem());
                 
-                // Advanced Modules (Part B)
-                Kernel.RegisterGlobalSystem(new RadarModule(eventBus));
-                Kernel.RegisterGlobalSystem(new DamageControlModule());
-                Kernel.RegisterGlobalSystem(new OwnershipInputSystem(localInternalId, eventBus));
-                Kernel.RegisterGlobalSystem(new TimeSyncSystem(eventBus, instanceId == 100));
-                Kernel.RegisterGlobalSystem(new Fdp.Examples.NetworkDemo.Systems.PacketBridgeSystem(eventBus, instanceId == 100, localInternalId));
-                Kernel.RegisterGlobalSystem(new ChatSystem(instanceId)); // Added Chat System
-
-                Kernel.RegisterGlobalSystem(new Fdp.Examples.NetworkDemo.Systems.CombatInputSystem(instanceId, eventBus));
-                
-                // Moved to DemoTopology
-                // Kernel.RegisterGlobalSystem(new Fdp.Examples.NetworkDemo.Systems.CombatFeedbackSystem(instanceId, eventBus));
-
                 // Setup Recorder
                 recorder = new AsyncRecorder(recordingPath);
                 var recorderSys = new RecorderTickSystem(recorder, World);
                 recorderSys.SetMinRecordableId(FdpConfig.SYSTEM_ID_RANGE);
                 Kernel.RegisterGlobalSystem(recorderSys);
                 
-                // Live Demo Topology Systems
-                foreach(var sys in DemoTopology.GetSystems(tkb, elm, localInternalId, eventBus))
-                {
-                    if (sys is IModuleSystem ms) Kernel.RegisterGlobalSystem(ms);
-                    else if (sys is ComponentSystem cs) { cs.Create(World); Kernel.RegisterGlobalSystem(new ComponentSystemWrapper(cs)); }
-                }
+                // --- GROUP 2: MODULE SYSTEMS ---
+                
+                // 1. Game Logic Module
+                var gameLogic = new GameLogicModule();
+                
+                // Core Physics
+                gameLogic.AddSystem(new PhysicsSystem());
+                gameLogic.AddSystem(new RefactoredPlayerInputSystem()); // Processes velocity changes
+                
+                // Combat
+                gameLogic.AddSystem(new CombatFeedbackSystem(localInternalId, eventBus));
+                gameLogic.AddSystem(new DamageControlModule()); 
+
+                // Sensing
+                gameLogic.AddSystem(new RadarModule(eventBus)); 
+
+                Kernel.RegisterModule(gameLogic);
+
+                // 2. Replication Logic Module
+                var replicationLogic = new ReplicationLogicModule(World);
+                // (Systems are added in constructor of ReplicationLogicModule)
+                Kernel.RegisterModule(replicationLogic);
 
                 // Time Controller
                 var timeController = new MasterTimeController(eventBus, null);
