@@ -17,8 +17,8 @@
     <ProjectReference Include="..\FDP.Interfaces\FDP.Interfaces.csproj" />
     <ProjectReference Include="..\FDP.Toolkit.Tkb\FDP.Toolkit.Tkb.csproj" />
     <ProjectReference Include="..\FDP.Toolkit.Lifecycle\FDP.Toolkit.Lifecycle.csproj" />
-    <ProjectReference Include="..\..\FastCycloneDdsCsharpBindings\src\CycloneDDS.Runtime\CycloneDDS.Runtime.csproj" />
-    <ProjectReference Include="..\..\FastCycloneDdsCsharpBindings\src\CycloneDDS.Schema\CycloneDDS.Schema.csproj" />
+    <ProjectReference Include="..\..\FastCycloneDds\src\CycloneDDS.Runtime\CycloneDDS.Runtime.csproj" />
+    <ProjectReference Include="..\..\FastCycloneDds\src\CycloneDDS.Schema\CycloneDDS.Schema.csproj" />
   </ItemGroup>
 
 </Project>

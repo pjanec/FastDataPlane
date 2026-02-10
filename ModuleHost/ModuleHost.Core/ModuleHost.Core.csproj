@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\FDP\Fdp.Kernel\Fdp.Kernel.csproj" />
-    <ProjectReference Include="..\FDP.Interfaces\FDP.Interfaces.csproj" />
+    <ProjectReference Include="..\..\Kernel\Fdp.Kernel\Fdp.Kernel.csproj" />
+    <ProjectReference Include="..\..\Common\FDP.Interfaces\FDP.Interfaces.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Fdp.Modules.Geographic\Fdp.Modules.Geographic.csproj" />
+    <ProjectReference Include="..\Fdp.Toolkit.Geographic\Fdp.Toolkit.Geographic.csproj" />
     <ProjectReference Include="..\ModuleHost\ModuleHost.Core\ModuleHost.Core.csproj" />
   </ItemGroup>
 

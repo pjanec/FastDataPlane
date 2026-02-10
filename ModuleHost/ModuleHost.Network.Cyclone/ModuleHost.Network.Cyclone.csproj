@@ -10,11 +10,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ModuleHost\ModuleHost.Core\ModuleHost.Core.csproj" />
-    <ProjectReference Include="..\FastCycloneDdsCsharpBindings\src\CycloneDDS.Runtime\CycloneDDS.Runtime.csproj" />
-    <ProjectReference Include="..\FastCycloneDdsCsharpBindings\src\CycloneDDS.Schema\CycloneDDS.Schema.csproj" />
-    <ProjectReference Include="..\ModuleHost\FDP.Toolkit.Lifecycle\FDP.Toolkit.Lifecycle.csproj" />
-    <ProjectReference Include="..\ModuleHost\FDP.Toolkit.Replication\FDP.Toolkit.Replication.csproj" />
+    <ProjectReference Include="..\ModuleHost.Core\ModuleHost.Core.csproj" />
+    <ProjectReference Include="..\..\ExtDeps\FastCycloneDds\src\CycloneDDS.Runtime\CycloneDDS.Runtime.csproj" />
+    <ProjectReference Include="..\..\ExtDeps\FastCycloneDds\src\CycloneDDS.Schema\CycloneDDS.Schema.csproj" />
+    <ProjectReference Include="..\..\Toolkits\FDP.Toolkit.Lifecycle\FDP.Toolkit.Lifecycle.csproj" />
+    <ProjectReference Include="..\..\Toolkits\FDP.Toolkit.Replication\FDP.Toolkit.Replication.csproj" />
   </ItemGroup>
-  <Import Project="..\FastCycloneDdsCsharpBindings\tools\CycloneDDS.CodeGen\CycloneDDS.targets" />
+  <Import Project="..\..\ExtDeps\FastCycloneDds\tools\CycloneDDS.CodeGen\CycloneDDS.targets" />
 </Project>

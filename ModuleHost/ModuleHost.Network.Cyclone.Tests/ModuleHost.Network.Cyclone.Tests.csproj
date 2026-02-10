@@ -18,17 +18,17 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ModuleHost.Network.Cyclone\ModuleHost.Network.Cyclone.csproj" />
-    <ProjectReference Include="..\ModuleHost\FDP.Toolkit.Lifecycle\FDP.Toolkit.Lifecycle.csproj" />
-    <ProjectReference Include="..\ModuleHost\FDP.Toolkit.Replication\FDP.Toolkit.Replication.csproj" />
+    <ProjectReference Include="..\..\Toolkits\FDP.Toolkit.Lifecycle\FDP.Toolkit.Lifecycle.csproj" />
+    <ProjectReference Include="..\..\Toolkits\FDP.Toolkit.Replication\FDP.Toolkit.Replication.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\FastCycloneDdsCsharpBindings\cyclone-compiled\bin\*.dll">
+    <None Include="..\..\ExtDeps\FastCycloneDds\cyclone-compiled\bin\*.dll">
       <Link>%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
-  <Import Project="..\FastCycloneDdsCsharpBindings\tools\CycloneDDS.CodeGen\CycloneDDS.targets" />
+  <Import Project="..\..\ExtDeps\FastCycloneDds\tools\CycloneDDS.CodeGen\CycloneDDS.targets" />
 
 </Project>
