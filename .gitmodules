@@ -1,6 +1,6 @@
 [submodule "ExtDeps/FastCycloneDds"]
 	path = ExtDeps/FastCycloneDds
-	url = https://github.com/pjanec/FastCycloneDdsCsharpBindings.git
+	url = https://github.com/pjanec/FastCycloneDds.git
 	branch = main
 [submodule "ExtDeps/FastBTree"]
 	path = ExtDeps/FastBTree
