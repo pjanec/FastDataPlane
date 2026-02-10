@@ -33,7 +33,7 @@ namespace Fdp.Examples.Showcase.Systems
         {
             ref var time = ref World.GetSingletonUnmanaged<GlobalTime>();
             var entities = new System.Collections.Generic.List<Entity>();
-            _query.ForEach(e => entities.Add(e));
+            foreach (var e in _query) entities.Add(e);
 
             for (int i = 0; i < entities.Count; i++)
             {

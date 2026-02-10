@@ -10,7 +10,7 @@ namespace Fdp.Examples.CarKinem.Input
         private bool _isDragging;
         private bool _possibleClick;
         private KeyInputManager _keyManager;
-        private DemoSimulation _boundSimulation;
+        private DemoSimulation _boundSimulation = default!;
 
         public InputManager()
         {
@@ -121,7 +121,7 @@ namespace Fdp.Examples.CarKinem.Input
                         float minDistance = float.MaxValue;
                         
                         var query = simulation.View.Query().With<global::CarKinem.Core.VehicleState>().Build();
-                        query.ForEach((entity) => {
+                        foreach (var entity in query) {
                              var state = simulation.View.GetComponentRO<global::CarKinem.Core.VehicleState>(entity);
                              float dist = Vector2.Distance(state.Position, mouseWorld);
                              if (dist < clickTolerance && dist < minDistance)
@@ -129,7 +129,7 @@ namespace Fdp.Examples.CarKinem.Input
                                  minDistance = dist;
                                  clickedEntity = entity.Index;
                              }
-                        });
+                        }
 
                         // Update selection
                         selection.SelectedEntityId = clickedEntity;

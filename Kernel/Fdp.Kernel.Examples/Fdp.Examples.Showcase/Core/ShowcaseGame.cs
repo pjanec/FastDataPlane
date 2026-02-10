@@ -332,7 +332,7 @@ namespace Fdp.Examples.Showcase.Core
             
             var query = Repo.Query().Build();
             var entities = new List<Entity>();
-            query.ForEach(e => entities.Add(e));
+            foreach (var e in query) entities.Add(e);
             
             if (entities.Count > 0)
             {

@@ -17,10 +17,10 @@ namespace Fdp.Examples.CarKinem.Rendering
 
             var query = view.Query().With<global::CarKinem.Core.VehicleState>().With<global::CarKinem.Core.VehicleParams>().Build();
             
-            query.ForEach((entity) =>
+            foreach (var entity in query)
             {
                 if (!view.HasComponent<global::CarKinem.Core.VehicleState>(entity) || !view.HasComponent<global::CarKinem.Core.VehicleParams>(entity))
-                    return;
+                    continue;
 
                 var state = view.GetComponentRO<global::CarKinem.Core.VehicleState>(entity);
                 var parameters = view.GetComponentRO<global::CarKinem.Core.VehicleParams>(entity);
@@ -190,7 +190,7 @@ namespace Fdp.Examples.CarKinem.Rendering
                         }
                     }
                 }
-            });
+            }
         }
     }
 }

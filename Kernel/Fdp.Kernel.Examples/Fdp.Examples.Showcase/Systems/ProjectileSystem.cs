@@ -38,7 +38,7 @@ namespace Fdp.Examples.Showcase.Systems
             
             // Collect all projectiles
             var projectiles = new System.Collections.Generic.List<Entity>();
-            _projectileQuery.ForEach(e => projectiles.Add(e));
+            foreach (var e in _projectileQuery) projectiles.Add(e);
             
             // Update all projectiles
             foreach (var proj in projectiles)

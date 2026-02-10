@@ -48,7 +48,7 @@ namespace Fdp.Examples.Showcase.Core
                 // Count entities
                 int entityCount = 0;
                 var query = _game.Repo.Query().Build();
-                query.ForEach(_ => entityCount++);
+                foreach (var _ in query) entityCount++;
                 
                 ImGui.Text($"Entities: {entityCount}");
                 ImGui.Separator();

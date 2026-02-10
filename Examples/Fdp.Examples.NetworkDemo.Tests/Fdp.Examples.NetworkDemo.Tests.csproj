@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NoWarn>$(NoWarn);CS8618;CS8602;CS8601;CS8603;CS8604;CS8625;CS8600;CS8605;CS0618;CS0649;CS9191;SYSLIB0050;CS8620</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

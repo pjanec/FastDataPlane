@@ -30,6 +30,8 @@ namespace Fdp.Examples.CarKinem.UI
 
         public EntityInspector()
         {
+            _repo = default!;
+            _selectionManager = default!;
         }
 
         public void SetContext(EntityRepository repo, SelectionManager selectionManager)
@@ -237,7 +239,7 @@ namespace Fdp.Examples.CarKinem.UI
         {
             // Try to find UnitStats or Position to show something useful
             // We use the string matching for types to be safe
-            var summary = "";
+            // var summary = "";
             
             // This is "Generic" but we prioritize known helpful types for summary
             // But checking ALL components via GetAllTypes() here would be too slow for the list
@@ -325,7 +327,7 @@ namespace Fdp.Examples.CarKinem.UI
             return props;
         }
         
-        private string FormatValue(object value)
+        private string FormatValue(object? value)
         {
             if (value == null) return "null";
             if (value is float f) return f.ToString("F3");
@@ -345,10 +347,10 @@ namespace Fdp.Examples.CarKinem.UI
             }
 
             if (method == null) return false;
-            return (bool)method.Invoke(repository, new object[] { entity });
+            return (bool)method.Invoke(repository, new object[] { entity })!;
         }
 
-        private object GetComponent(EntityRepository repository, Entity entity, Type type)
+        private object? GetComponent(EntityRepository repository, Entity entity, Type type)
         {
             if (!_getComponentMethods.TryGetValue(type, out var method))
             {

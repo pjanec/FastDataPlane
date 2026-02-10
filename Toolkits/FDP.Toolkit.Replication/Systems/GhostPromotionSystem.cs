@@ -83,7 +83,7 @@ namespace FDP.Toolkit.Replication.Systems
             {
                 if (_inQueue.Contains(entity)) continue;
 
-                var spawnReq = World.GetComponent<NetworkSpawnRequest>(entity);
+                var spawnReq = World.GetComponent<NetworkSpawnRequest>(entity)!;
                 var store = World.GetComponent<BinaryGhostStore>(entity);
                 
                 if (store == null) continue;
@@ -93,12 +93,12 @@ namespace FDP.Toolkit.Replication.Systems
                     store.IdentifiedAtFrame = currentFrame;
                 }
 
-                if (!_tkbDatabase.TryGetByType(spawnReq.TkbType, out var template))
+                if (!_tkbDatabase!.TryGetByType(spawnReq.TkbType, out var template))
                 {
                     continue; 
                 }
 
-                if (template.AreAllRequirementsMet(store.StashedData.Keys, currentFrame, store.IdentifiedAtFrame))
+                if (template!.AreAllRequirementsMet(store.StashedData.Keys, currentFrame, store.IdentifiedAtFrame))
                 {
                     _promotionQueue.Enqueue(entity);
                     _inQueue.Add(entity);
@@ -108,9 +108,9 @@ namespace FDP.Toolkit.Replication.Systems
 
         private void PromoteGhost(Entity entity)
         {
-            var spawnReq = World.GetComponent<NetworkSpawnRequest>(entity);
-            var store = World.GetComponent<BinaryGhostStore>(entity);
-            var template = _tkbDatabase.GetByType(spawnReq.TkbType);
+            var spawnReq = World.GetComponent<NetworkSpawnRequest>(entity)!;
+            var store = World.GetComponent<BinaryGhostStore>(entity)!;
+            var template = _tkbDatabase.GetByType(spawnReq.TkbType)!;
 
             template.ApplyTo(World, entity, preserveExisting: false);
 
@@ -162,7 +162,7 @@ namespace FDP.Toolkit.Replication.Systems
                     byte[] data = kvp.Value;
                     
                     int ordinal = PackedKey.GetOrdinal(packedKey);
-                    if (_serializationRegistry.TryGet(ordinal, out var provider))
+                    if (_serializationRegistry!.TryGet(ordinal, out var provider))
                     {
                         // Handle Instance Routing
                         int instanceId = PackedKey.GetInstanceId(packedKey);

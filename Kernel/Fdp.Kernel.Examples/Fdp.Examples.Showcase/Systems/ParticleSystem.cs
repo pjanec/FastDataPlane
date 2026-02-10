@@ -44,7 +44,7 @@ namespace Fdp.Examples.Showcase.Systems
             }
             
             // Update particles
-            _query.ForEach(entity =>
+            foreach (var entity in _query)
             {
                 ref var particle = ref World.GetComponentRW<Particle>(entity);
                 
@@ -54,7 +54,7 @@ namespace Fdp.Examples.Showcase.Systems
                 {
                     toDestroy.Add(entity);
                 }
-            });
+            }
             
             // Queue expired particles for cleanup at end of frame
             foreach (var entity in toDestroy)

@@ -36,7 +36,7 @@ namespace Fdp.Examples.Showcase.Systems
             
             // Process corpses - count down their timers
             var toRemove = new System.Collections.Generic.List<Entity>();
-            _corpseQuery.ForEach(entity =>
+            foreach (var entity in _corpseQuery)
             {
                 ref var corpse = ref World.GetComponentRW<Corpse>(entity);
                 corpse.TimeRemaining -= dt;
@@ -46,7 +46,7 @@ namespace Fdp.Examples.Showcase.Systems
                     // Timer expired - queue for destruction
                     toRemove.Add(entity);
                 }
-            });
+            }
             
             // Queue expired corpses for destruction
             foreach (var entity in toRemove)

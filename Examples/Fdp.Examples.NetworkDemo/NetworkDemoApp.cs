@@ -236,7 +236,7 @@ namespace Fdp.Examples.NetworkDemo
             else
             {
                 // Replay Mode: Just smoothing, no recording
-                Kernel.RegisterModule(new RecordingModule(null, World));
+                Kernel.RegisterModule(new RecordingModule(null!, World));
             }
 
             // D. Bridge (Control <-> Simulation)

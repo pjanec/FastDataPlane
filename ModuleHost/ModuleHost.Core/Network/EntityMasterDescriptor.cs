@@ -24,7 +24,7 @@ namespace ModuleHost.Core.Network
         public long EntityId { get; set; }
         public int OwnerId { get; set; }
         public DISEntityType Type { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = default!;
         public MasterFlags Flags { get; set; } = MasterFlags.None;
     }
 }

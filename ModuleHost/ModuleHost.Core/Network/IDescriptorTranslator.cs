@@ -23,7 +23,7 @@ namespace ModuleHost.Core.Network
     // Default implementation for simple use cases
     public class DataSample : IDataSample
     {
-        public object Data { get; set; }
+        public object Data { get; set; } = default!;
         public DdsInstanceState InstanceState { get; set; }
         public long EntityId { get; set; } // Populated from Data if available
         public long InstanceId { get; set; } = 0;

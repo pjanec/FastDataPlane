@@ -23,11 +23,11 @@ namespace Fdp.Examples.Showcase.Systems
         {
             Map.Clear();
             // This can't be parallelized easily without concurrent collections (slow)
-            _query.ForEach(e => 
+            foreach (var e in _query)
             {
                 ref readonly var pos = ref World.GetComponentRO<Position>(e);
                 Map.Add(e, pos);
-            });
+            }
         }
     }
 }

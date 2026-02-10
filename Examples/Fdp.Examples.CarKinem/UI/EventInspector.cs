@@ -15,7 +15,7 @@ namespace Fdp.Examples.CarKinem.UI
     /// </summary>
     public class EventInspector
     {
-        private FdpEventBus _eventBus;
+        private FdpEventBus _eventBus = default!;
         
         // Event history tracking
         private List<EventRecord> _currentFrameEvents = new();

@@ -106,16 +106,16 @@ namespace Fdp.Examples.Showcase.Core
                 .Build();
 
             // First pass: Draw entities
-            renderQuery.ForEach(entity =>
+            foreach (var entity in renderQuery)
             {
                 ref readonly var pos = ref _game.Repo.GetComponentRO<Position>(entity);
                 ref readonly var sym = ref _game.Repo.GetComponentRO<RenderSymbol>(entity);
                 
                 DrawEntity(entity, pos, sym);
-            });
+            }
             
             // Second pass: Draw health bars and effects on top
-            renderQuery.ForEach(entity =>
+            foreach (var entity in renderQuery)
             {
                 ref readonly var pos = ref _game.Repo.GetComponentRO<Position>(entity);
                 ref readonly var sym = ref _game.Repo.GetComponentRO<RenderSymbol>(entity);
@@ -142,17 +142,17 @@ namespace Fdp.Examples.Showcase.Core
                         DrawHitFlash(pos, sym.Size, flash.Remaining);
                     }
                 }
-            });
+            }
             
             // Draw particles
             var particleQuery = _game.Repo.Query().With<Particle>().With<Position>().Build();
-            particleQuery.ForEach(entity =>
+            foreach (var entity in particleQuery)
             {
                 ref readonly var pos = ref _game.Repo.GetComponentRO<Position>(entity);
                 ref readonly var particle = ref _game.Repo.GetComponentRO<Particle>(entity);
                 
                 DrawParticle(pos, particle);
-            });
+            }
             
             Raylib.EndMode2D();
         }

@@ -15,9 +15,9 @@ namespace Fdp.Examples.CarKinem.Rendering
             
             var query = view.Query().With<global::CarKinem.Core.VehicleState>().Build();
             
-            query.ForEach((entity) =>
+            foreach (var entity in query)
             {
-                if (!view.HasComponent<global::CarKinem.Core.VehicleState>(entity)) return;
+                if (!view.HasComponent<global::CarKinem.Core.VehicleState>(entity)) continue;
                 
                 var state = view.GetComponentRO<global::CarKinem.Core.VehicleState>(entity);
                 
@@ -47,7 +47,7 @@ namespace Fdp.Examples.CarKinem.Rendering
                     ImGui.GetColorU32(new Vector4(1, 1, 1, 1)),
                     text
                 );
-            });
+            }
         }
     }
 }

@@ -31,7 +31,7 @@ namespace Fdp.Examples.Showcase.Systems
         {
             // _spatial.Map has been updated by SpatialSystem just before this system runs
 
-            _query.ForEach(entityA =>
+            foreach (var entityA in _query)
             {
                 ref readonly var posA = ref World.GetComponentRO<Position>(entityA);
                 
@@ -73,7 +73,7 @@ namespace Fdp.Examples.Showcase.Systems
                         }
                     }
                 }
-            });
+            }
         }
     }
 }

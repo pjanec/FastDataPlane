@@ -13,15 +13,15 @@ namespace FDP.Toolkit.Replication.Utilities
         public delegate long GetIdDelegate(T instance);
         public delegate void SetIdDelegate(T instance, long id);
 
-        public static readonly GetIdDelegate GetId;
-        public static readonly SetIdDelegate SetId;
+        public static readonly GetIdDelegate GetId = default!;
+        public static readonly SetIdDelegate SetId = default!;
         public static readonly bool IsValid;
 
         static ManagedAccessor()
         {
             var type = typeof(T);
             // Look for EntityId field or property
-            var member = type.GetField("EntityId") ?? (MemberInfo)type.GetProperty("EntityId");
+            MemberInfo? member = type.GetField("EntityId") ?? (MemberInfo?)type.GetProperty("EntityId");
 
             if (member != null)
             {

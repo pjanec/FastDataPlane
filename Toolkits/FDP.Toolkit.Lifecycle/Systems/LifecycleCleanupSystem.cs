@@ -13,14 +13,14 @@ namespace FDP.Toolkit.Lifecycle.Systems
     [UpdateInPhase(SystemPhase.Simulation)]
     public class LifecycleCleanupSystem : IModuleSystem
     {
-        private List<int> _transientTypes;
+        private List<int> _transientTypes = default!;
         private readonly MethodInfo _removeUnmanagedMethod;
         private readonly MethodInfo _removeManagedMethod;
 
         public LifecycleCleanupSystem()
         {
-            _removeUnmanagedMethod = GetType().GetMethod(nameof(RemoveTransientUnmanaged), BindingFlags.NonPublic | BindingFlags.Instance);
-            _removeManagedMethod = GetType().GetMethod(nameof(RemoveTransientManaged), BindingFlags.NonPublic | BindingFlags.Instance);
+            _removeUnmanagedMethod = GetType().GetMethod(nameof(RemoveTransientUnmanaged), BindingFlags.NonPublic | BindingFlags.Instance)!;
+            _removeManagedMethod = GetType().GetMethod(nameof(RemoveTransientManaged), BindingFlags.NonPublic | BindingFlags.Instance)!;
         }
 
         private void InitializeTransientTypes()
@@ -71,20 +71,18 @@ namespace FDP.Toolkit.Lifecycle.Systems
 
         private void RemoveTransientUnmanaged<T>(ISimulationView view, IEntityCommandBuffer cmd) where T : unmanaged
         {
-             view.Query()
+             foreach (var entity in view.Query()
                  .With<T>()
                  .WithLifecycle(EntityLifecycle.Active)
-                 .Build()
-                 .ForEach(entity => cmd.RemoveComponent<T>(entity));
+                 .Build()) cmd.RemoveComponent<T>(entity);
         }
 
         private void RemoveTransientManaged<T>(ISimulationView view, IEntityCommandBuffer cmd) where T : class
         {
-             view.Query()
+             foreach (var entity in view.Query()
                  .WithManaged<T>()
                  .WithLifecycle(EntityLifecycle.Active)
-                 .Build()
-                 .ForEach(entity => cmd.RemoveManagedComponent<T>(entity));
+                 .Build()) cmd.RemoveManagedComponent<T>(entity);
         }
     }
 }

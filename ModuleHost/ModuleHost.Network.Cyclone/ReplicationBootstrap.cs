@@ -33,7 +33,7 @@ namespace ModuleHost.Network.Cyclone
                     // UNMANAGED / STRUCT PATH
                     var unsafeLayoutType = typeof(UnsafeLayout<>).MakeGenericType(type);
                     var isValidField = unsafeLayoutType.GetField("IsValid", BindingFlags.Public | BindingFlags.Static);
-                    bool isValid = (bool)isValidField.GetValue(null);
+                    bool isValid = (bool)isValidField!.GetValue(null)!;
 
                     if (isValid)
                     {
@@ -46,7 +46,7 @@ namespace ModuleHost.Network.Cyclone
                             attr.TopicName,
                             attr.Ordinal,
                             entityMap
-                        );
+                        )!;
                         
                         translators.Add(translator);
                         
@@ -72,7 +72,7 @@ namespace ModuleHost.Network.Cyclone
                     System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(accessorType.TypeHandle);
                     
                     var isValidField = accessorType.GetField("IsValid", BindingFlags.Public | BindingFlags.Static);
-                    bool isValid = (bool)isValidField.GetValue(null);
+                    bool isValid = (bool)isValidField!.GetValue(null)!;
 
                     if (isValid)
                     {
@@ -85,13 +85,13 @@ namespace ModuleHost.Network.Cyclone
                             attr.TopicName,
                             attr.Ordinal,
                             entityMap
-                        );
+                        )!;
 
                         translators.Add(translator);
 
                         // Register Serialization Provider for Managed Type
                         var providerType = typeof(ManagedSerializationProvider<>).MakeGenericType(type);
-                        var provider = (ISerializationProvider)Activator.CreateInstance(providerType);
+                        var provider = (ISerializationProvider)Activator.CreateInstance(providerType)!;
                         providers.Add((attr.Ordinal, provider));
 
                         FdpLog<NetworkEntityMap>.Info(
@@ -126,12 +126,12 @@ namespace ModuleHost.Network.Cyclone
                     var accessorType = typeof(ManagedAccessor<>).MakeGenericType(type);
                     System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(accessorType.TypeHandle);
                     var isValidField = accessorType.GetField("IsValid", BindingFlags.Public | BindingFlags.Static);
-                    bool isValid = (bool)isValidField.GetValue(null);
+                    bool isValid = (bool)isValidField!.GetValue(null)!;
 
                     if (isValid)
                     {
                         var providerType = typeof(ManagedSerializationProvider<>).MakeGenericType(type);
-                        var provider = (ISerializationProvider)Activator.CreateInstance(providerType);
+                        var provider = (ISerializationProvider)Activator.CreateInstance(providerType)!;
                         providers.Add((attr.Ordinal, provider));
                     }
                 }
