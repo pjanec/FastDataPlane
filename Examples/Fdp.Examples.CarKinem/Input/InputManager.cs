@@ -11,6 +11,8 @@ namespace Fdp.Examples.CarKinem.Input
         private bool _possibleClick;
         private KeyInputManager _keyManager;
         private DemoSimulation _boundSimulation = default!;
+        
+        public bool EnableCameraControl { get; set; } = true;
 
         public InputManager()
         {
@@ -64,7 +66,7 @@ namespace Fdp.Examples.CarKinem.Input
             {
                 // Camera Zoom
                 float wheel = Raylib.GetMouseWheelMove();
-                if (wheel != 0)
+                if (wheel != 0 && EnableCameraControl)
                 {
                     Vector2 mouseScreenPos = Raylib.GetMousePosition();
                     Vector2 worldPosBeforeZoom = Raylib.GetScreenToWorld2D(mouseScreenPos, camera);
@@ -101,7 +103,7 @@ namespace Fdp.Examples.CarKinem.Input
                         _possibleClick = false; // It's a drag, not a click
                     }
 
-                    if (_isDragging && !Raylib.IsKeyDown(KeyboardKey.LeftControl))
+                    if (_isDragging && !Raylib.IsKeyDown(KeyboardKey.LeftControl) && EnableCameraControl)
                     {
                         // Pan Logic
                         var delta = Raylib.GetMouseDelta();

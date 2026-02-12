@@ -216,24 +216,47 @@ namespace Fdp.Examples.CarKinem.Simulation
             }
 
             // Live / Recording Mode
+            
+            // Apply scale
+            _kernel.GetTimeController().SetTimeScale(timeScale);
+
             // Update distributed coordinators
             _timeCoordinator?.Update();
             _slaveListener?.Update();
             
-            if (IsPaused && StepFrames > 0)
+            bool isDeterministic = _kernel.GetTimeController().GetMode() == TimeMode.Deterministic;
+
+            if (IsPaused)
             {
-                 // Handle Stepping
-                 // Only step if we are actually in Deterministic mode (pause completed)
-                 if (_kernel.GetTimeController().GetMode() == TimeMode.Deterministic)
+                 // We want to pause or step.
+                 if (StepFrames > 0)
                  {
-                     const float FIXED_STEP_DT = 1.0f / 60.0f;
-                     _kernel.StepFrame(FIXED_STEP_DT);
-                     StepFrames--;
+                     // Stepping requested
+                     if (isDeterministic)
+                     {
+                         const float FIXED_STEP_DT = 1.0f / 60.0f;
+                         _kernel.StepFrame(FIXED_STEP_DT);
+                         StepFrames--;
+                     }
+                     else
+                     {
+                         // Not yet paused (coasting to barrier) -> must update to reach barrier
+                         _kernel.Update();
+                     }
                  }
                  else
                  {
-                     // Still coasting to barrier -> Normal Update
-                     _kernel.Update();
+                     // Just Paused.
+                     if (isDeterministic)
+                     {
+                         // In Deterministic Standalone mode, SteppedMasterController auto-steps if we call Update().
+                         // So to FREEZE time, we must NOT call Update().
+                     }
+                     else
+                     {
+                         // Coasting to barrier -> must update
+                         _kernel.Update();
+                     }
                  }
             }
             else

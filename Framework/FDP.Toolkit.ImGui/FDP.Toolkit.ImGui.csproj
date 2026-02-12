@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>FDP.Toolkit.ImGui</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Core FDP dependency -->
+    <ProjectReference Include="..\..\Kernel\Fdp.Kernel\Fdp.Kernel.csproj" />
+    <ProjectReference Include="..\..\ModuleHost\ModuleHost.Core\ModuleHost.Core.csproj" /> 
+    <!-- Rendering abstraction -->
+    <PackageReference Include="ImGui.NET" Version="1.91.0.1" /> 
+  </ItemGroup>
+  
+  <ItemGroup>
+    <InternalsVisibleTo Include="FDP.Toolkit.ImGui.Tests" />
+  </ItemGroup>
+</Project>
