@@ -31,6 +31,7 @@ namespace FDP.Toolkit.Vis2D.Tools
         // Callbacks / Action Handlers
         // Generic Events (Decoupled)
         public event Action<Vector2, MouseButton, bool, bool, Entity>? OnWorldClick; // Pos, Button, Shift, Ctrl, HitEntity
+        public event Action<Entity, bool>? OnEntitySelectRequest; // Entity, AugmentSelection
         public event Action<List<Entity>>? OnRegionSelected;     // Result of Box Select
         public event Action<Entity, Vector2>? OnEntityMoved;     // Result of Drag Operation
 
@@ -38,8 +39,8 @@ namespace FDP.Toolkit.Vis2D.Tools
         private bool _isLeftMouseDown;
         private Vector2 _mouseDownPos;
         private Entity _potentialTarget = Entity.Null;
-        private bool _shiftHeld => Raylib.IsKeyDown(KeyboardKey.LeftShift) || Raylib.IsKeyDown(KeyboardKey.RightShift);
-        private bool _ctrlHeld => Raylib.IsKeyDown(KeyboardKey.LeftControl) || Raylib.IsKeyDown(KeyboardKey.RightControl);
+        private bool _shiftHeld => _canvas?.Input.IsKeyDown(KeyboardKey.LeftShift) == true || _canvas?.Input.IsKeyDown(KeyboardKey.RightShift) == true;
+        private bool _ctrlHeld => _canvas?.Input.IsKeyDown(KeyboardKey.LeftControl) == true || _canvas?.Input.IsKeyDown(KeyboardKey.RightControl) == true;
         private MapCanvas _canvas;
 
         public StandardInteractionTool(
@@ -71,7 +72,7 @@ namespace FDP.Toolkit.Vis2D.Tools
 
         public void Update(float dt)
         {
-            if (_isLeftMouseDown && !Raylib.IsMouseButtonDown(MouseButton.Left))
+            if (_isLeftMouseDown && _canvas?.Input.IsMouseButtonDown(MouseButton.Left) == false)
             {
                 ResetState();
             }
@@ -87,6 +88,22 @@ namespace FDP.Toolkit.Vis2D.Tools
         {
             // Detect hit
             var hit = FindEntityAt(worldPos);
+
+            // Notify Selection Request
+            bool augment = _ctrlHeld || _shiftHeld;
+            
+            // If we hit something, request select.
+            // If we hit nothing, request deselect all (unless augment?).
+            if (_view.IsAlive(hit))
+            {
+                OnEntitySelectRequest?.Invoke(hit, augment);
+            }
+            else
+            {
+               // If valid click on empty space with no modifiers, usually implies deselect.
+               if (!augment)
+                   OnEntitySelectRequest?.Invoke(Entity.Null, false);
+            }
             
             // Notify Generic Click
             OnWorldClick?.Invoke(worldPos, button, _shiftHeld, _ctrlHeld, hit);
@@ -109,9 +126,9 @@ namespace FDP.Toolkit.Vis2D.Tools
                         var tool = new EntityDragTool(
                             _potentialTarget, 
                             startPos, 
-                            (e, p) => OnEntityMoved?.Invoke(e, p),
                             () => _canvas.PopTool()
                         );
+                        tool.OnEntityMoved += (e, p) => OnEntityMoved?.Invoke(e, p);
                         _canvas.PushTool(tool);
 
                         ResetState();
@@ -142,7 +159,7 @@ namespace FDP.Toolkit.Vis2D.Tools
         public bool HandleHover(Vector2 worldPos)
         {
             // Track Mouse Down for Drag Initiation
-            if (Raylib.IsMouseButtonPressed(MouseButton.Left))
+            if (_canvas?.Input.IsMouseButtonPressed(MouseButton.Left) == true)
             {
                 _isLeftMouseDown = true;
                 _mouseDownPos = worldPos;

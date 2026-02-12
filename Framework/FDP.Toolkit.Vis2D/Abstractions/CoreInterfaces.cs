@@ -19,6 +19,11 @@ public struct RenderContext
     /// The mask of layers currently enabled by the user (32-bit bitmask).
     /// </summary>
     public uint VisibleLayersMask;
+
+    /// <summary>
+    /// Access to global resources.
+    /// </summary>
+    public IResourceProvider Resources;
 }
 
 /// <summary>

@@ -149,10 +149,11 @@ public class CarKinemApp : FdpApplication
         
         // 2. Visualization Setup
         _map = new MapCanvas();
+        _map.AddResource(_trajectoryPool);
         var roadLayer = new RoadMapLayer(_roadNetwork);
         _map.AddLayer(roadLayer);
         
-        _vehicleVisualizer = new VehicleVisualizer(_trajectoryPool);
+        _vehicleVisualizer = new VehicleVisualizer();
         _selectionManager = new SelectionManager(); 
         _inspectorAdapter = new CarKinemInspectorAdapter(_selectionManager, _repository);
         
@@ -177,44 +178,60 @@ public class CarKinemApp : FdpApplication
         // 3. UI & Input
         _legacyUI = new MainUI();
         
-        // 3. UI & Input
-        _legacyUI = new MainUI();
-        
         // --- Tool Setup ---
         _interactionTool = new StandardInteractionTool(_repository, _vehicleQuery, _vehicleVisualizer);
         
-        // 1. Generic Interaction (Clicks)
+        // 1. Selection Interaction
+        _interactionTool.OnEntitySelectRequest += (entity, augment) =>
+        {
+            if (_repository.IsAlive(entity))
+                _selectionManager.Select(entity, additive: augment);
+            else if (!augment)
+                _selectionManager.Clear();
+        };
+
+        // 2. Drag Interaction
+        _interactionTool.OnEntityMoved += (entity, pos) =>
+        {
+            // Update simulation state
+            if (_repository.HasComponent<VehicleState>(entity))
+            {
+                 ref var state = ref _repository.GetComponentRW<VehicleState>(entity);
+                 state.Position = pos;
+                 // Also reset velocity?
+                 state.Speed = 0.0f;
+            }
+        };
+
+        // 3. Generic Interaction (Context Menu / Actions)
         _interactionTool.OnWorldClick += (pos, btn, shift, ctrl, hit) =>
         {
-             if (btn == MouseButton.Left)
+             if (btn == MouseButton.Right)
              {
-                 if (_repository.IsAlive(hit))
-                      _selectionManager.Select(hit.Index, additive: shift || ctrl);
-                 else if (!shift && !ctrl) 
-                      _selectionManager.Clear();
-             }
-             else if (btn == MouseButton.Right)
-             {
-                 // Action / Context
+                 var entities = _selectionManager.SelectedEntities;
+
+                 if (entities.Count == 0) return;
+
                  if (shift)
                  {
-                     // Add Waypoint (Shift+Right) (DRY with PointSequenceTool)
-                     var selected = _inspectorAdapter.SelectedEntity;
-                     if (selected.HasValue)
+                     // Add Waypoint (Shift+Right) -> Sequence
+                     var mode = _legacyUI?.UIState?.InterpolationMode ?? global::CarKinem.Trajectory.TrajectoryInterpolation.CatmullRom;
+                     foreach(var e in entities)
                      {
-                          var mode = _legacyUI?.UIState?.InterpolationMode ?? global::CarKinem.Trajectory.TrajectoryInterpolation.CatmullRom;
-                          _scenarioManager.AddWaypoint(selected.Value.Index, pos, mode);
+                         if (_repository.IsAlive(e))
+                            _scenarioManager.AddWaypoint(e, pos, mode);
                      }
                  }
                  else
                  {
-                     // Context (Navigate)
-                     var selected = _inspectorAdapter.SelectedEntity;
-                     if (selected.HasValue)
+                     // Context (Navigate) -> Move Command (Clear previous)
+                     foreach(var e in entities)
                      {
+                        if (!_repository.IsAlive(e)) continue;
+
                         _repository.Bus.Publish(new CmdNavigateToPoint 
                         {
-                            Entity = selected.Value,
+                            Entity = e,
                             Destination = pos,
                             ArrivalRadius = 3.0f,
                             Speed = 10.0f
@@ -228,7 +245,7 @@ public class CarKinemApp : FdpApplication
         _interactionTool.OnRegionSelected += (entities) =>
         {
              // Assumes Replace logic for now
-             _selectionManager.SetSelection(entities.Select(e => e.Index));
+             _selectionManager.SetSelection(entities);
         };
         
         // 3. Drag
@@ -278,18 +295,13 @@ public class CarKinemApp : FdpApplication
         // Global Input Handling (Delete)
         if (Raylib.IsKeyPressed(KeyboardKey.Delete)) 
         {
-             var toDelete = _selectionManager.SelectedIds.ToList();
+             var toDelete = _selectionManager.SelectedEntities.ToList();
              if (toDelete.Count > 0)
              {
-                 var idx = _repository.GetEntityIndex();
-                 foreach(var id in toDelete)
+                 foreach(var e in toDelete)
                  {
-                     if (id <= idx.MaxIssuedIndex)
-                     {
-                         ref var header = ref idx.GetHeader(id);
-                         if (header.IsActive)
-                             _repository.DestroyEntity(new Entity(id, header.Generation));
-                     }
+                     if (_repository.IsAlive(e))
+                         _repository.DestroyEntity(e);
                  }
                  _selectionManager.Clear();
              }
@@ -458,21 +470,21 @@ public class CarKinemApp : FdpApplication
         
         // --- Tool Interactions (Draw Path) ---
         // Press P to draw path for selected entity
-        if (Raylib.IsKeyPressed(KeyboardKey.P) && _selectionManager.SelectedEntityId.HasValue)
+        if (Raylib.IsKeyPressed(KeyboardKey.P) && _selectionManager.SelectedEntity.HasValue)
         {
-            var entityId = _selectionManager.SelectedEntityId.Value;
+            var entity = _selectionManager.SelectedEntity.Value;
             var pathTool = new PointSequenceTool(points => 
             {
                 if (points.Length > 0)
                 {
                     // Call ScenarioManager SetDestination/AddWaypoint sequence
                     // Clear path by calling SetDestination with first point
-                    _scenarioManager.SetDestination(entityId, points[0], _legacyUI.UIState.InterpolationMode);
+                    _scenarioManager.SetDestination(entity, points[0], _legacyUI.UIState.InterpolationMode);
                     
                     // Add remaining points
                     for (int i = 1; i < points.Length; i++)
                     {
-                        _scenarioManager.AddWaypoint(entityId, points[i], _legacyUI.UIState.InterpolationMode);
+                        _scenarioManager.AddWaypoint(entity, points[i], _legacyUI.UIState.InterpolationMode);
                     }
                 }
                 

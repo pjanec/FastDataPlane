@@ -1,10 +1,12 @@
 using Fdp.Kernel;
 using FDP.Toolkit.ImGui.Abstractions;
+using FDP.Toolkit.Vis2D.Abstractions;
 using Fdp.Examples.CarKinem.Core;
+using System.Collections.Generic;
 
 namespace Fdp.Examples.CarKinem
 {
-    public class CarKinemInspectorAdapter : IInspectorContext
+    public class CarKinemInspectorAdapter : IInspectorContext, ISelectionState
     {
         private readonly SelectionManager _selectionManager;
         private readonly EntityRepository _repository; 
@@ -15,32 +17,27 @@ namespace Fdp.Examples.CarKinem
             _repository = repository;
         }
 
+        // ISelectionState Implementation
+        public bool IsSelected(Entity entity) 
+        {
+             return _selectionManager.IsSelected(entity);
+        }
+
+        public IReadOnlyCollection<Entity> SelectedEntities => _selectionManager.SelectedEntities;
+
+        public Entity? PrimarySelected 
+        {
+            get => SelectedEntity;
+            set => SelectedEntity = value;
+        }
+
         public Entity? SelectedEntity 
         { 
-            get 
-            {
-                if (_selectionManager.SelectedEntityId.HasValue)
-                {
-                    int index = _selectionManager.SelectedEntityId.Value;
-                    var idx = _repository.GetEntityIndex();
-                    
-                    if (index <= idx.MaxIssuedIndex)
-                    {
-                        ref var header = ref idx.GetHeader(index);
-                        if (header.IsActive)
-                        {
-                            return new Entity(index, header.Generation);
-                        }
-                    }
-                    
-                    return new Entity(index, 0); 
-                }
-                return null;
-            }
+            get => _selectionManager.SelectedEntity;
             set 
             {
                 if (value.HasValue)
-                    _selectionManager.Select(value.Value.Index, false);
+                    _selectionManager.Select(value.Value, false);
                 else
                     _selectionManager.Clear();
             }
@@ -48,19 +45,8 @@ namespace Fdp.Examples.CarKinem
         
         public Entity? HoveredEntity 
         { 
-            get 
-            {
-                if (_selectionManager.HoveredEntityId.HasValue)
-                     return new Entity(_selectionManager.HoveredEntityId.Value, 0); // Simplified
-                return null;
-            }
-            set 
-            {
-                if (value.HasValue)
-                    _selectionManager.HoveredEntityId = value.Value.Index;
-                else
-                    _selectionManager.HoveredEntityId = null;
-            }
+            get => _selectionManager.HoveredEntity;
+            set => _selectionManager.HoveredEntity = value;
         }
     }
 }

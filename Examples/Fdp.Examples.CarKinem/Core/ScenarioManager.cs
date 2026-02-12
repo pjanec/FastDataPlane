@@ -20,10 +20,10 @@ namespace Fdp.Examples.CarKinem.Core
         private readonly Random _rng = new Random();
 
         // Roaming Logic
-        private HashSet<int> _roamingEntities = new HashSet<int>();
+        private HashSet<Entity> _roamingEntities = new HashSet<Entity>();
         
         // Waypoint Logic
-        private Dictionary<int, List<Vector2>> _waypointQueues = new Dictionary<int, List<Vector2>>();
+        private Dictionary<Entity, List<Vector2>> _waypointQueues = new Dictionary<Entity, List<Vector2>>();
 
         public ScenarioManager(
             EntityRepository repository, 
@@ -69,10 +69,9 @@ namespace Fdp.Examples.CarKinem.Core
 
         private void UpdateRoamers()
         {
-            foreach (var id in new List<int>(_roamingEntities))
+            foreach (var entity in new List<Entity>(_roamingEntities))
             {
-                var entity = new Entity(id, 1);
-                if (!_repository.IsAlive(entity)) { _roamingEntities.Remove(id); continue; }
+                if (!_repository.IsAlive(entity)) { _roamingEntities.Remove(entity); continue; }
 
                 if (!_repository.HasComponent<NavState>(entity)) continue;
 
@@ -80,22 +79,21 @@ namespace Fdp.Examples.CarKinem.Core
                 if (nav.HasArrived == 1)
                 {
                     // Pick new random destination
-                    SetDestination(id, new Vector2(_rng.Next(0, 500), _rng.Next(0, 500)));
+                    SetDestination(entity, new Vector2(_rng.Next(0, 500), _rng.Next(0, 500)));
                 }
             }
         }
 
         private void UpdateWaypointQueues()
         {
-            foreach (var entityIndex in new List<int>(_waypointQueues.Keys))
+            foreach (var entity in new List<Entity>(_waypointQueues.Keys))
             {
-                var queue = _waypointQueues[entityIndex];
+                var queue = _waypointQueues[entity];
                 if (queue.Count == 0) continue;
 
-                var entity = new Entity(entityIndex, 1);
                 if (!_repository.IsAlive(entity))
                 {
-                    _waypointQueues.Remove(entityIndex);
+                    _waypointQueues.Remove(entity);
                     continue;
                 }
 
@@ -116,7 +114,7 @@ namespace Fdp.Examples.CarKinem.Core
             }
         }
 
-        public int SpawnVehicle(Vector2 position, Vector2 heading, VehicleClass vehicleClass = VehicleClass.PersonalCar)
+        public Entity SpawnVehicle(Vector2 position, Vector2 heading, VehicleClass vehicleClass = VehicleClass.PersonalCar)
         {
             var e = _repository.CreateEntity();
             
@@ -139,29 +137,28 @@ namespace Fdp.Examples.CarKinem.Core
                 Mode = NavigationMode.None
             });
             
-            return e.Index;
+            return e;
         }
 
-        public void AddWaypoint(int entityIndex, Vector2 destination, TrajectoryInterpolation interpolation = TrajectoryInterpolation.Linear)
+        public void AddWaypoint(Entity entity, Vector2 destination, TrajectoryInterpolation interpolation = TrajectoryInterpolation.Linear)
         {
              // 1. Get/Create Queue
-             if (!_waypointQueues.ContainsKey(entityIndex))
+             if (!_waypointQueues.ContainsKey(entity))
              {
-                 _waypointQueues[entityIndex] = new List<Vector2>();
+                 _waypointQueues[entity] = new List<Vector2>();
              }
              
              // 2. Add to Queue
-             _waypointQueues[entityIndex].Add(destination);
+             _waypointQueues[entity].Add(destination);
              
              // 3. Construct Trajectory from Current Position
-             var entity = new Entity(entityIndex, 1);
              if (!_repository.IsAlive(entity)) return;
 
              var state = _repository.GetComponentRO<VehicleState>(entity);
              
              var path = new List<Vector2>();
              path.Add(state.Position);
-             path.AddRange(_waypointQueues[entityIndex]);
+             path.AddRange(_waypointQueues[entity]);
              
              // 4. Create Speeds (Cruise=15, Stop=0 at end)
              var speeds = new float[path.Count];
@@ -185,13 +182,13 @@ namespace Fdp.Examples.CarKinem.Core
             });
         }
         
-        public void SetDestination(int entityIndex, Vector2 destination, TrajectoryInterpolation interpolation = TrajectoryInterpolation.Linear)
+        public void SetDestination(Entity entity, Vector2 destination, TrajectoryInterpolation interpolation = TrajectoryInterpolation.Linear)
         {
-             if (_waypointQueues.ContainsKey(entityIndex))
+             if (_waypointQueues.ContainsKey(entity))
              {
-                 _waypointQueues[entityIndex].Clear();
+                 _waypointQueues[entity].Clear();
              }
-             AddWaypoint(entityIndex, destination, interpolation);
+             AddWaypoint(entity, destination, interpolation);
         }
 
         // --- Scenarios ---
@@ -203,11 +200,11 @@ namespace Fdp.Examples.CarKinem.Core
                  Vector2 center = new Vector2(250 + i * 20, 250 + i * 20); 
                  Vector2 offset = new Vector2(40, 0);
                  
-                 int idA = SpawnVehicle(center - offset, new Vector2(1, 0), vClass);
-                 SetDestination(idA, center + offset);
+                 var entityA = SpawnVehicle(center - offset, new Vector2(1, 0), vClass);
+                 SetDestination(entityA, center + offset);
                  
-                 int idB = SpawnVehicle(center + offset, new Vector2(-1, 0), vClass);
-                 SetDestination(idB, center - offset);
+                 var entityB = SpawnVehicle(center + offset, new Vector2(-1, 0), vClass);
+                 SetDestination(entityB, center - offset);
             }
         }
 
@@ -223,9 +220,7 @@ namespace Fdp.Examples.CarKinem.Core
             var startNode = _roadNetwork.Nodes[startIdx];
             var endNode = _roadNetwork.Nodes[endIdx];
             
-            int id = SpawnVehicle(startNode.Position, new Vector2(1,0), VehicleClass.PersonalCar);
-            
-            Entity entity = new Entity(id, 1);
+            var entity = SpawnVehicle(startNode.Position, new Vector2(1,0), VehicleClass.PersonalCar);
             
             // Boost speed
             var vParams = _repository.GetComponentRO<VehicleParams>(entity); // Struct copy
@@ -252,9 +247,7 @@ namespace Fdp.Examples.CarKinem.Core
                 int endNodeIdx = _rng.Next(0, _roadNetwork.Nodes.Length);
                 var endNode = _roadNetwork.Nodes[endNodeIdx];
                 
-                int id = SpawnVehicle(startNode.Position, new Vector2(1,0), vClass);
-                
-                var entity = new Entity(id, 1);
+                var entity = SpawnVehicle(startNode.Position, new Vector2(1,0), vClass);
                 _repository.SetComponent(entity, VehicleColor.Blue);
                 
                 _repository.Bus.Publish(new CmdNavigateViaRoad {
@@ -274,11 +267,11 @@ namespace Fdp.Examples.CarKinem.Core
                  if (heading == Vector2.Zero) heading = new Vector2(1, 0);
                  else heading = Vector2.Normalize(heading);
 
-                 int id = SpawnVehicle(pos, heading, vClass);
-                 _repository.SetComponent(new Entity(id, 1), VehicleColor.Orange);
+                 var entity = SpawnVehicle(pos, heading, vClass);
+                 _repository.SetComponent(entity, VehicleColor.Orange);
                  
-                 _roamingEntities.Add(id);
-                 SetDestination(id, new Vector2(_rng.Next(0,500), _rng.Next(0,500)), interpolation);
+                 _roamingEntities.Add(entity);
+                 SetDestination(entity, new Vector2(_rng.Next(0,500), _rng.Next(0,500)), interpolation);
             }
         }
 
@@ -287,8 +280,8 @@ namespace Fdp.Examples.CarKinem.Core
              Vector2 startPos = new Vector2(_rng.Next(100, 400), _rng.Next(100, 400));
              Vector2 heading = new Vector2(1, 0); 
              
-             int leaderId = SpawnVehicle(startPos, heading, vClass);
-             var leaderEntity = new Entity(leaderId, 1);
+             var leaderEntity = SpawnVehicle(startPos, heading, vClass);
+             int leaderId = leaderEntity.Index;
              _repository.SetComponent(leaderEntity, VehicleColor.Magenta);
              
              _repository.Bus.Publish(new CmdCreateFormation
@@ -311,8 +304,7 @@ namespace Fdp.Examples.CarKinem.Core
              for (int i = 0; i < count - 1; i++) 
              {
                  Vector2 followerPos = template.GetSlotPosition(i, startPos, heading);
-                 int followerId = SpawnVehicle(followerPos, heading, vClass);
-                 var followerEntity = new Entity(followerId, 1);
+                 var followerEntity = SpawnVehicle(followerPos, heading, vClass);
                  _repository.SetComponent(followerEntity, VehicleColor.Cyan);
                  
                  _repository.Bus.Publish(new CmdJoinFormation
@@ -324,7 +316,7 @@ namespace Fdp.Examples.CarKinem.Core
              }
              
              Vector2 dest = startPos + new Vector2(200, 0);
-             SetDestination(leaderId, dest, interpolation);
+             SetDestination(leaderEntity, dest, interpolation);
          }
     }
 }

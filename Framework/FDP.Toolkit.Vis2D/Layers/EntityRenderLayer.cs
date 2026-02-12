@@ -3,7 +3,6 @@ using Fdp.Kernel;
 using ModuleHost.Core.Abstractions;
 using FDP.Toolkit.Vis2D.Abstractions;
 using FDP.Toolkit.Vis2D.Components;
-using FDP.Toolkit.ImGui.Abstractions;
 using Raylib_cs;
 
 namespace FDP.Toolkit.Vis2D.Layers
@@ -15,7 +14,7 @@ namespace FDP.Toolkit.Vis2D.Layers
 
         private readonly EntityQuery _query;
         private readonly IVisualizerAdapter _adapter;
-        private readonly IInspectorContext _inspector;
+        private readonly ISelectionState _selection;
         private readonly ISimulationView _view; // Usually Global.World or passed in
 
         public EntityRenderLayer(
@@ -24,14 +23,14 @@ namespace FDP.Toolkit.Vis2D.Layers
             ISimulationView view,
             EntityQuery query, 
             IVisualizerAdapter adapter, 
-            IInspectorContext inspector)
+            ISelectionState selection)
         {
             Name = name;
             LayerBitIndex = layerBitIndex;
             _view = view; // We need a view to access components
             _query = query;
             _adapter = adapter;
-            _inspector = inspector;
+            _selection = selection;
         }
 
         public void Update(float dt)
@@ -73,8 +72,8 @@ namespace FDP.Toolkit.Vis2D.Layers
                 if (!pos.HasValue) continue;
 
                 // Selection State
-                bool isSelected = _inspector.SelectedEntity == entity;
-                bool isHovered = _inspector.HoveredEntity == entity;
+                bool isSelected = _selection.IsSelected(entity);
+                bool isHovered = _selection.HoveredEntity == entity;
 
                 // Render
                 _adapter.Render(_view, entity, pos.Value, ctx, isSelected, isHovered);
@@ -125,7 +124,7 @@ namespace FDP.Toolkit.Vis2D.Layers
 
             if (_view.IsAlive(bestEntity))
             {
-                _inspector.SelectedEntity = bestEntity;
+                _selection.PrimarySelected = bestEntity;
                 return true; // Consumed
             }
 

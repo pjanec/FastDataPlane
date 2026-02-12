@@ -88,13 +88,13 @@
 
 **Goal**: Decouple toolkits, improve testability, and formalize input/resource patterns.
 
-- [ ] **MAP-P7-001** ISelectionState Abstraction [details](./MAP-TASK-DETAIL.md#map-p7-001-iselectionstate-abstraction)
-- [ ] **MAP-P7-002** IResourceProvider Pattern [details](./MAP-TASK-DETAIL.md#map-p7-002-iresourceprovider-pattern)
-- [ ] **MAP-P7-003** IInputProvider Abstraction [details](./MAP-TASK-DETAIL.md#map-p7-003-iinputprovider-abstraction)
-- [ ] **MAP-P7-004** IInspectableSession Adapter [details](./MAP-TASK-DETAIL.md#map-p7-004-iinspectablesession-adapter)
-- [ ] **MAP-P7-005** MapCamera Logic Split [details](./MAP-TASK-DETAIL.md#map-p7-005-mapcamera-logic-split)
-- [ ] **MAP-P7-006** MapCanvas Input Pipeline Formalization [details](./MAP-TASK-DETAIL.md#map-p7-006-mapcanvas-input-pipeline-formalization)
-- [ ] **MAP-P7-007** Tool Event Pattern [details](./MAP-TASK-DETAIL.md#map-p7-007-tool-event-pattern)
+- [x] **MAP-P7-001** ISelectionState Abstraction [details](./MAP-TASK-DETAIL.md#map-p7-001-iselectionstate-abstraction)
+- [x] **MAP-P7-002** IResourceProvider Pattern [details](./MAP-TASK-DETAIL.md#map-p7-002-iresourceprovider-pattern)
+- [x] **MAP-P7-003** IInputProvider Abstraction [details](./MAP-TASK-DETAIL.md#map-p7-003-iinputprovider-abstraction)
+- [x] **MAP-P7-004** IInspectableSession Adapter [details](./MAP-TASK-DETAIL.md#map-p7-004-iinspectablesession-adapter)
+- [x] **MAP-P7-005** MapCamera Logic Split [details](./MAP-TASK-DETAIL.md#map-p7-005-mapcamera-logic-split)
+- [x] **MAP-P7-006** MapCanvas Input Pipeline Formalization [details](./MAP-TASK-DETAIL.md#map-p7-006-mapcanvas-input-pipeline-formalization)
+- [x] **MAP-P7-007** Tool Event Pattern [details](./MAP-TASK-DETAIL.md#map-p7-007-tool-event-pattern)
 - [ ] **MAP-P7-008** Multi-Selection Support [details](./MAP-TASK-DETAIL.md#map-p7-008-multi-selection-support)
 - [ ] **MAP-P7-009** Input Action Mapping [details](./MAP-TASK-DETAIL.md#map-p7-009-input-action-mapping)
 - [ ] **MAP-P7-010** Visual Picking for Hierarchical Layers [details](./MAP-TASK-DETAIL.md#map-p7-010-visual-picking-for-hierarchical-layers)
@@ -146,13 +146,20 @@
 **Completed**:
 - ✅ All 3 framework project structures created
 - ✅ Core abstractions implemented (IInspectorContext, IVisualizerAdapter, IMapLayer, IMapTool, IHierarchyAdapter)
+- ✅ **Decoupled Selection State** (MAP-P7-001)
+- ✅ **Resource Injection Pattern** (MAP-P7-002)
+- ✅ **Input Abstraction & Mocking** (MAP-P7-003)
+- ✅ **Inspectable Session Adapter** (MAP-P7-004)
+- ✅ **MapCamera Logic Split** (MAP-P7-005)
+- ✅ **Input Pipeline Formalization** (MAP-P7-006)
+- ✅ **Tool Event Pattern** (MAP-P7-007)
 
 **Active Tasks**:
-- MAP-P7-001 through MAP-P7-004 assigned to **BATCH-07**
+- MAP-P7-008 through MAP-P7-010 assigned to **BATCH-10**
 
 **Blockers**: None
 
-**Next Up**: MAP-P7-001 (Decouple Selection State)
+**Next Up**: MAP-P7-008 (Multi-Selection Support)
 
 ---
 

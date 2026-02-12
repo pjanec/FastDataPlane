@@ -16,11 +16,8 @@ namespace Fdp.Examples.CarKinem.Visualization;
 
 public class VehicleVisualizer : IVisualizerAdapter
 {
-    private readonly TrajectoryPoolManager? _trajectoryPool;
-
-    public VehicleVisualizer(TrajectoryPoolManager? trajectoryPool = null)
+    public VehicleVisualizer()
     {
-        _trajectoryPool = trajectoryPool;
     }
 
     public Vector2? GetPosition(ISimulationView view, Entity entity)
@@ -55,7 +52,7 @@ public class VehicleVisualizer : IVisualizerAdapter
         // Highlight if selected
         if (isSelected)
         {
-            color = Color.Green;
+            // Keep original color but add strong highlight ring (see below)
         }
         else if (isHovered)
         {
@@ -83,7 +80,7 @@ public class VehicleVisualizer : IVisualizerAdapter
         // Draw selection ring
         if (isSelected)
         {
-            Raylib.DrawRing(position, parameters.Length * 0.6f, parameters.Length * 0.7f, 0, 360, 32, new Color(255, 255, 255, 128));
+            Raylib.DrawRing(position, parameters.Length * 0.6f, parameters.Length * 0.75f, 0, 360, 32, new Color(0, 255, 0, 255));
              
             // Draw Nav Diagnostics for selected
             if (view.HasComponent<NavState>(entity))
@@ -91,9 +88,10 @@ public class VehicleVisualizer : IVisualizerAdapter
                 var nav = view.GetComponentRO<NavState>(entity);
                 
                 // Draw Active Trajectory Spline
-                if (nav.TrajectoryId > 0 && _trajectoryPool != null)
+                var trajectoryPool = ctx.Resources.Get<TrajectoryPoolManager>();
+                if (nav.TrajectoryId > 0 && trajectoryPool != null)
                 {
-                    if (_trajectoryPool.TryGetTrajectory(nav.TrajectoryId, out var traj))
+                    if (trajectoryPool.TryGetTrajectory(nav.TrajectoryId, out var traj))
                     {
                         // Draw sampled spline or waypoints
                         // For performance, we sample every 2 meters or similar, or just draw waypoints if linear
@@ -125,7 +123,7 @@ public class VehicleVisualizer : IVisualizerAdapter
                                         }
                                     }
                                     
-                                    var (currentPos, _, _) = _trajectoryPool.SampleTrajectory(nav.TrajectoryId, nav.ProgressS);
+                                    var (currentPos, _, _) = trajectoryPool.SampleTrajectory(nav.TrajectoryId, nav.ProgressS);
                                     
                                     if (nextIdx != -1)
                                     {
@@ -146,16 +144,16 @@ public class VehicleVisualizer : IVisualizerAdapter
                                     float startS = nav.ProgressS;
                                     float endS = traj.TotalLength;
                                     
-                                    Vector2 prevPos = _trajectoryPool.SampleTrajectory(nav.TrajectoryId, startS).pos;
+                                    Vector2 prevPos = trajectoryPool.SampleTrajectory(nav.TrajectoryId, startS).pos;
                                     
                                     for (float s = startS + step; s <= endS; s += step)
                                     {
-                                        Vector2 currentPos = _trajectoryPool.SampleTrajectory(nav.TrajectoryId, s).pos;
+                                        Vector2 currentPos = trajectoryPool.SampleTrajectory(nav.TrajectoryId, s).pos;
                                         Raylib.DrawLineEx(prevPos, currentPos, 0.15f, splineColor);
                                         prevPos = currentPos;
                                     }
                                     // Close final gap
-                                    Vector2 finalPos = _trajectoryPool.SampleTrajectory(nav.TrajectoryId, endS).pos;
+                                    Vector2 finalPos = trajectoryPool.SampleTrajectory(nav.TrajectoryId, endS).pos;
                                     Raylib.DrawLineEx(prevPos, finalPos, 0.15f, splineColor);
                                 }
                             }

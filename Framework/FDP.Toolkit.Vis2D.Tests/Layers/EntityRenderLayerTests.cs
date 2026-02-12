@@ -4,7 +4,6 @@ using Fdp.Kernel;
 using FDP.Toolkit.Vis2D.Layers;
 using FDP.Toolkit.Vis2D.Abstractions;
 using FDP.Toolkit.Vis2D.Components;
-using FDP.Toolkit.ImGui.Abstractions;
 using Fdp.Kernel.Collections;
 using ModuleHost.Core.Abstractions;
 using Moq;
@@ -22,13 +21,13 @@ namespace FDP.Toolkit.Vis2D.Tests.Layers
             world.RegisterComponent<MapDisplayComponent>();
             
             var adapter = new Mock<IVisualizerAdapter>();
-            var inspector = new Mock<IInspectorContext>();
+            var selection = new Mock<ISelectionState>();
             
             // Create query for all entities (empty filter)
             var query = world.Query().Build();
             
             // Layer 0 is default
-            var layer = new EntityRenderLayer("TestLayer", 0, world, query, adapter.Object, inspector.Object);
+            var layer = new EntityRenderLayer("TestLayer", 0, world, query, adapter.Object, selection.Object);
 
             // Create entities
             var e1 = world.CreateEntity();
@@ -69,10 +68,10 @@ namespace FDP.Toolkit.Vis2D.Tests.Layers
         {
             var world = new EntityRepository();
             var adapter = new Mock<IVisualizerAdapter>();
-            var inspector = new Mock<IInspectorContext>();
+            var selection = new Mock<ISelectionState>();
             
             var query = world.Query().Build();
-            var layer = new EntityRenderLayer("TestLayer", 0, world, query, adapter.Object, inspector.Object);
+            var layer = new EntityRenderLayer("TestLayer", 0, world, query, adapter.Object, selection.Object);
 
             var e1 = world.CreateEntity(); // At (10, 10)
             var e2 = world.CreateEntity(); // At (20, 20) close to click
@@ -89,7 +88,7 @@ namespace FDP.Toolkit.Vis2D.Tests.Layers
             
             // Assert
             Assert.True(consumed);
-            inspector.VerifySet(i => i.SelectedEntity = e2);
+            selection.VerifySet(s => s.PrimarySelected = e2);
         }
     }
 }

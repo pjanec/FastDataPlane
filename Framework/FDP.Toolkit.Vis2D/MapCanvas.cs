@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Numerics;
+using System;
 using Raylib_cs;
 using FDP.Toolkit.Vis2D.Abstractions;
 using FDP.Toolkit.Vis2D.Components;
@@ -7,11 +8,39 @@ using FDP.Framework.Raylib.Input;
 
 namespace FDP.Toolkit.Vis2D
 {
-    public class MapCanvas
+    public class MapCanvas : IResourceProvider
     {
         public MapCamera Camera { get; set; } = new MapCamera();
         public uint ActiveLayerMask { get; set; } = 0xFFFFFFFF;
+        public IInputProvider Input => _input;
         
+        private readonly IInputProvider _input;
+
+        public MapCanvas(IInputProvider? input = null)
+        {
+             _input = input ?? new FDP.Toolkit.Vis2D.Defaults.RaylibInputProvider();
+        }
+
+        // Resources
+        private readonly Dictionary<Type, object> _resources = new();
+
+        public void AddResource<T>(T resource) where T : class
+        {
+            _resources[typeof(T)] = resource;
+        }
+
+        public T? Get<T>() where T : class
+        {
+            if (_resources.TryGetValue(typeof(T), out var res))
+                return res as T;
+            return null;
+        }
+
+        public bool Has<T>() where T : class
+        {
+            return _resources.ContainsKey(typeof(T));
+        }
+
         // Backing field for ActiveTool to allow private set
         public IMapTool? ActiveTool
         {
@@ -122,10 +151,10 @@ namespace FDP.Toolkit.Vis2D
 
         public void Update(float dt)
         {
-            // Update Camera
+            // Update Camera Interpolation
             Camera.Update(dt);
 
-            // Update Layers (0 -> N usually, order doesn't matter much for update but consistency helps)
+            // Update Layers
             foreach (var layer in _layers)
             {
                 layer.Update(dt);
@@ -136,7 +165,7 @@ namespace FDP.Toolkit.Vis2D
                 ActiveTool.Update(dt);
             
             // Handle Input Routing
-            HandleInput();
+            ProcessInputPipeline();
         }
 
         public void Draw()
@@ -148,7 +177,8 @@ namespace FDP.Toolkit.Vis2D
                 Camera = Camera.InnerCamera,
                 MouseWorldPos = Camera.ScreenToWorld(GetMousePosition()),
                 DeltaTime = GetFrameTime(),
-                VisibleLayersMask = ActiveLayerMask
+                VisibleLayersMask = ActiveLayerMask,
+                Resources = this
             };
 
             // Draw Layers (0 -> N) - Bottom to Top
@@ -179,102 +209,94 @@ namespace FDP.Toolkit.Vis2D
             return (ActiveLayerMask & mask) != 0;
         }
 
-        // Internal virtual to allow testing input routing logic without Raylib
-        // Or just implement it assuming mocked Raylib usage for now.
-        // Actually since MapCanvas calls Raylib static methods, unit testing input routing is hard unless wrapped.
-        // But for Task 3, integration with input is required.
-        protected virtual void HandleInput()
+        protected virtual void ProcessInputPipeline()
         {
-            if (IsMouseCaptured()) return;
+            if (_input.IsMouseCaptured) return;
 
-            Vector2 mouseScreen = GetMousePosition();
+            Vector2 mouseScreen = _input.MousePosition;
             Vector2 mouseWorld = Camera.ScreenToWorld(mouseScreen);
             
-            bool leftPressed = IsMouseButtonPressed(MouseButton.Left);
-            bool rightPressed = IsMouseButtonPressed(MouseButton.Right);
-            bool leftReleased = Raylib.IsMouseButtonReleased(MouseButton.Left);
-            bool rightReleased = Raylib.IsMouseButtonReleased(MouseButton.Right);
+            bool leftPressed = _input.IsMouseButtonPressed(MouseButton.Left);
+            bool rightPressed = _input.IsMouseButtonPressed(MouseButton.Right);
+            bool leftDown = _input.IsMouseButtonDown(MouseButton.Left);
+            bool rightDown = _input.IsMouseButtonDown(MouseButton.Right);
+            bool leftReleased = _input.IsMouseButtonReleased(MouseButton.Left);
+            bool rightReleased = _input.IsMouseButtonReleased(MouseButton.Right);
 
-            // Reset drag state on new press
-            if (leftPressed || rightPressed)
-            {
-                _isDraggingInteraction = false;
-            }
-            
-            // Tool Priority
+            Vector2 delta = _input.MouseDelta;
+            Vector2 deltaWorld = delta * (1.0f / Camera.Zoom);
+
+            bool consumed = false;
+
+            // 1. Tool Priority
             if (ActiveTool != null)
             {
-                bool consumed = false;
-                
-                // 1. Hover (Always update hover state)
-                try { ActiveTool.HandleHover(mouseWorld); } catch { /* Ignore */ }
+                // Hover
+                ActiveTool.HandleHover(mouseWorld);
 
-                // 2. Drag (Priority over Click)
-                // If we are holding buttons, check for drag
-                if (IsMouseButtonDown(MouseButton.Left) || IsMouseButtonDown(MouseButton.Right))
+                // Drag
+                if (leftDown || rightDown)
                 {
-                    Vector2 deltaScreen = GetMouseDelta();
-                    Vector2 deltaWorld = deltaScreen * (1.0f / Camera.Zoom);
-                    
-                    // Allow tools to decide if they want to handle drag even with zero delta (e.g. initial grab)
-                    // But typically we send delta.
-                    if (deltaWorld != Vector2.Zero || _isDraggingInteraction)
+                    if (ActiveTool.HandleDrag(mouseWorld, deltaWorld))
                     {
-                         bool dragged = ActiveTool.HandleDrag(mouseWorld, deltaWorld);
-                         if (dragged) _isDraggingInteraction = true;
+                        consumed = true;
+                        _isDraggingInteraction = true;
                     }
                 }
 
-                // 3. Click (Only on Release, and only if we didn't Drag)
-                // This prevents "Selection" triggering at the end of a Box Select or Entity Drag
-                // when the user releases the mouse.
+                // Click (Release)
                 if (!_isDraggingInteraction)
                 {
-                    if (leftReleased) consumed = ActiveTool.HandleClick(mouseWorld, MouseButton.Left);
-                    if (!consumed && rightReleased) consumed = ActiveTool.HandleClick(mouseWorld, MouseButton.Right);
-                }
-                else
-                {
-                    // effectively consumed by drag
-                    if (leftReleased || rightReleased) consumed = true;
+                    if (leftReleased) 
+                    {
+                        if (ActiveTool.HandleClick(mouseWorld, MouseButton.Left)) consumed = true;
+                    }
+                    if (rightReleased && !consumed)
+                    {
+                        if (ActiveTool.HandleClick(mouseWorld, MouseButton.Right)) consumed = true;
+                    }
                 }
 
-                // Note: If Tool consumes Release, we assume it blocked lower layers from acting on Release implies they shouldn't act on Press?
-                // But Layers usually act on Press. 
-                // If Tool ignores 'Press', Layers might act on it.
-                // Standard Map Interaction usually blocks Layers if the Mouse is over the Map area.
-                // For now, we preserve existing Layer-Press logic if Tool didn't consume Click (but Layer-Press happens on Press).
-                // Wait: checks below are for 'leftPressed'.
-                // If ActiveTool moved to Release, 'leftPressed' is unhandled by Tool here.
-                // So Layers get all Presses. This is likely Correct for UI overlaid on Map.
-                
-                // If dragged, we consume everything.
-                if (_isDraggingInteraction) return; 
+                // Reset Drag State
+                if (leftReleased || rightReleased)
+                {
+                    _isDraggingInteraction = false;
+                }
             }
 
-            // Layer Priority (Reverse N -> 0)
-            for (int i = _layers.Count - 1; i >= 0; i--)
+            // 2. Camera Priority
+            if (!consumed)
             {
-                var layer = _layers[i];
-                if (!IsLayerVisible(layer)) continue;
+                if (Camera.HandleInput(_input)) consumed = true;
+            }
 
-                if (leftPressed)
+            // 3. Layer Priority (Reverse)
+            if (!consumed)
+            {
+                for (int i = _layers.Count - 1; i >= 0; i--)
                 {
-                    if (layer.HandleInput(mouseWorld, MouseButton.Left, true)) return;
-                }
-                if (rightPressed)
-                {
-                    if (layer.HandleInput(mouseWorld, MouseButton.Right, true)) return;
+                    var layer = _layers[i];
+                    if (!IsLayerVisible(layer)) continue;
+
+                    // Support acting on Pressed
+                    if (leftPressed)
+                    {
+                        if (layer.HandleInput(mouseWorld, MouseButton.Left, true)) return;
+                    }
+                    if (rightPressed)
+                    {
+                        if (layer.HandleInput(mouseWorld, MouseButton.Right, true)) return;
+                    }
                 }
             }
         }
 
         // Virtual for testing
-        protected virtual Vector2 GetMousePosition() => Raylib.GetMousePosition();
+        protected virtual Vector2 GetMousePosition() => _input.MousePosition;
         protected virtual float GetFrameTime() => Raylib.GetFrameTime();
-        protected virtual bool IsMouseButtonPressed(MouseButton button) => Raylib.IsMouseButtonPressed(button);
-        protected virtual bool IsMouseButtonDown(MouseButton button) => Raylib.IsMouseButtonDown(button);
-        protected virtual Vector2 GetMouseDelta() => Raylib.GetMouseDelta();
+        protected virtual bool IsMouseButtonPressed(MouseButton button) => _input.IsMouseButtonPressed(button);
+        protected virtual bool IsMouseButtonDown(MouseButton button) => _input.IsMouseButtonDown(button);
+        protected virtual Vector2 GetMouseDelta() => _input.MouseDelta;
         protected virtual bool IsMouseCaptured() => InputFilter.IsMouseCaptured;
     }
 }

@@ -1,6 +1,6 @@
 using System.Numerics;
 using Raylib_cs;
-using FDP.Framework.Raylib.Input;
+using FDP.Toolkit.Vis2D.Abstractions;
 
 namespace FDP.Toolkit.Vis2D.Components
 {
@@ -40,6 +40,13 @@ namespace FDP.Toolkit.Vis2D.Components
         private Vector2 _lastMousePos;
         private bool _isDragging;
 
+        private Vector2 _targetTarget;
+        private float _targetZoom;
+
+        // Damping factors
+        public float ZoomDamping { get; set; } = 15.0f;
+        public float PanDamping { get; set; } = 20.0f;
+
         public MapCamera()
         {
             InnerCamera = new Camera2D();
@@ -47,86 +54,112 @@ namespace FDP.Toolkit.Vis2D.Components
             InnerCamera.Rotation = 0.0f;
             InnerCamera.Offset = Vector2.Zero;
             InnerCamera.Target = Vector2.Zero;
+
+            _targetZoom = 1.0f;
+            _targetTarget = Vector2.Zero;
         }
 
         public virtual void Update(float dt)
         {
-            // Gather inputs
-            float wheel = Raylib.GetMouseWheelMove();
-            Vector2 mousePos = Raylib.GetMousePosition();
-            bool isPanDown = Raylib.IsMouseButtonDown(PanButton);
-            bool isCaptured = InputFilter.IsMouseCaptured;
+            // Validating targets
+            if (_targetZoom < MinZoom) _targetZoom = MinZoom;
+            if (_targetZoom > MaxZoom) _targetZoom = MaxZoom;
 
-            ProcessInput(wheel, mousePos, isPanDown, isCaptured);
+            // Interpolate Zoom
+            InnerCamera.Zoom = Lerp(InnerCamera.Zoom, _targetZoom, dt * ZoomDamping);
+
+            // Interpolate Target
+            InnerCamera.Target = Vector2.Lerp(InnerCamera.Target, _targetTarget, dt * PanDamping);
+        }
+
+        private float Lerp(float a, float b, float t)
+        {
+            return a + (b - a) * t;
+        }
+
+        public virtual bool HandleInput(IInputProvider input)
+        {
+            // Gather inputs
+            float wheel = input.MouseWheelMove;
+            Vector2 mousePos = input.MousePosition;
+            bool isPanDown = input.IsMouseButtonDown(PanButton);
+            bool isCaptured = input.IsMouseCaptured;
+
+            return ProcessInput(wheel, mousePos, isPanDown, isCaptured);
         }
 
         /// <summary>
-        /// Update camera state based on inputs. Public for testing.
+        /// Update camera targets based on inputs. Public for testing.
+        /// Returns true if input was consumed/handled.
         /// </summary>
-        public void ProcessInput(float wheelMove, Vector2 mousePos, bool isPanDown, bool isInputCaptured)
+        public bool ProcessInput(float wheelMove, Vector2 mousePos, bool isPanDown, bool isInputCaptured)
         {
             if (isInputCaptured)
             {
                 _isDragging = false;
-                return;
+                return false;
             }
+
+            bool interacted = false;
 
             // Zoom
             if (wheelMove != 0)
             {
-                // Zoom to cursor logic:
-                // 1. Get world point under cursor
+                interacted = true;
+                // Zoom logic:
+                // 1. Get world point based on CURRENT state (approximate start point)
+                // actually, for stability, we might want to base it on TARGET state if we are already moving?
+                // But the user sees the CURRENT state. So they point at a pixel on screen corresponding to world X.
                 Vector2 mouseWorldBefore = ScreenToWorld(mousePos);
 
-                // 2. Adjust zoom
-                float zoomFactor = 1.0f + (wheelMove * ZoomSpeed);
-                // Try to keep zoom changes proportional? Or just add?
-                // Standard is usually multiplicative or exponential but linear is fine for now.
-                // Let's use simple addition/subtraction or multiplication.
-                // Task says "ZoomSpeed". Usually implies linear or multiplicative factor.
-                
-                // Let's implement multiplicative zoom for smoother feel
-                // If wheel > 0, zoom in (multiply by 1.1)
-                // If wheel < 0, zoom out (multiply by 0.9)
-                // Or use ZoomSpeed as a t value.
-                
-                float newZoom = InnerCamera.Zoom + (wheelMove * ZoomSpeed * InnerCamera.Zoom); 
-                // Using linear addition based on current zoom level makes it exponential-ish
+                // 2. Adjust target zoom
+                // Use current target zoom as base to avoid "fighting" the interpolation
+                float newZoom = _targetZoom + (wheelMove * ZoomSpeed * _targetZoom);
                 
                 newZoom = System.Math.Clamp(newZoom, MinZoom, MaxZoom);
+                _targetZoom = newZoom;
 
-                InnerCamera.Zoom = newZoom;
-
-                // 3. Adjust target so that world point is still under cursor
-                // For this we need ScreenToWorld with new zoom.
-                // Actually easier: 
-                // target = mouseWorldBefore - (mousePos - offset) / newZoom
-                // ScreenToWorld(screen) = target + (screen - offset) / zoom
-                // We want ScreenToWorld(mousePos) == mouseWorldBefore
-                // mouseWorldBefore = newTarget + (mousePos - offset) / newZoom
-                // newTarget = mouseWorldBefore - (mousePos - offset) / newZoom
+                // 3. Adjust target target
+                // constraint: ScreenToWorld(mousePos) using (TargetZoom, TargetTarget) == mouseWorldBefore
+                // mouseWorldBefore = (mousePos - Offset) / TargetZoom + TargetTarget
+                // TargetTarget = mouseWorldBefore - (mousePos - Offset) / TargetZoom
                 
-                InnerCamera.Target = mouseWorldBefore - (mousePos - InnerCamera.Offset) / InnerCamera.Zoom;
+                _targetTarget = mouseWorldBefore - (mousePos - InnerCamera.Offset) / _targetZoom;
             }
 
             // Pan
             if (isPanDown)
             {
+                interacted = true;
                 if (!_isDragging)
                 {
                     _isDragging = true;
                     _lastMousePos = mousePos;
+                    // Reset targets to current state on drag start to prevent jumps?
+                    // _targetTarget = InnerCamera.Target; 
+                    // _targetZoom = InnerCamera.Zoom;
+                    // Actually, if we are animating somewhere and user grabs, we should probably stop and grab.
+                    _targetTarget = InnerCamera.Target;
+                    _targetZoom = InnerCamera.Zoom;
                 }
                 else
                 {
                     Vector2 deltaWrapper = mousePos - _lastMousePos;
-                    // Pan moves the world, so we move target in opposite direction of mouse drag, scaled by zoom
-                    // deltaScreen = deltaWorld * Zoom
-                    // deltaWorld = deltaScreen / Zoom
-                    // We move Target by -deltaWorld
+                    
+                    // We move target by -deltaWorld
+                    // deltaWorld = deltaScreen / CurrentZoom? Or TargetZoom?
+                    // To interact 1:1 with cursor, we must use CurrentZoom.
                     
                     Vector2 deltaWorld = deltaWrapper / InnerCamera.Zoom;
-                    InnerCamera.Target -= deltaWorld;
+                    
+                    // We modify the TargetTarget directly to "pull" it.
+                    // If Damping is high, InnerCamera.Target follows closely.
+                    // Effectively we are setting the desired position.
+                    
+                    _targetTarget -= deltaWorld;
+                    
+                    // Also maintain InnerCamera.Target close to mouse for responsivness if needed?
+                    // But Update() will handle it.
                     
                     _lastMousePos = mousePos;
                 }
@@ -135,7 +168,16 @@ namespace FDP.Toolkit.Vis2D.Components
             {
                 _isDragging = false;
             }
+
+            return interacted;
         }
+
+        public void FocusOn(Vector2 position, float zoom = -1f)
+        {
+            _targetTarget = position;
+            if (zoom > 0) _targetZoom = zoom;
+        }
+
 
         public virtual void BeginMode()
         {

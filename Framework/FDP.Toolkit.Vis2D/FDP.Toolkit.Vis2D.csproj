@@ -10,6 +10,5 @@
     <ProjectReference Include="..\..\Kernel\Fdp.Kernel\Fdp.Kernel.csproj" />
     <ProjectReference Include="..\..\ModuleHost\ModuleHost.Core\ModuleHost.Core.csproj" />
     <ProjectReference Include="..\FDP.Framework.Raylib\FDP.Framework.Raylib.csproj" />
-    <ProjectReference Include="..\FDP.Toolkit.ImGui\FDP.Toolkit.ImGui.csproj" />
   </ItemGroup>
 </Project>

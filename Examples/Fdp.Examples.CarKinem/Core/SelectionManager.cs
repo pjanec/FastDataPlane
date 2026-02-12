@@ -1,49 +1,59 @@
+using Fdp.Kernel;
+using System.Collections.Generic;
+using System.Linq;
+
 namespace Fdp.Examples.CarKinem.Core
 {
     public class SelectionManager
     {
-        private readonly System.Collections.Generic.HashSet<int> _selectedIds = new();
+        private readonly HashSet<Entity> _selectedEntities = new();
         public event System.Action? SelectionChanged;
 
-        public System.Collections.Generic.IReadOnlyCollection<int> SelectedIds => _selectedIds;
-        public int? SelectedEntityId => _selectedIds.Count == 1 ? System.Linq.Enumerable.First(_selectedIds) : null;
-        public int? HoveredEntityId { get; set; }
+        public IReadOnlyCollection<Entity> SelectedEntities => _selectedEntities;
+        
+        public Entity? SelectedEntity => _selectedEntities.Count == 1 ? _selectedEntities.First() : null;
+        public Entity? HoveredEntity { get; set; }
 
         public void Clear()
         {
-            if (_selectedIds.Count > 0)
+            if (_selectedEntities.Count > 0)
             {
-                _selectedIds.Clear();
+                _selectedEntities.Clear();
                 SelectionChanged?.Invoke();
             }
         }
 
-        public void Select(int id, bool additive = false)
+        public void Select(Entity entity, bool additive = false)
         {
             bool changed = false;
             if (!additive)
             {
-                if (_selectedIds.Count != 1 || !_selectedIds.Contains(id))
+                if (_selectedEntities.Count != 1 || !_selectedEntities.Contains(entity))
                 {
-                    _selectedIds.Clear();
-                    _selectedIds.Add(id);
+                    _selectedEntities.Clear();
+                    _selectedEntities.Add(entity);
                     changed = true;
                 }
             }
             else
             {
-                if (_selectedIds.Add(id)) changed = true;
+                if (_selectedEntities.Add(entity)) changed = true;
             }
             if (changed) SelectionChanged?.Invoke();
         }
 
-        public void SetSelection(System.Collections.Generic.IEnumerable<int> ids)
+        public void Deselect(Entity entity)
         {
-            _selectedIds.Clear();
-            foreach (var id in ids) _selectedIds.Add(id);
+             if (_selectedEntities.Remove(entity)) SelectionChanged?.Invoke();
+        }
+
+        public void SetSelection(IEnumerable<Entity> entities)
+        {
+            _selectedEntities.Clear();
+            foreach (var e in entities) _selectedEntities.Add(e);
             SelectionChanged?.Invoke();
         }
 
-        public bool IsSelected(int id) => _selectedIds.Contains(id);
+        public bool IsSelected(Entity entity) => _selectedEntities.Contains(entity);
     }
 }

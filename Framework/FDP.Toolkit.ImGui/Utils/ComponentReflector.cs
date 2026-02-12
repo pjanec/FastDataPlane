@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Reflection;
 using System.Linq;
 using Fdp.Kernel;
+using FDP.Toolkit.ImGui.Abstractions;
 using ImGuiNET;
 
 using ImGuiApi = ImGuiNET.ImGui;
@@ -20,25 +21,25 @@ internal class ComponentReflector
     /// <summary>
     /// Draws all components attached to an entity with editable fields.
     /// </summary>
-    public void DrawComponents(EntityRepository repo, Entity e)
+    public void DrawComponents(IInspectableSession session, Entity e)
     {
-        var allTypes = ComponentTypeRegistry.GetAllTypes();
+        var allTypes = session.GetAllComponentTypes();
 
         foreach (var type in allTypes)
         {
             // Generic "HasComponent" check
-            if (!RepoReflector.HasComponent(repo, e, type)) continue;
+            if (!session.HasComponent(e, type)) continue;
 
             bool open = ImGuiApi.CollapsingHeader(type.Name, ImGuiTreeNodeFlags.DefaultOpen);
             
             if (open)
             {
                 ImGuiApi.Indent();
-                object? data = RepoReflector.GetComponent(repo, e, type);
+                object? data = session.GetComponent(e, type);
                 if (data != null)
                 {
                     // Draw with edit support
-                    DrawObjectProperties(data, e, repo, type);
+                    DrawObjectProperties(data, e, session, type);
                 }
                 ImGuiApi.Unindent();
             }
@@ -49,7 +50,7 @@ internal class ComponentReflector
     /// Draws object properties as EDITABLE ImGui widgets.
     /// Writes changes back to ECS with proper versioning.
     /// </summary>
-    private void DrawObjectProperties(object obj, Entity entity, EntityRepository repo, Type componentType)
+    private void DrawObjectProperties(object obj, Entity entity, IInspectableSession session, Type componentType)
     {
         Type t = obj.GetType();
         
@@ -76,7 +77,15 @@ internal class ComponentReflector
                 var val = field.GetValue(obj);
                 
                 // Draw editable widget based on type
-                bool fieldModified = DrawEditableField(field, ref val, $"##{field.Name}_{entity.Index}");
+                bool fieldModified = false;
+                if (!session.IsReadOnly)
+                {
+                    fieldModified = DrawEditableField(field, ref val, $"##{field.Name}_{entity.Index}");
+                }
+                else
+                {
+                    ImGuiApi.Text(val?.ToString() ?? "null");
+                }
                 
                 if (fieldModified)
                 {
@@ -88,9 +97,9 @@ internal class ComponentReflector
             ImGuiApi.EndTable();
             
             // Write back to ECS if any field was modified
-            if (modified)
+            if (modified && !session.IsReadOnly)
             {
-                RepoReflector.SetComponent(repo, entity, componentType, obj);
+                session.SetComponent(entity, componentType, obj);
             }
         }
     }

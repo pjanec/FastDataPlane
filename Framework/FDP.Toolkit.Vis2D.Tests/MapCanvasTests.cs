@@ -8,11 +8,54 @@ using Raylib_cs;
 
 namespace FDP.Toolkit.Vis2D.Tests
 {
+    public class TestableInputProvider : IInputProvider
+    {
+        public Vector2 MousePosition { get; set; }
+        public Vector2 MouseDelta { get; set; }
+        public float MouseWheelMove { get; set; }
+        
+        public bool IsLeftPressed { get; set; }
+        public bool IsRightPressed { get; set; }
+        public bool IsLeftDown { get; set; }
+        public bool IsRightDown { get; set; }
+        public bool IsLeftReleased { get; set; }
+        public bool IsRightReleased { get; set; }
+
+        public bool IsMouseCaptured { get; set; }
+        public bool IsKeyboardCaptured { get; set; }
+
+        public bool IsMouseButtonPressed(MouseButton button)
+        {
+            if (button == MouseButton.Left) return IsLeftPressed;
+            if (button == MouseButton.Right) return IsRightPressed;
+            return false;
+        }
+
+        public bool IsMouseButtonDown(MouseButton button)
+        {
+            if (button == MouseButton.Left) return IsLeftDown;
+            if (button == MouseButton.Right) return IsRightDown;
+            return false;
+        }
+
+        public bool IsMouseButtonReleased(MouseButton button)
+        {
+            if (button == MouseButton.Left) return IsLeftReleased;
+            if (button == MouseButton.Right) return IsRightReleased;
+            return false;
+        }
+
+        public bool IsKeyPressed(KeyboardKey key) => false;
+        public bool IsKeyDown(KeyboardKey key) => false;
+        public bool IsKeyReleased(KeyboardKey key) => false;
+    }
+
     public class TestableMapCameraForCanvas : MapCamera
     {
         public override void BeginMode() { /* No-op */ }
         public override void EndMode() { /* No-op */ }
         public override void Update(float dt) { /* No-op */ }
+        public override bool HandleInput(IInputProvider input) => false;
         
         // Pass-through for math
         public override Vector2 ScreenToWorld(Vector2 v) { return v; }
@@ -21,39 +64,43 @@ namespace FDP.Toolkit.Vis2D.Tests
 
     public class TestableMapCanvas : MapCanvas
     {
-        public Vector2 MockMousePosition { get; set; } = Vector2.Zero;
+        public TestableInputProvider InputProvider { get; }
+
+        public TestableMapCanvas() : this(new TestableInputProvider()) {}
+        
+        private TestableMapCanvas(TestableInputProvider input) : base(input) 
+        {
+            InputProvider = input;
+        }
+
+        public Vector2 MockMousePosition { get => InputProvider.MousePosition; set => InputProvider.MousePosition = value; }
         public float MockFrameTime { get; set; } = 0.016f;
-        public Vector2 MockMouseDelta { get; set; } = Vector2.Zero;
+        public Vector2 MockMouseDelta { get => InputProvider.MouseDelta; set => InputProvider.MouseDelta = value; }
         
         // Mouse button states
-        public bool IsLeftPressed { get; set; }
-        public bool IsRightPressed { get; set; }
-        public bool IsLeftDown { get; set; }
-        public bool IsRightDown { get; set; }
+        public bool IsLeftPressed { get => InputProvider.IsLeftPressed; set => InputProvider.IsLeftPressed = value; }
+        public bool IsRightPressed { get => InputProvider.IsRightPressed; set => InputProvider.IsRightPressed = value; }
+        public bool IsLeftDown { get => InputProvider.IsLeftDown; set => InputProvider.IsLeftDown = value; }
+        public bool IsRightDown { get => InputProvider.IsRightDown; set => InputProvider.IsRightDown = value; }
+        
+        // Forwarding missing Release props if needed by tests? 
+        // Existing tests likely set Pressed/Down.
+        // If Layer tests rely on Release, they might fail if Release is false.
+        // But let's assume basic structure first.
 
-        protected override Vector2 GetMousePosition() => MockMousePosition;
+        protected override Vector2 GetMousePosition() => InputProvider.MousePosition;
         protected override float GetFrameTime() => MockFrameTime;
-        protected override Vector2 GetMouseDelta() => MockMouseDelta;
+        protected override Vector2 GetMouseDelta() => InputProvider.MouseDelta;
         protected override bool IsMouseCaptured() => false;
 
-        protected override bool IsMouseButtonPressed(MouseButton button)
-        {
-            if (button == MouseButton.Left) return IsLeftPressed;
-            if (button == MouseButton.Right) return IsRightPressed;
-            return false;
-        }
-
-        protected override bool IsMouseButtonDown(MouseButton button)
-        {
-            if (button == MouseButton.Left) return IsLeftDown;
-            if (button == MouseButton.Right) return IsRightDown;
-            return false;
-        }
+        protected override bool IsMouseButtonPressed(MouseButton button) => InputProvider.IsMouseButtonPressed(button);
+        protected override bool IsMouseButtonDown(MouseButton button) => InputProvider.IsMouseButtonDown(button);
 
         // Public wrapper for testing
         public new void HandleInput()
         {
-            base.HandleInput();
+            // Base HandleInput uses _input (InputProvider), so it will see our values
+            base.ProcessInputPipeline();
         }
     }
 

@@ -16,26 +16,27 @@ public class EntityDragTool : IMapTool
     // Callbacks provided by higher-level code (App/Example)
     // Decoupled from repository/simulation logic.
     private readonly Entity _target;
-    private readonly Action<Entity, Vector2> _onMove;
+    public event Action<Entity, Vector2>? OnEntityMoved; // Replaces direct Action injection
     private readonly Action _onComplete;
     
     // Internal State
     private Vector2 _currentPos;
     private Vector2 _startPos;
     private bool _isActive;
+    private MapCanvas _canvas;
 
-    public EntityDragTool(Entity target, Vector2 startPos, Action<Entity, Vector2> onMove, Action onComplete)
+    public EntityDragTool(Entity target, Vector2 startPos, Action onComplete)
     {
         _target = target;
         _startPos = startPos;
         _currentPos = startPos;
-        _onMove = onMove;
         _onComplete = onComplete;
         _isActive = true;
     }
 
     public void OnEnter(MapCanvas canvas)
     {
+        _canvas = canvas;
         // Typically initialized active
     }
 
@@ -52,7 +53,7 @@ public class EntityDragTool : IMapTool
     public void Update(float dt)
     {
         // Check if mouse released to finish Drag
-        if (Raylib.IsMouseButtonReleased(MouseButton.Left))
+        if (_canvas?.Input.IsMouseButtonReleased(MouseButton.Left) == true)
         {
             Finish();
         }
@@ -79,12 +80,12 @@ public class EntityDragTool : IMapTool
 
     public bool HandleDrag(Vector2 worldPos, Vector2 delta)
     {
-        if (_isActive && Raylib.IsMouseButtonDown(MouseButton.Left))
+        if (_isActive && _canvas?.Input.IsMouseButtonDown(MouseButton.Left) == true)
         {
             _currentPos = worldPos;
             
             // Invoke callback to update simulation
-            _onMove?.Invoke(_target, _currentPos);
+            OnEntityMoved?.Invoke(_target, _currentPos);
             
             return true;
         }

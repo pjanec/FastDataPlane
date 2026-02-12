@@ -5,6 +5,7 @@ using Fdp.Kernel;
 using FDP.Toolkit.ImGui.Panels;
 using Fdp.Kernel.FlightRecorder;
 using FDP.Toolkit.ImGui.Abstractions;
+using FDP.Toolkit.ImGui.Adapters;
 using ModuleHost.Core;
 
 namespace Fdp.Examples.CarKinem.UI
@@ -97,7 +98,7 @@ namespace Fdp.Examples.CarKinem.UI
             }
             
             // Entity Inspector
-            _entityInspector.Draw(repository, inspectorCtx);
+            _entityInspector.Draw(new RepositoryAdapter(repository), inspectorCtx);
             
             // Event Inspector
             // Capture events from bus

@@ -19,7 +19,7 @@ public class EntityInspectorPanel
     /// <summary>
     /// Renders the entity inspector window.
     /// </summary>
-    public void Draw(EntityRepository repo, IInspectorContext context)
+    public void Draw(IInspectableSession session, IInspectorContext context)
     {
         if (!ImGuiApi.Begin("Entity Inspector"))
         {
@@ -28,7 +28,7 @@ public class EntityInspectorPanel
         }
 
         // 1. Top Bar: Statistics & Filter
-        ImGuiApi.TextDisabled($"Total Entities: {repo.EntityCount}");
+        ImGuiApi.TextDisabled($"Total Entities: {session.EntityCount}");
         ImGuiApi.SameLine();
         ImGuiApi.InputTextWithHint("##search", "Search ID...", ref _searchFilter, 20);
         
@@ -46,11 +46,11 @@ public class EntityInspectorPanel
             
             // --- ENTITY LIST ---
             ImGuiApi.TableSetColumnIndex(0);
-            DrawEntityList(repo, context);
+            DrawEntityList(session, context);
 
             // --- COMPONENT DETAILS ---
             ImGuiApi.TableSetColumnIndex(1);
-            DrawEntityDetails(repo, context);
+            DrawEntityDetails(session, context);
 
             ImGuiApi.EndTable();
         }
@@ -62,10 +62,10 @@ public class EntityInspectorPanel
     /// <summary>
     /// Gets filtered entities list. Internal for testing.
     /// </summary>
-    internal static List<Entity> GetFilteredEntities(EntityRepository repo, string searchFilter, int limit = 1000)
+    internal static List<Entity> GetFilteredEntities(IInspectableSession session, string searchFilter, int limit = 1000)
     {
         var results = new List<Entity>(System.Math.Min(limit, 1000));
-        var query = repo.Query().Build();
+        var entities = session.GetEntities();
         int count = 0;
         
         bool hasFilter = !string.IsNullOrWhiteSpace(searchFilter);
@@ -76,7 +76,7 @@ public class EntityInspectorPanel
             filterId = parsedId;
         }
 
-        foreach (var entity in query)
+        foreach (var entity in entities)
         {
             if (hasFilter)
             {
@@ -94,11 +94,11 @@ public class EntityInspectorPanel
         return results;
     }
 
-    private void DrawEntityList(EntityRepository repo, IInspectorContext context)
+    private void DrawEntityList(IInspectableSession session, IInspectorContext context)
     {
         ImGuiApi.BeginChild("EntityList_Scroll");
         
-        var entities = GetFilteredEntities(repo, _searchFilter);
+        var entities = GetFilteredEntities(session, _searchFilter);
         int count = 0;
         
         foreach (var entity in entities)
@@ -132,7 +132,7 @@ public class EntityInspectorPanel
         ImGuiApi.EndChild();
     }
 
-    private void DrawEntityDetails(EntityRepository repo, IInspectorContext context)
+    private void DrawEntityDetails(IInspectableSession session, IInspectorContext context)
     {
         ImGuiApi.BeginChild("EntityDetails_Scroll");
 
@@ -143,18 +143,17 @@ public class EntityInspectorPanel
         else
         {
             Entity e = context.SelectedEntity.Value;
-            if (!repo.IsAlive(e))
+            
+            ImGuiApi.Text($"ID: {e.Index} | Gen: {e.Generation}");
+            ImGuiApi.Separator();
+            
+            if (session.IsReadOnly)
             {
-                ImGuiApi.TextColored(new Vector4(1,0,0,1), "Entity Destroyed");
+                ImGuiApi.TextColored(new Vector4(1, 1, 0, 1), "[READ-ONLY MODE]");
             }
-            else
-            {
-                ImGuiApi.Text($"ID: {e.Index} | Gen: {e.Generation}");
-                ImGuiApi.Separator();
                 
-                // Use helper to iterate components (with edit support)
-                _reflector.DrawComponents(repo, e);
-            }
+            // Use helper to iterate components (with edit support)
+            _reflector.DrawComponents(session, e);
         }
         ImGuiApi.EndChild();
     }
