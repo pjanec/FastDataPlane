@@ -1,9 +1,11 @@
 using ImGuiNET;
 using System.Numerics;
-using Fdp.Examples.CarKinem.Simulation;
-using Fdp.Examples.CarKinem.Input;
-using FDP.Toolkit.ImGui.Panels; // Framework
+using Fdp.Examples.CarKinem.Core;
+using Fdp.Kernel;
+using FDP.Toolkit.ImGui.Panels;
+using Fdp.Kernel.FlightRecorder;
 using FDP.Toolkit.ImGui.Abstractions;
+using ModuleHost.Core;
 
 namespace Fdp.Examples.CarKinem.UI
 {
@@ -17,55 +19,93 @@ namespace Fdp.Examples.CarKinem.UI
         private SystemPerformanceWindow _sysPerfWindow = new();
         
         public UIState UIState { get; } = new();
-        public bool IsPaused => _simControls.IsPaused;
-        public float TimeScale => _simControls.TimeScale;
+        
+        // Exposed Props for App
+        public bool IsPaused 
+        { 
+            get => _simControls.IsPaused; 
+            set => _simControls.IsPaused = value; 
+        }
+        
+        public float TimeScale 
+        { 
+            get => _simControls.TimeScale;
+            set => _simControls.TimeScale = value;
+        }
 
-        public void Render(DemoSimulation simulation, SelectionManager selection, IInspectorContext inspectorCtx)
+        // Recording / Replay Status
+        public bool IsRecording
+        {
+            get => _simControls.IsRecording;
+            set => _simControls.IsRecording = value;
+        }
+
+        public bool IsReplaying
+        {
+            get => _simControls.IsReplaying;
+            set => _simControls.IsReplaying = value;
+        }
+
+        // Methods to consume toggles
+        public bool ConsumeRecordingToggle()
+        {
+            bool req = _simControls.RecordingToggleInput;
+            _simControls.RecordingToggleInput = false;
+            return req;
+        }
+        
+        public bool ConsumeReplayToggle()
+        {
+            bool req = _simControls.ReplayToggleInput;
+            _simControls.ReplayToggleInput = false;
+            return req;
+        }
+
+        public bool ConsumeStepRequest()
+        {
+            bool req = _simControls.StepRequested;
+            _simControls.StepRequested = false;
+            return req;
+        }
+
+        public void Render(EntityRepository repository, ModuleHostKernel kernel, ScenarioManager scenarioManager, IInspectorContext inspectorCtx, IEnumerable<Fdp.Kernel.ComponentSystem> systems, PlaybackController? playback = null)
         {
             ImGui.SetNextWindowPos(new Vector2(10, 10), ImGuiCond.FirstUseEver);
             ImGui.SetNextWindowSize(new Vector2(300, 500), ImGuiCond.FirstUseEver);
             
             if (ImGui.Begin("Simulation Control"))
             {
-                ImGui.Text($"FPS: {Raylib_cs.Raylib.GetFPS()}");
+                _perfPanel.Render();
                 ImGui.Separator();
                 
                 if (ImGui.CollapsingHeader("Simulation", ImGuiTreeNodeFlags.DefaultOpen))
                 {
-                    _simControls.Render(simulation);
+                    _simControls.Render(repository, kernel, playback);
                 }
                 
                 if (ImGui.CollapsingHeader("Spawning", ImGuiTreeNodeFlags.DefaultOpen))
                 {
-                    _spawnControls.Render(simulation, UIState);
+                    _spawnControls.Render(scenarioManager, UIState);
                 }
                 
-                if (ImGui.CollapsingHeader("Performance", ImGuiTreeNodeFlags.DefaultOpen))
+                if (ImGui.CollapsingHeader("Performance"))
                 {
-                    _perfPanel.Render(simulation);
                     ImGui.Checkbox("Show System Profiler", ref _sysPerfWindow.IsOpen);
                 }
                 
                 ImGui.End();
             }
             
-            // Entity Inspector - use Framework panel
-            _entityInspector.Draw(simulation.Repository, inspectorCtx);
+            // Entity Inspector
+            _entityInspector.Draw(repository, inspectorCtx);
             
-            // Event Inspector - use Framework panel
-            // Need frame count? Use arbitrary incrementing counter or try to get from simulation
-            uint frame = (uint)Raylib_cs.Raylib.GetTime() * 60; // Approximate
-            // Better: _eventInspector.Update(simulation.Repository.Bus, frame);
-            // Actually, EventBrowserPanel needs Update() called to capture.
-            // Let's do it here for simplicity, assuming Bus has data available.
-            
-            // Note: EventBrowser uses internal history, Update adds to it.
-            // If we call Update here every frame, we capture events.
-            _eventInspector.Update(simulation.Repository.Bus, frame);
+            // Event Inspector
+            // Capture events from bus
+            _eventInspector.Update(repository.Bus, repository.GlobalVersion);
             _eventInspector.Draw();
             
-            // System Performance Profiler - separate window
-            _sysPerfWindow.Render(simulation.Systems);
+            // System Performance Profiler
+            _sysPerfWindow.Render(systems); 
         }
     }
 }

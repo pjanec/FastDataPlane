@@ -1,84 +1,109 @@
 using ImGuiNET;
-using Fdp.Examples.CarKinem.Simulation;
 using System.Numerics;
 using System;
+using ImGuiNET;
+using System.Numerics;
+using System;
+using Fdp.Kernel;
+using ModuleHost.Core;
+using Fdp.Kernel.FlightRecorder;
 
 namespace Fdp.Examples.CarKinem.UI
 {
     public class SimulationControlsPanel
     {
-        public bool IsPaused { get; private set; }
-        public float TimeScale = 1.0f;
+        public bool IsPaused { get; set; }
+        public float TimeScale { get; set; } = 1.0f;
+        
+        // Exposed Requests
+        public bool StepRequested { get; set; }
+        
+        // Recording / Replay
+        public bool IsRecording { get; set; } 
+        public bool IsReplaying { get; set; }
+        
+        public bool RecordingToggleInput { get; set; } 
+        public bool ReplayToggleInput { get; set; }    
 
-        public void Render(DemoSimulation sim)
+        public void Render(EntityRepository repository, ModuleHostKernel kernel, PlaybackController? playback = null)
         {
-            // Sync local state for external readers (MainUI)
-            IsPaused = sim.IsPaused;
-            
             // Play/Pause
-            if (ImGui.Button(sim.IsPaused ? "Play" : "Pause"))
+            if (ImGui.Button(IsPaused ? "Play" : "Pause"))
             {
-                sim.IsPaused = !sim.IsPaused;
+                IsPaused = !IsPaused;
             }
             
             ImGui.SameLine();
             
-            // Step
+            // Step (Only if paused)
             if (ImGui.Button("Step"))
             {
-                sim.StepForward();
+                StepRequested = true;
+                // If replaying, step usually moves forward one frame.
+                // If simulating, step advances one physics tick.
             }
             
             ImGui.SameLine();
             ImGui.SetNextItemWidth(100);
-            ImGui.SliderFloat("Speed", ref TimeScale, 0.1f, 5.0f);
-            
-            ImGui.Separator();
-            
-            var time = sim.Repository.GetSingletonUnmanaged<global::Fdp.Kernel.GlobalTime>();
-            ImGui.Text($"Time: {time.TotalTime:F2}s | Frame: {time.FrameNumber}");
-            
-            ImGui.Separator();
-            
-            // Replay / Recording
-            if (sim.IsReplaying) 
+            float scale = TimeScale;
+            if (ImGui.SliderFloat("Speed", ref scale, 0.1f, 5.0f))
             {
-                ImGui.TextColored(new Vector4(1, 1, 0, 1), $"REPLAY MODE [{sim.PlaybackController!.CurrentFrame}/{sim.PlaybackController!.TotalFrames}]");
-                
-                if (ImGui.Button("Stop Replay"))
+                TimeScale = scale;
+            }
+            
+            ImGui.Separator();
+
+            // Recording Controls
+            if (!IsReplaying)
+            {
+                if (ImGui.Button(IsRecording ? "Stop Recording" : "Record"))
                 {
-                    sim.StopReplay();
-                    return;
+                    RecordingToggleInput = true;
                 }
                 
-                int currentFrame = sim.PlaybackController!.CurrentFrame;
-                int maxFrame = Math.Max(0, sim.PlaybackController!.TotalFrames - 1);
+                ImGui.SameLine();
                 
-                if (ImGui.SliderInt("Timeline", ref currentFrame, 0, maxFrame))
+                if (ImGui.Button("Start Replay"))
                 {
-                    sim.IsPaused = true;
-                    sim.PlaybackController!.SeekToFrame(sim.Repository, currentFrame);
+                    ReplayToggleInput = true;
                 }
             }
             else
             {
-                if (sim.IsRecording)
+                if (ImGui.Button("Stop Replay"))
                 {
-                    ImGui.TextColored(new Vector4(1, 0, 0, 1), "RECORDING");
-                    ImGui.SameLine();
-                    ImGui.Text($"{sim.Recorder?.RecordedFrames ?? 0} frames");
-                }
-                else
-                {
-                    ImGui.TextDisabled("Recording Stopped");
-                }
-                
-                // Allow entering replay if we have data
-                if (ImGui.Button("Enter Replay Mode"))
-                {
-                    sim.StartReplay();
+                    ReplayToggleInput = true;
                 }
             }
+
+            if (IsReplaying && playback != null)
+            {
+                // Replay Status
+                ImGui.TextColored(new Vector4(1, 1, 0, 1), $"REPLAY MODE [{playback.CurrentFrame}/{playback.TotalFrames}]");
+                
+                // Timeline Slider
+                int currentFrame = playback.CurrentFrame;
+                int maxFrame = Math.Max(0, playback.TotalFrames - 1);
+                
+                ImGui.SetNextItemWidth(-1); // Full width
+                if (ImGui.SliderInt("##Timeline", ref currentFrame, 0, maxFrame, "Frame %d"))
+                {
+                    // User dragged slider - Pause and Seek
+                    IsPaused = true;
+                    // Seek immediately to provide visual feedback
+                    playback.SeekToFrame(repository, currentFrame);
+                }
+            }
+            else if (IsRecording)
+            {
+               ImGui.TextColored(new Vector4(1, 0, 0, 1), "RECORDING..."); 
+            }
+            
+            ImGui.Separator();
+            
+            var time = repository.GetSingletonUnmanaged<GlobalTime>();
+            ImGui.Text($"Time: {time.TotalTime:F2}s | Frame: {time.FrameNumber}");
+            ImGui.Text($"Mode: {kernel.GetTimeController().GetMode()}");
         }
     }
 }

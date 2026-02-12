@@ -1,32 +1,49 @@
 using ImGuiNET;
-using Fdp.Examples.CarKinem.Simulation;
-using Fdp.Kernel;
+using System.Numerics;
+using CarKinem.Systems;
 
 namespace Fdp.Examples.CarKinem.UI
 {
     public class PerformancePanel
     {
-        private float[] _frameTimeHistory = new float[60];
-        private int _historyIndex = 0;
-        
-        public void Render(DemoSimulation sim)
+        // Simple performance stats
+        public void Render()
         {
-            float dt = Raylib_cs.Raylib.GetFrameTime() * 1000.0f; // ms
+             ImGui.Text($"FPS: {Raylib_cs.Raylib.GetFPS()}");
+             ImGui.Text($"Frame Time: {Raylib_cs.Raylib.GetFrameTime() * 1000.0f:F2} ms");
+             
+             // System stats would require access to Systems list
+        }
+    }
+    
+    public class SystemPerformanceWindow
+    {
+        public bool IsOpen = false;
+        
+        public void Render(System.Collections.Generic.IEnumerable<Fdp.Kernel.ComponentSystem> systems)
+        {
+            if (!IsOpen) return;
             
-            _frameTimeHistory[_historyIndex] = dt;
-            _historyIndex = (_historyIndex + 1) % _frameTimeHistory.Length;
-            
-            ImGui.Text($"FPS: {Raylib_cs.Raylib.GetFPS()}");
-            ImGui.Text($"Frame Time: {dt:F2} ms");
-            
-            ImGui.PlotLines("Frame Time", ref _frameTimeHistory[0], _frameTimeHistory.Length, 0, "", 0, 33.0f, new System.Numerics.Vector2(0, 50));
-            
-            ImGui.Separator();
-            // In a real ModuleHost scenario we would query the Kernel for system timings.
-            // Since we are running systems manually in DemoSimulation, we don't have automatic metrics.
-            // Placeholder for now.
-             ImGui.TextDisabled("Detailed system profiling requires");
-             ImGui.TextDisabled("kernel integration updates.");
+            ImGui.SetNextWindowSize(new Vector2(400, 300), ImGuiCond.FirstUseEver);
+            if (ImGui.Begin("System Performance", ref IsOpen))
+            {
+                ImGui.Columns(2, "perf_cols", true);
+                ImGui.Separator();
+                ImGui.Text("System Name"); ImGui.NextColumn();
+                ImGui.Text("Time (ms)"); ImGui.NextColumn();
+                ImGui.Separator();
+                
+                foreach(var sys in systems)
+                {
+                    ImGui.Text(sys.GetType().Name);
+                    ImGui.NextColumn();
+                    ImGui.Text($"{sys.LastUpdateDuration:F4}");
+                    ImGui.NextColumn();
+                }
+                
+                ImGui.Columns(1);
+                ImGui.End();
+            }
         }
     }
 }

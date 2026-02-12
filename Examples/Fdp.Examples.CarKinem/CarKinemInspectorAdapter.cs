@@ -1,6 +1,6 @@
 using Fdp.Kernel;
 using FDP.Toolkit.ImGui.Abstractions;
-using Fdp.Examples.CarKinem.Input;
+using Fdp.Examples.CarKinem.Core;
 
 namespace Fdp.Examples.CarKinem
 {
@@ -46,6 +46,21 @@ namespace Fdp.Examples.CarKinem
             }
         }
         
-        public Entity? HoveredEntity { get; set; }
+        public Entity? HoveredEntity 
+        { 
+            get 
+            {
+                if (_selectionManager.HoveredEntityId.HasValue)
+                     return new Entity(_selectionManager.HoveredEntityId.Value, 0); // Simplified
+                return null;
+            }
+            set 
+            {
+                if (value.HasValue)
+                    _selectionManager.HoveredEntityId = value.Value.Index;
+                else
+                    _selectionManager.HoveredEntityId = null;
+            }
+        }
     }
 }

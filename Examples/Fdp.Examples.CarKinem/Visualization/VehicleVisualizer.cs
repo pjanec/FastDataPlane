@@ -3,12 +3,26 @@ using Raylib_cs;
 using Fdp.Kernel;
 using FDP.Toolkit.Vis2D.Abstractions;
 using CarKinem.Core;
+using CarKinem.Formation;
 using ModuleHost.Core.Abstractions;
+using Fdp.Examples.CarKinem.Components; // Ensure components are available
+using System;
+using System.Diagnostics;
+using CarKinem.Trajectory; // Trajectory Pool
+using Fdp.Kernel.Collections;
+using ExampleCore = Fdp.Examples.CarKinem.Core;
 
 namespace Fdp.Examples.CarKinem.Visualization;
 
 public class VehicleVisualizer : IVisualizerAdapter
 {
+    private readonly TrajectoryPoolManager? _trajectoryPool;
+
+    public VehicleVisualizer(TrajectoryPoolManager? trajectoryPool = null)
+    {
+        _trajectoryPool = trajectoryPool;
+    }
+
     public Vector2? GetPosition(ISimulationView view, Entity entity)
     {
         if (view.HasComponent<VehicleState>(entity))
@@ -35,8 +49,8 @@ public class VehicleVisualizer : IVisualizerAdapter
         ref readonly var state = ref view.GetComponentRO<VehicleState>(entity);
         ref readonly var parameters = ref view.GetComponentRO<VehicleParams>(entity);
 
-        var (r, g, b) = VehiclePresets.GetColor(parameters.Class);
-        var color = new Color(r, g, b, (byte)255);
+        // Use extracted logic for color
+        Color color = ExampleCore.ExampleVehiclePresets.GetColorForEntity(view, entity, parameters);
 
         // Highlight if selected
         if (isSelected)
@@ -45,7 +59,7 @@ public class VehicleVisualizer : IVisualizerAdapter
         }
         else if (isHovered)
         {
-            color = new Color((byte)Math.Min(r + 50, 255), (byte)Math.Min(g + 50, 255), (byte)Math.Min(b + 50, 255), (byte)255);
+            color = new Color((byte)Math.Min(color.R + 50, 255), (byte)Math.Min(color.G + 50, 255), (byte)Math.Min(color.B + 50, 255), (byte)255);
         }
 
         // Draw rotated rectangle
@@ -56,15 +70,131 @@ public class VehicleVisualizer : IVisualizerAdapter
         
         Raylib.DrawRectanglePro(rec, origin, rotationDeg, color);
 
-        // Draw front indicator (a line or triangle)
-        // Let's just draw a small line from center to front
-        Vector2 front = position + state.Forward * (parameters.Length / 2);
-        Raylib.DrawLineV(position, front, Color.Black);
+        // Draw front indicator (triangle)
+        // Replicating VehicleRenderer triangle logic slightly simplified
+        // Or just a line as before? VehicleRenderer used a triangle.
+        // Let's stick to the previous code if it was acceptable, but refine it.
+        // Previous VehicleVisualizer used a line. VehicleRenderer used a triangle.
+        // Let's use Line for simplicity unless requested otherwise.
+        
+        Vector2 front = position + state.Forward * (parameters.Length / 2 * 0.8f);
+        Raylib.DrawLineEx(position, front, 0.2f, Color.Black);
         
         // Draw selection ring
         if (isSelected)
         {
-            Raylib.DrawCircleLines((int)position.X, (int)position.Y, parameters.Length * 0.7f, Color.White);
+            Raylib.DrawRing(position, parameters.Length * 0.6f, parameters.Length * 0.7f, 0, 360, 32, new Color(255, 255, 255, 128));
+             
+            // Draw Nav Diagnostics for selected
+            if (view.HasComponent<NavState>(entity))
+            {
+                var nav = view.GetComponentRO<NavState>(entity);
+                
+                // Draw Active Trajectory Spline
+                if (nav.TrajectoryId > 0 && _trajectoryPool != null)
+                {
+                    if (_trajectoryPool.TryGetTrajectory(nav.TrajectoryId, out var traj))
+                    {
+                        // Draw sampled spline or waypoints
+                        // For performance, we sample every 2 meters or similar, or just draw waypoints if linear
+                        
+                        if (traj.Waypoints.IsCreated) // NativeArray check
+                        {
+                            // Draw raw waypoints first as dots
+                            for (int i = 0; i < traj.Waypoints.Length; i++)
+                            {
+                                Raylib.DrawCircleV(traj.Waypoints[i].Position, 0.3f, new Color(255, 215, 0, 150)); // Gold dots
+                            }
+
+                            // Draw continuous path
+                            if (traj.Waypoints.IsCreated && traj.Waypoints.Length >= 2)
+                            {
+                                if (traj.Interpolation == TrajectoryInterpolation.Linear)
+                                {
+                                    // Linear: Draw straight lines between waypoints
+                                    // We can just draw lines from current pos -> next waypoint -> ... -> end
+                                    
+                                    // Identify next waypoint
+                                    int nextIdx = -1;
+                                    for(int i=0; i<traj.Waypoints.Length; i++)
+                                    {
+                                        if (traj.Waypoints[i].CumulativeDistance > nav.ProgressS)
+                                        {
+                                            nextIdx = i;
+                                            break;
+                                        }
+                                    }
+                                    
+                                    var (currentPos, _, _) = _trajectoryPool.SampleTrajectory(nav.TrajectoryId, nav.ProgressS);
+                                    
+                                    if (nextIdx != -1)
+                                    {
+                                        Raylib.DrawLineEx(currentPos, traj.Waypoints[nextIdx].Position, 0.15f, new Color(50, 200, 255, 100)); // Blue-ish
+                                        for(int i=nextIdx; i<traj.Waypoints.Length-1; i++)
+                                        {
+                                            Raylib.DrawLineEx(traj.Waypoints[i].Position, traj.Waypoints[i+1].Position, 0.15f, new Color(50, 200, 255, 100));
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    // Hermite/Spline: Sample smoothly
+                                    // Use Orange/Gold for splines as requested
+                                    Color splineColor = new Color(255, 161, 0, 200); // Legacy Orange
+                                    
+                                    float step = 1.0f; // 1 meter steps
+                                    float startS = nav.ProgressS;
+                                    float endS = traj.TotalLength;
+                                    
+                                    Vector2 prevPos = _trajectoryPool.SampleTrajectory(nav.TrajectoryId, startS).pos;
+                                    
+                                    for (float s = startS + step; s <= endS; s += step)
+                                    {
+                                        Vector2 currentPos = _trajectoryPool.SampleTrajectory(nav.TrajectoryId, s).pos;
+                                        Raylib.DrawLineEx(prevPos, currentPos, 0.15f, splineColor);
+                                        prevPos = currentPos;
+                                    }
+                                    // Close final gap
+                                    Vector2 finalPos = _trajectoryPool.SampleTrajectory(nav.TrajectoryId, endS).pos;
+                                    Raylib.DrawLineEx(prevPos, finalPos, 0.15f, splineColor);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                if (nav.Mode == NavigationMode.None && !nav.HasArrived.Equals(1)) // Using Equals(1) for byte bool? Or just > 0
+                {
+                    Raylib.DrawLineEx(state.Position, nav.FinalDestination, 0.1f, new Color(0, 255, 255, 100));
+                    Raylib.DrawCircleV(nav.FinalDestination, 0.5f, new Color(0, 255, 255, 100));
+                }
+                else if (nav.Mode == NavigationMode.Formation && view.HasComponent<FormationTarget>(entity))
+                {
+                     var target = view.GetComponentRO<FormationTarget>(entity);
+                     Raylib.DrawLineEx(state.Position, target.TargetPosition, 0.1f, new Color(200, 200, 200, 100));
+                     Raylib.DrawCircleV(target.TargetPosition, 0.3f, new Color(200, 200, 200, 100));
+                }
+            }
+        }
+        
+        // Draw Formation Leader lines (Legacy functionality)
+        if (view.HasComponent<FormationRoster>(entity))
+        {
+             var roster = view.GetComponentRO<FormationRoster>(entity);
+             if (roster.Count > 0)
+             {
+                  Raylib.DrawRing(position, parameters.Width * 0.6f, parameters.Width * 0.8f, 0, 360, 32, Color.Magenta);
+                  
+                  for (int i = 1; i < roster.Count; i++)
+                  {
+                      var follower = roster.GetMember(i);
+                      if (view.IsAlive(follower) && view.HasComponent<VehicleState>(follower))
+                      {
+                          var fState = view.GetComponentRO<VehicleState>(follower);
+                          Raylib.DrawLineEx(position, fState.Position, 0.1f, new Color(255, 0, 255, 128));
+                      }
+                  }
+             }
         }
     }
     

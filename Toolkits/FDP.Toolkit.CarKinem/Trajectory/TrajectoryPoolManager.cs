@@ -329,6 +329,20 @@ namespace CarKinem.Trajectory
             }
         }
         
+        public void Clear()
+        {
+            lock (_lock)
+            {
+                foreach (var traj in _trajectories.Values)
+                {
+                    if (traj.Waypoints.IsCreated)
+                        traj.Waypoints.Dispose();
+                }
+                _trajectories.Clear();
+                _nextId = 1;
+            }
+        }
+
         /// <summary>
         /// Cleanup all trajectories (call on shutdown).
         /// </summary>

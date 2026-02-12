@@ -16,6 +16,9 @@ namespace FDP.Toolkit.Time.Controllers
         private float _timeScale;
         private double _unscaledTotalTime;
         
+        private float _lastDeltaTime;
+        private float _lastUnscaledDeltaTime;
+        
         /// <summary>
         /// Create a stepping controller with initial state.
         /// </summary>
@@ -25,19 +28,20 @@ namespace FDP.Toolkit.Time.Controllers
         }
         
         /// <summary>
-        /// Update() does nothing - stepping controller only advances on Step().
-        /// Returns current frozen time.
+        /// Update() returns the time state corresponding to the last step.
+        /// Use Step() to advance time.
         /// </summary>
         public GlobalTime Update()
         {
-            // No wall clock measurement - return frozen time
+            // Return state including the delta from the last step
+            // This allows the Kernel to see the time progression when Update() is called.
             return new GlobalTime
             {
                 FrameNumber = _frameNumber,
-                DeltaTime = 0.0f,  // No time passes
+                DeltaTime = _lastDeltaTime,
                 TotalTime = _totalTime,
                 TimeScale = _timeScale,
-                UnscaledDeltaTime = 0.0f,
+                UnscaledDeltaTime = _lastUnscaledDeltaTime,
                 UnscaledTotalTime = _unscaledTotalTime
             };
         }
@@ -53,15 +57,10 @@ namespace FDP.Toolkit.Time.Controllers
             _frameNumber++;
             _unscaledTotalTime += fixedDeltaTime;
             
-            return new GlobalTime
-            {
-                FrameNumber = _frameNumber,
-                DeltaTime = scaledDelta,
-                TotalTime = _totalTime,
-                TimeScale = _timeScale,
-                UnscaledDeltaTime = fixedDeltaTime,
-                UnscaledTotalTime = _unscaledTotalTime
-            };
+            _lastDeltaTime = scaledDelta;
+            _lastUnscaledDeltaTime = fixedDeltaTime;
+            
+            return Update();
         }
         
         public void SetTimeScale(float scale)
@@ -101,6 +100,9 @@ namespace FDP.Toolkit.Time.Controllers
             _frameNumber = state.FrameNumber;
             _timeScale = state.TimeScale;
             _unscaledTotalTime = state.UnscaledTotalTime;
+            // When seeding, reset delta
+            _lastDeltaTime = 0.0f;
+            _lastUnscaledDeltaTime = 0.0f;
         }
         
         public void Dispose()

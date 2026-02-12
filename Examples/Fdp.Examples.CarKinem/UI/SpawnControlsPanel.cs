@@ -1,17 +1,26 @@
 using ImGuiNET;
 using System.Numerics;
-using Fdp.Examples.CarKinem.Simulation;
-using CarKinem.Core;
-using CarKinem.Trajectory;
+using Fdp.Examples.CarKinem.Core;
+using CarKinem.Core; // VehicleClass
 using CarKinem.Formation;
+using CarKinem.Trajectory;
 
 namespace Fdp.Examples.CarKinem.UI
 {
+    // Need a shared state object for UI selections
+    public class UIState
+    {
+        public VehicleClass SelectedVehicleClass { get; set; } = VehicleClass.PersonalCar;
+        public FormationType SelectedFormationType { get; set; } = FormationType.Column;
+        public TrajectoryInterpolation InterpolationMode { get; set; } = TrajectoryInterpolation.CatmullRom;
+    }
+
     public class SpawnControlsPanel
     {
         private int _spawnCount = 10;
         private bool _randomMovement = true;
-        public void Render(DemoSimulation sim, UIState uiState)
+        
+        public void Render(ScenarioManager scenarioManager, UIState uiState)
         {
             ImGui.SliderInt("Spawn Count", ref _spawnCount, 1, 100);
             ImGui.Checkbox("Random Movement", ref _randomMovement);
@@ -24,14 +33,7 @@ namespace Fdp.Examples.CarKinem.UI
             if (ImGui.RadioButton("Catmull-Rom (Smooth)", ref mode, 1)) uiState.InterpolationMode = TrajectoryInterpolation.CatmullRom;
             
             // Vehicle class combo box
-            string[] classNames = new string[]
-            {
-                "Personal Car",
-                "Truck",
-                "Bus",
-                "Tank",
-                "Pedestrian"
-            };
+            string[] classNames = Enum.GetNames(typeof(VehicleClass));
             
             int selectedIndex = (int)uiState.SelectedVehicleClass;
             if (ImGui.Combo("Vehicle Type", ref selectedIndex, classNames, classNames.Length))
@@ -41,32 +43,34 @@ namespace Fdp.Examples.CarKinem.UI
             
             if (ImGui.Button("Spawn Vehicles"))
             {
-                SpawnVehicles(sim, _spawnCount, _randomMovement, uiState.SelectedVehicleClass, uiState.InterpolationMode);
+                // Use generic spawn or Roamers based on checkbox
+                if (_randomMovement)
+                    scenarioManager.SpawnRoamers(_spawnCount, uiState.SelectedVehicleClass, uiState.InterpolationMode);
+                else
+                    scenarioManager.SpawnRoadUsers(_spawnCount, uiState.SelectedVehicleClass); // Or similar fallback
             }
             
             ImGui.SameLine();
             
             if (ImGui.Button("Spawn Collision Test"))
             {
-                sim.SpawnCollisionTest(uiState.SelectedVehicleClass);
+                scenarioManager.SpawnCollisionTest(uiState.SelectedVehicleClass);
             }
             ImGui.SameLine();
             if (ImGui.Button("Spawn Road Users"))
             {
-               sim.SpawnRoadUsers(_spawnCount, uiState.SelectedVehicleClass);
+               scenarioManager.SpawnRoadUsers(_spawnCount, uiState.SelectedVehicleClass);
             }
             ImGui.SameLine();
             if (ImGui.Button("Spawn Roamers"))
             {
-               sim.SpawnRoamers(_spawnCount, uiState.SelectedVehicleClass, uiState.InterpolationMode);
+               scenarioManager.SpawnRoamers(_spawnCount, uiState.SelectedVehicleClass, uiState.InterpolationMode);
             }
-            ImGui.SameLine();
-            
             ImGui.SameLine();
             
             if (ImGui.Button("Clear All"))
             {
-                // sim.ClearAllVehicles(); // TODO: Implement Clear in Simulation
+                // scenarioManager.ClearAll()? 
             }
             
             ImGui.Separator();
@@ -82,47 +86,17 @@ namespace Fdp.Examples.CarKinem.UI
             
             if (ImGui.Button("Spawn Formation"))
             {
-                sim.SpawnFormation(uiState.SelectedVehicleClass, uiState.SelectedFormationType, _spawnCount, uiState.InterpolationMode);
+                scenarioManager.SpawnFormation(uiState.SelectedVehicleClass, uiState.SelectedFormationType, _spawnCount, uiState.InterpolationMode);
             }
             ImGui.TextColored(new Vector4(0, 1, 0, 1), "Hint: Select the Leader to move the entire formation.");
             ImGui.TextDisabled("(Leader marked with 'Leader' label)");
             
             // Show vehicle class info
-            var preset = VehiclePresets.GetPreset(uiState.SelectedVehicleClass);
+            var preset = global::CarKinem.Core.VehiclePresets.GetPreset(uiState.SelectedVehicleClass);
             ImGui.Separator();
             ImGui.Text($"Size: {preset.Length:F1}m x {preset.Width:F1}m");
             ImGui.Text($"Max Speed: {preset.MaxSpeedFwd:F1} m/s");
             ImGui.Text($"Max Turn: {(preset.MaxSteerAngle * 180 / MathF.PI):F0}°");
-        }
-        
-        private void SpawnVehicles(DemoSimulation sim, int count, bool randomMovement, VehicleClass vehicleClass, TrajectoryInterpolation interpolation)
-        {
-            var rng = new Random();
-            
-            for (int i = 0; i < count; i++)
-            {
-                Vector2 pos = new Vector2(
-                    rng.Next(0, 500),
-                    rng.Next(0, 500)
-                );
-                
-                Vector2 heading = new Vector2(
-                    (float)rng.NextDouble() * 2 - 1,
-                    (float)rng.NextDouble() * 2 - 1
-                );
-                heading = Vector2.Normalize(heading);
-                
-                int entityIndex = sim.SpawnVehicle(pos, heading, vehicleClass);
-                
-                if (randomMovement)
-                {
-                    Vector2 destination = new Vector2(
-                        rng.Next(0, 500),
-                        rng.Next(0, 500)
-                    );
-                    sim.IssueMoveToPointCommand(entityIndex, destination, interpolation);
-                }
-            }
         }
     }
 }
