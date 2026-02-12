@@ -404,6 +404,21 @@ public class CarKinemApp : FdpApplication
 
         bool shouldStep = false;
 
+        // A. ALWAYS Update Kernel (Time & Event Buffer Swap)
+        _kernel.Update();
+
+        // B. ALWAYS Run Logic Systems (Command, Formation)
+        // These systems consume input events from buffers (swapped above).
+        // If we don't run them, next frame properties will be lost.
+        // They only set intentions/state, not physics.
+        // (Unless in Replay Mode, where we might want to disable them)
+        if (_playback == null)
+        {
+            _commandSystem.Run();
+            _formationSystem.Run();
+        }
+
+        // C. Conditional Physics/Stepping Logic
         // If Replaying, we drive from Playback
         if (_playback != null)
         {
@@ -420,37 +435,28 @@ public class CarKinemApp : FdpApplication
         }
         else
         {
-            // Normal Simulation
-            
+            // Normal Simulation Logic
             if (_legacyUI.ConsumeStepRequest())
             {
-                // Single Step
+                // Single Step: Force SteppingController to advance
                  _steppingTime.Step(1.0f / 60.0f);
-                 // Need to update Kernel so systems see the new time
-                 _kernel.Update(); 
                  shouldStep = true;
             }
             else if (!isPaused)
             {
-                // Continuous Run
-                _kernel.Update(); // Updates time
+                // Continuous Run already updated time in _kernel.Update()
                 shouldStep = true;
-            }
-            else
-            {
-                // Paused, just update Kernel for time? NO, SteppingController does nothing on Update
-                _kernel.Update();
             }
         }
 
-        // --- 3. System Execution ---
+        // --- 3. Physics & Integration Execution ---
         
         if (shouldStep)
         {
-            // Run Systems
+            // Run Systems that integrate/modify physics state
             _spatialSystem.Run();
-            _formationSystem.Run();
-            _commandSystem.Run();
+            // _formationSystem.Run(); // Moved strictly to always run (Logic)
+            // _commandSystem.Run();   // Moved strictly to always run (Logic)
             _kinematicsSystem.Run();
             
             _scenarioManager.Update();

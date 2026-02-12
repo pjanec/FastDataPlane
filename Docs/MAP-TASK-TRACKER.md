@@ -95,9 +95,9 @@
 - [x] **MAP-P7-005** MapCamera Logic Split [details](./MAP-TASK-DETAIL.md#map-p7-005-mapcamera-logic-split)
 - [x] **MAP-P7-006** MapCanvas Input Pipeline Formalization [details](./MAP-TASK-DETAIL.md#map-p7-006-mapcanvas-input-pipeline-formalization)
 - [x] **MAP-P7-007** Tool Event Pattern [details](./MAP-TASK-DETAIL.md#map-p7-007-tool-event-pattern)
-- [ ] **MAP-P7-008** Multi-Selection Support [details](./MAP-TASK-DETAIL.md#map-p7-008-multi-selection-support)
-- [ ] **MAP-P7-009** Input Action Mapping [details](./MAP-TASK-DETAIL.md#map-p7-009-input-action-mapping)
-- [ ] **MAP-P7-010** Visual Picking for Hierarchical Layers [details](./MAP-TASK-DETAIL.md#map-p7-010-visual-picking-for-hierarchical-layers)
+- [x] **MAP-P7-008** Multi-Selection Support [details](./MAP-TASK-DETAIL.md#map-p7-008-multi-selection-support)
+- [x] **MAP-P7-009** Input Action Mapping [details](./MAP-TASK-DETAIL.md#map-p7-009-input-action-mapping)
+- [x] **MAP-P7-010** Visual Picking for Hierarchical Layers [details](./MAP-TASK-DETAIL.md#map-p7-010-visual-picking-for-hierarchical-layers)
 
 ---
 
@@ -133,7 +133,7 @@
 - Phase 4 (Integration): 5/5 tasks completed ✅
 - Phase 5 (Tools): 0/6 tasks completed (Postponed)
 - Phase 6 (Aggregation): 0/6 tasks completed
-- Phase 7 (Architecture): 0/10 tasks completed (Active)
+- Phase 7 (Architecture): 10/10 tasks completed ✅
 - Performance: 0/2 tasks completed
 - Documentation: 0/2 tasks completed
 
@@ -153,13 +153,16 @@
 - ✅ **MapCamera Logic Split** (MAP-P7-005)
 - ✅ **Input Pipeline Formalization** (MAP-P7-006)
 - ✅ **Tool Event Pattern** (MAP-P7-007)
+- ✅ **Multi-Selection Support** (MAP-P7-008)
+- ✅ **Input Action Mapping** (MAP-P7-009)
+- ✅ **Visual Picking** (MAP-P7-010)
 
 **Active Tasks**:
-- MAP-P7-008 through MAP-P7-010 assigned to **BATCH-10**
+- Phase 7 Complete. Ready for Phase 6 (Aggregation) or Phase 5 (Tools).
 
 **Blockers**: None
 
-**Next Up**: MAP-P7-008 (Multi-Selection Support)
+**Next Up**: Planning Next Phase
 
 ---
 
