@@ -11,7 +11,6 @@ using Fdp.Examples.CarKinem.Visualization;
 using Fdp.Examples.CarKinem.Core;
 using Fdp.Examples.CarKinem.Components;
 using Fdp.Examples.CarKinem.UI; // UI Panels
-using Fdp.Examples.CarKinem.Input; // Input
 using CarKinem.Core;
 using CarKinem.Road;
 using CarKinem.Spatial;
@@ -25,6 +24,8 @@ using ModuleHost.Core.Time; // ITimeController
 using FDP.Toolkit.Time.Controllers;
 using Fdp.Kernel.FlightRecorder; // Recorder
 
+using FDP.Toolkit.Vis2D.Tools; // Added Tools namespace
+
 namespace Fdp.Examples.CarKinem;
 
 public class CarKinemApp : FdpApplication
@@ -33,6 +34,10 @@ public class CarKinemApp : FdpApplication
     private EntityRepository _repository = null!;
     private ModuleHostKernel _kernel = null!;
     private EventAccumulator _eventAccumulator = null!;
+    private EntityQuery _vehicleQuery = null!; // Promoted to field for Tools
+    
+    // Tools
+    private StandardInteractionTool _interactionTool = null!;
     
     // Time & Recording (Restored)
     private SwitchableTimeController _timeController = null!;
@@ -52,7 +57,7 @@ public class CarKinemApp : FdpApplication
     private TrajectoryPoolManager _trajectoryPool = null!;
     private FormationTemplateManager _formationTemplates = null!;
     private ScenarioManager _scenarioManager = null!;
-    private InputManager _inputManager = null!;
+    // private InputManager _inputManager = null!; // Removed
 
     // Visualization
     private MapCanvas _map = null!;
@@ -151,7 +156,7 @@ public class CarKinemApp : FdpApplication
         _selectionManager = new SelectionManager(); 
         _inspectorAdapter = new CarKinemInspectorAdapter(_selectionManager, _repository);
         
-        var vehicleQuery = _repository.Query()
+        _vehicleQuery = _repository.Query()
             .With<VehicleState>()
             .With<VehicleParams>()
             .Build();
@@ -160,7 +165,7 @@ public class CarKinemApp : FdpApplication
             "Vehicles",     
             0,              
             _repository, 
-            vehicleQuery, 
+            _vehicleQuery, 
             _vehicleVisualizer, 
             _inspectorAdapter
         );
@@ -171,7 +176,76 @@ public class CarKinemApp : FdpApplication
         
         // 3. UI & Input
         _legacyUI = new MainUI();
-        _inputManager = new InputManager();
+        
+        // 3. UI & Input
+        _legacyUI = new MainUI();
+        
+        // --- Tool Setup ---
+        _interactionTool = new StandardInteractionTool(_repository, _vehicleQuery, _vehicleVisualizer);
+        
+        // 1. Generic Interaction (Clicks)
+        _interactionTool.OnWorldClick += (pos, btn, shift, ctrl, hit) =>
+        {
+             if (btn == MouseButton.Left)
+             {
+                 if (_repository.IsAlive(hit))
+                      _selectionManager.Select(hit.Index, additive: shift || ctrl);
+                 else if (!shift && !ctrl) 
+                      _selectionManager.Clear();
+             }
+             else if (btn == MouseButton.Right)
+             {
+                 // Action / Context
+                 if (shift)
+                 {
+                     // Add Waypoint (Shift+Right) (DRY with PointSequenceTool)
+                     var selected = _inspectorAdapter.SelectedEntity;
+                     if (selected.HasValue)
+                     {
+                          var mode = _legacyUI?.UIState?.InterpolationMode ?? global::CarKinem.Trajectory.TrajectoryInterpolation.CatmullRom;
+                          _scenarioManager.AddWaypoint(selected.Value.Index, pos, mode);
+                     }
+                 }
+                 else
+                 {
+                     // Context (Navigate)
+                     var selected = _inspectorAdapter.SelectedEntity;
+                     if (selected.HasValue)
+                     {
+                        _repository.Bus.Publish(new CmdNavigateToPoint 
+                        {
+                            Entity = selected.Value,
+                            Destination = pos,
+                            ArrivalRadius = 3.0f,
+                            Speed = 10.0f
+                        });
+                     }
+                 }
+             }
+        };
+
+        // 2. Region Select
+        _interactionTool.OnRegionSelected += (entities) =>
+        {
+             // Assumes Replace logic for now
+             _selectionManager.SetSelection(entities.Select(e => e.Index));
+        };
+        
+        // 3. Drag
+        _interactionTool.OnEntityMoved += (entity, newPos) =>
+        {
+            if (_repository.HasComponent<VehicleState>(entity))
+            {
+                var s = _repository.GetComponentRO<VehicleState>(entity);
+                s.Position = newPos;
+                _repository.SetComponent(entity, s);
+            }
+        };
+        
+        _map.SwitchTool(_interactionTool);
+        
+        // Input Manager removed
+        // _inputManager = new InputManager();
         // _inputManager.EnableCameraControl = false; // MapCanvas handles it
     }
 
@@ -201,6 +275,26 @@ public class CarKinemApp : FdpApplication
 
     protected override void OnUpdate(float dt)
     {
+        // Global Input Handling (Delete)
+        if (Raylib.IsKeyPressed(KeyboardKey.Delete)) 
+        {
+             var toDelete = _selectionManager.SelectedIds.ToList();
+             if (toDelete.Count > 0)
+             {
+                 var idx = _repository.GetEntityIndex();
+                 foreach(var id in toDelete)
+                 {
+                     if (id <= idx.MaxIssuedIndex)
+                     {
+                         ref var header = ref idx.GetHeader(id);
+                         if (header.IsActive)
+                             _repository.DestroyEntity(new Entity(id, header.Generation));
+                     }
+                 }
+                 _selectionManager.Clear();
+             }
+        }
+
         // --- 1. Handle Input (Pause/Record/Replay) ---
         
         // Pause/Play Logic (Time Mode Switching)
@@ -359,8 +453,39 @@ public class CarKinemApp : FdpApplication
             }
         }
 
-        // 4. Input Manager (Right Click -> Navigate)
-        _inputManager.HandleInput(_selectionManager, _scenarioManager, _map.Camera.InnerCamera, _legacyUI.UIState);
+        // 4. Input Manager (Right Click -> Navigate) REMOVED
+        // _inputManager.HandleInput(_selectionManager, _scenarioManager, _map.Camera.InnerCamera, _legacyUI.UIState);
+        
+        // --- Tool Interactions (Draw Path) ---
+        // Press P to draw path for selected entity
+        if (Raylib.IsKeyPressed(KeyboardKey.P) && _selectionManager.SelectedEntityId.HasValue)
+        {
+            var entityId = _selectionManager.SelectedEntityId.Value;
+            var pathTool = new PointSequenceTool(points => 
+            {
+                if (points.Length > 0)
+                {
+                    // Call ScenarioManager SetDestination/AddWaypoint sequence
+                    // Clear path by calling SetDestination with first point
+                    _scenarioManager.SetDestination(entityId, points[0], _legacyUI.UIState.InterpolationMode);
+                    
+                    // Add remaining points
+                    for (int i = 1; i < points.Length; i++)
+                    {
+                        _scenarioManager.AddWaypoint(entityId, points[i], _legacyUI.UIState.InterpolationMode);
+                    }
+                }
+                
+                // Switch back to default
+                _map.PopTool();
+            });
+            _map.PushTool(pathTool);
+        }
+        else if (Raylib.IsKeyPressed(KeyboardKey.Escape))
+        {
+             // Reset tool
+             _map.SwitchTool(_interactionTool);
+        }
 
         // 5. Map Update (Camera/Zoom/Layers)
         _map.Update(dt);

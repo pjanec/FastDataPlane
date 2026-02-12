@@ -40,9 +40,9 @@ namespace Fdp.Examples.CarKinem
             set 
             {
                 if (value.HasValue)
-                    _selectionManager.SelectedEntityId = value.Value.Index;
+                    _selectionManager.Select(value.Value.Index, false);
                 else
-                    _selectionManager.SelectedEntityId = null;
+                    _selectionManager.Clear();
             }
         }
         

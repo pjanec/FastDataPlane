@@ -13,8 +13,19 @@ namespace FDP.Toolkit.Vis2D
         public uint ActiveLayerMask { get; set; } = 0xFFFFFFFF;
         
         // Backing field for ActiveTool to allow private set
-        public IMapTool ActiveTool { get; private set; }
+        public IMapTool? ActiveTool
+        {
+             get => _toolStack.Count > 0 ? _toolStack.Peek() : null;
+             // Set is removed, use SwitchTool/PushTool
+        }
 
+        private readonly Stack<IMapTool> _toolStack = new();
+        private bool _isSwitching = false;
+        
+        // Input state tracking to separate Click from Drag
+        private bool _isDraggingInteraction = false;
+
+        public IReadOnlyList<IMapLayer> Layers => _layers;
         private readonly List<IMapLayer> _layers = new();
 
         public void AddLayer(IMapLayer layer)
@@ -28,15 +39,80 @@ namespace FDP.Toolkit.Vis2D
             _layers.Remove(layer);
         }
 
-        public void SwitchTool(IMapTool tool)
+        /// <summary>
+        /// Clears the tool stack and sets the new tool as the base.
+        /// Use this for major mode switches.
+        /// </summary>
+        public void SwitchTool(IMapTool? tool)
         {
-            if (ActiveTool != null)
-                ActiveTool.OnExit();
+            if (_isSwitching) return; // Prevent recursion loops
             
-            ActiveTool = tool;
+            // Check if we are already effective
+            // if (ActiveTool == tool) return; // Hard to check with stack clearing semantics
+
+            _isSwitching = true;
+            try
+            {
+                // Exit all tools in stack from top to bottom
+                while (_toolStack.Count > 0)
+                {
+                    var t = _toolStack.Pop();
+                    t.OnExit();
+                }
+                
+                if (tool != null)
+                {
+                    _toolStack.Push(tool);
+                    tool.OnEnter(this);
+                }
+            }
+            finally
+            {
+                _isSwitching = false;
+            }
+        }
+        
+        /// <summary>
+        /// Pushes a new tool onto the stack (e.g. starting a sub-task).
+        /// The previous tool is suspended (OnExit *is* called?).
+        /// Convention: OnExit is usually called when losing focus.
+        /// </summary>
+        public void PushTool(IMapTool tool)
+        {
+             if (_isSwitching) return;
+             _isSwitching = true;
+             try 
+             {
+                 var current = ActiveTool;
+                 // We choose NOT to call OnExit on the suspended tool? 
+                 // Or we DO call OnExit, and OnEnter when it returns?
+                 // Standard state machine: Exit old, Enter new.
+                 if (current != null) current.OnExit();
+                 
+                 _toolStack.Push(tool);
+                 tool.OnEnter(this);
+             }
+             finally { _isSwitching = false; }
+        }
+        
+        /// <summary>
+        /// Pops the current tool and returns to the previous one.
+        /// </summary>
+        public void PopTool()
+        {
+            if (_isSwitching) return;
+            if (_toolStack.Count == 0) return;
             
-            if (ActiveTool != null)
-                ActiveTool.OnEnter(this);
+            _isSwitching = true;
+            try
+            {
+                var current = _toolStack.Pop();
+                current.OnExit();
+                
+                var prev = ActiveTool;
+                if (prev != null) prev.OnEnter(this);
+            }
+            finally { _isSwitching = false; }
         }
 
         public void ResetTool()
@@ -116,35 +192,64 @@ namespace FDP.Toolkit.Vis2D
             
             bool leftPressed = IsMouseButtonPressed(MouseButton.Left);
             bool rightPressed = IsMouseButtonPressed(MouseButton.Right);
+            bool leftReleased = Raylib.IsMouseButtonReleased(MouseButton.Left);
+            bool rightReleased = Raylib.IsMouseButtonReleased(MouseButton.Right);
+
+            // Reset drag state on new press
+            if (leftPressed || rightPressed)
+            {
+                _isDraggingInteraction = false;
+            }
             
             // Tool Priority
             if (ActiveTool != null)
             {
                 bool consumed = false;
-
-                // Clicks
-                if (leftPressed) consumed = ActiveTool.HandleClick(mouseWorld, MouseButton.Left);
-                if (!consumed && rightPressed) consumed = ActiveTool.HandleClick(mouseWorld, MouseButton.Right);
                 
-                // Hover
-                ActiveTool.HandleHover(mouseWorld);
+                // 1. Hover (Always update hover state)
+                try { ActiveTool.HandleHover(mouseWorld); } catch { /* Ignore */ }
 
-                // Drag? (Simple implementation: always call if button down?)
-                // Interface: bool HandleDrag(Vector2 worldPos, Vector2 delta);
-                // We calculate delta.
+                // 2. Drag (Priority over Click)
+                // If we are holding buttons, check for drag
                 if (IsMouseButtonDown(MouseButton.Left) || IsMouseButtonDown(MouseButton.Right))
                 {
                     Vector2 deltaScreen = GetMouseDelta();
-                    // Convert screen delta to world delta approximate?
-                    // Accurate: ScreenToWorld(pos) - ScreenToWorld(pos - delta)
-                    // Simple: deltaScreen / Zoom
                     Vector2 deltaWorld = deltaScreen * (1.0f / Camera.Zoom);
                     
-                    if (deltaWorld != Vector2.Zero)
-                        ActiveTool.HandleDrag(mouseWorld, deltaWorld); 
+                    // Allow tools to decide if they want to handle drag even with zero delta (e.g. initial grab)
+                    // But typically we send delta.
+                    if (deltaWorld != Vector2.Zero || _isDraggingInteraction)
+                    {
+                         bool dragged = ActiveTool.HandleDrag(mouseWorld, deltaWorld);
+                         if (dragged) _isDraggingInteraction = true;
+                    }
                 }
 
-                if (consumed) return;
+                // 3. Click (Only on Release, and only if we didn't Drag)
+                // This prevents "Selection" triggering at the end of a Box Select or Entity Drag
+                // when the user releases the mouse.
+                if (!_isDraggingInteraction)
+                {
+                    if (leftReleased) consumed = ActiveTool.HandleClick(mouseWorld, MouseButton.Left);
+                    if (!consumed && rightReleased) consumed = ActiveTool.HandleClick(mouseWorld, MouseButton.Right);
+                }
+                else
+                {
+                    // effectively consumed by drag
+                    if (leftReleased || rightReleased) consumed = true;
+                }
+
+                // Note: If Tool consumes Release, we assume it blocked lower layers from acting on Release implies they shouldn't act on Press?
+                // But Layers usually act on Press. 
+                // If Tool ignores 'Press', Layers might act on it.
+                // Standard Map Interaction usually blocks Layers if the Mouse is over the Map area.
+                // For now, we preserve existing Layer-Press logic if Tool didn't consume Click (but Layer-Press happens on Press).
+                // Wait: checks below are for 'leftPressed'.
+                // If ActiveTool moved to Release, 'leftPressed' is unhandled by Tool here.
+                // So Layers get all Presses. This is likely Correct for UI overlaid on Map.
+                
+                // If dragged, we consume everything.
+                if (_isDraggingInteraction) return; 
             }
 
             // Layer Priority (Reverse N -> 0)
