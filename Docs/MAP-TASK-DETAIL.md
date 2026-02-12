@@ -3,8 +3,9 @@
 
 **Reference Design**: [MAP-DESIGN.md](./MAP-DESIGN.md)  
 **Task Tracker**: [MAP-TASK-TRACKER.md](./MAP-TASK-TRACKER.md)  
-**Version**: 1.0  
-**Date**: 2026-02-11
+**Version**: 2.0  
+**Date**: 2026-02-12  
+**Status**: Phases 1-5 implemented, Phase 6-7 pending
 
 ---
 
@@ -871,6 +872,386 @@ Implement tool for editing existing trajectories by dragging control points (way
 - Enter edit mode, drag middle waypoint 10 meters
 - Verify vehicle following trajectory adjusts path
 - Exit edit mode, verify changes persist
+
+---
+
+## Phase 7: Architectural Refinements
+
+### MAP-P7-001: ISelectionState Abstraction
+
+**Description**:
+Extract selection state interface from IInspectorContext into FDP.Toolkit.Vis2D to decouple visualization from UI toolkit.
+
+**Dependencies**: MAP-P3-001, MAP-P1-001
+
+**Implementation Steps**:
+1. Create `FDP.Toolkit.Vis2D/Abstractions/ISelectionState.cs`
+2. Define interface with:
+   - `bool IsSelected(Entity entity)` - O(1) check for rendering
+   - `IReadOnlyCollection<Entity> SelectedEntities { get; }` - Full set
+   - `Entity? PrimarySelected { get; set; }` - Inspector focus entity
+   - `Entity? HoveredEntity { get; set; }` - Transient hover state
+3. Create `DefaultSelectionState` implementation with HashSet backing
+4. Update `EntityRenderLayer` constructor to take `ISelectionState` instead of `IInspectorContext`
+5. Update `Draw()` method to use `_selectionState.IsSelected(entity)`
+6. Remove dependency on `FDP.Toolkit.ImGui` from `FDP.Toolkit.Vis2D` project file
+
+**Success Conditions**:
+- `FDP.Toolkit.Vis2D.csproj` has zero references to `FDP.Toolkit.ImGui`
+- `EntityRenderLayer` compiles without `IInspectorContext`
+- Inspector and Map can share state via application-level adapter
+- Multi-selection supported (not just single entity)
+
+**Unit Tests**:
+- `DefaultSelectionState_Add_UpdatesIsSelected()` - Verify O(1) check
+- `DefaultSelectionState_SetPrimary_UpdatesProperty()` - Verify focus tracking
+- `EntityRenderLayer_UsesSelectionState_OnlyHighlightsSelected()` - Integration test
+
+---
+
+### MAP-P7-002: IResourceProvider Pattern
+
+**Description**:
+Implement resource injection pattern allowing visualizers to access global data (TrajectoryPool, TerrainData) via RenderContext instead of constructor injection.
+
+**Dependencies**: MAP-P3-001, MAP-P3-004
+
+**Implementation Steps**:
+1. Create `FDP.Toolkit.Vis2D/Abstractions/IResourceProvider.cs`
+2. Define methods:
+   - `T? Get<T>() where T : class`
+   - `bool Has<T>() where T : class`
+3. Update `RenderContext` struct to include `IResourceProvider Resources` field
+4. Update `MapCanvas` to implement `IResourceProvider`
+5. Add `Dictionary<Type, object> _resources` backing field to MapCanvas
+6. Implement `AddResource<T>(T resource)` and `RemoveResource<T>()` public methods
+7. Update `MapCanvas.Draw()` to inject `Resources = this` into RenderContext
+8. Update all visualizers to remove constructor dependencies and use `ctx.Resources.Get<T>()`
+9. Document graceful degradation when resources missing
+
+**Success Conditions**:
+- `VehicleVisualizer` constructor has zero parameters
+- Visualizer works in unit tests without TrajectoryPoolManager
+- Graceful degradation: Missing resources skip rendering that feature (no crash)
+- MapCanvas allows runtime resource registration
+
+**Unit Tests**:
+- `MapCanvas_GetResource_ReturnsRegistered()` - Verify lookup
+- `MapCanvas_GetResource_ReturnsNull_WhenNotRegistered()` - Verify safety
+- `VehicleVisualizer_Render_SkipsTrajectory_WhenPoolMissing()` - Verify degradation
+
+---
+
+### MAP-P7-003: IInputProvider Abstraction
+
+**Description**:
+Abstract input polling to enable testability, replay, and portability. Replace direct Raylib static calls with interface.
+
+**Dependencies**: MAP-P3-002, MAP-P3-004
+
+**Implementation Steps**:
+1. Create `FDP.Toolkit.Vis2D/Abstractions/IInputProvider.cs`
+2. Define interface with properties:
+   - `Vector2 MousePosition`, `Vector2 MouseDelta`, `float MouseWheelMove`
+   - `bool IsMouseButtonPressed/Down/Released(MouseButton)`
+   - `bool IsKeyDown/Pressed(KeyboardKey)`
+   - `int ScreenWidth/Height`
+3. Create `FDP.Toolkit.Vis2D/Defaults/RaylibInputProvider.cs` (wraps Raylib static calls)
+4. Update `MapCamera` to accept `IInputProvider` in `HandleInput()` method
+5. Update `MapCanvas` constructor to take optional `IInputProvider? input = null`
+6. Replace all Raylib input calls in MapCanvas with `_input.*` calls
+7. Update all tools `Update(float dt)` to `Update(float dt, IInputProvider input)`
+8. Create `MockInputProvider` in test project for unit testing
+
+**Success Conditions**:
+- Zero direct Raylib calls in `MapCanvas.cs` or `MapCamera.cs`
+- `MapCamera_Zoom_WorksWithMockInput()` unit test passes
+- Input replay possible by implementing `PlaybackInputProvider`
+- Default constructor still works (uses RaylibInputProvider)
+
+**Unit Tests**:
+- `MapCamera_Zoom_ChangesTargetZoom()` - With mock input
+- `MapCanvas_InputPipeline_ToolBeforeCameraBeforeLayers()` - Verify priority order
+- `MapCanvas_InputCaptured_SkipsPipeline()` - Verify ImGui filtering
+
+---
+
+### MAP-P7-004: IInspectableSession Adapter
+
+**Description**:
+Create adapter pattern for EntityInspectorPanel to support different data sources (live world, snapshots, network proxies).
+
+**Dependencies**: MAP-P1-003
+
+**Implementation Steps**:
+1. Create `FDP.Toolkit.ImGui/Abstractions/IInspectableSession.cs`
+2. Define interface:
+   - `int EntityCount { get; }`
+   - `bool IsReadOnly { get; }`
+   - `IEnumerable<Entity> GetEntities(string filter, int maxCount)`
+   - `bool IsAlive(Entity)`
+   - `bool HasComponent(Entity, Type)`, `object? GetComponent(...)`, `void SetComponent(...)`
+3. Create `FDP.Toolkit.ImGui/Adapters/RepositoryAdapter.cs` wrapping EntityRepository
+4. Create `FDP.Toolkit.ImGui/Adapters/SimulationViewAdapter.cs` wrapping ISimulationView (read-only)
+5. Update `EntityInspectorPanel.Draw()` signature to take `IInspectableSession` instead of `EntityRepository`
+6. Update `ComponentReflector.DrawComponents()` to take session and check `IsReadOnly`
+7. When `IsReadOnly == true`, disable all ImGui input widgets and show "[READ-ONLY]" indicator
+8. Update `RepoReflector` to support dynamic method lookup
+
+**Success Conditions**:
+- Inspector can display snapshot data without modification
+- Read-only mode prevents accidental edits
+- RepositoryAdapter supports full read/write
+- SimulationViewAdapter is read-only by design
+
+**Unit Tests**:
+- `RepositoryAdapter_SetComponent_Succeeds()` - Verify write-back
+- `SimulationViewAdapter_SetComponent_Throws()` - Verify read-only enforcement
+- `EntityInspectorPanel_ShowsReadOnlyIndicator_ForSnapshots()` - UX test
+
+---
+
+### MAP-P7-005: MapCamera Logic Split
+
+**Description**:
+Separate MapCamera responsibilities: HandleInput (command) interprets user input into intent, Update (animation) interpolates current state toward targets.
+
+**Dependencies**: MAP-P3-002, MAP-P7-003
+
+**Implementation Steps**:
+1. Add private fields to MapCamera:
+   - `Vector2 _targetOffset`, `Vector2 _targetTarget`, `float _targetZoom`
+2. Refactor `Update(float dt)` to remove all input polling:
+   - Move to `HandleInput(IInputProvider input)` method
+   - `Update` only does `Lerp(current, target, dt * smoothTime)`
+3. Update `HandleInput` to:
+   - Return `bool` (true if user is actively controlling camera)
+   - Calculate zoom using `_target*` values (not `InnerCamera` values) to prevent jitter
+   - Pan logic modifies `_targetTarget` instead of `InnerCamera.Target`
+4. Add public `FocusOn(Vector2 worldPos, float zoom)` method that sets targets programmatically
+5. Add `EnableSmoothing` property (default true)
+6. Update MapCanvas to call `bool cameraConsumed = Camera.HandleInput(_input)` in pipeline
+
+**Success Conditions**:
+- Camera zoom is smooth even with rapid wheel scroll
+- Programmatic `FocusOn()` uses same smooth animation as user input
+- Unit test can verify logic without real input by setting targets directly
+- `HandleInput` returns true when user is dragging/zooming
+
+**Unit Tests**:
+- `MapCamera_HandleInput_ReturnsTrue_WhenUserZooms()` - Verify consumption flag
+- `MapCamera_Update_InterpolatesZoom()` - Verify smooth animation
+- `MapCamera_FocusOn_SetsTarget()` - Verify programmatic control
+- `MapCamera_RapidZoom_DoesNotJitter()` - Regression test
+
+---
+
+### MAP-P7-006: MapCanvas Input Pipeline Formalization
+
+**Description**:
+Formalize strict Chain of Responsibility for input routing with explicit priority: UI → Tool → Camera → Layers.
+
+**Dependencies**: MAP-P3-004, MAP-P5-001, MAP-P7-003, MAP-P7-005
+
+**Implementation Steps**:
+1. Rename `HandleInput()` in MapCanvas to `ProcessInputPipeline()` (internal)
+2. Structure:
+   ```csharp
+   if (InputFilter.IsMouseCaptured) return; // Priority 0: UI
+   bool consumed = false;
+   // Priority 1: Tool
+   if (ActiveTool != null && !consumed)
+       consumed = ActiveTool.HandleClick/Drag(...);
+   // Priority 2: Camera
+   if (!consumed)
+       consumed = Camera.HandleInput(_input);
+   // Priority 3: Layers (reverse order)
+   if (!consumed)
+       for (i = layers.Count - 1; i >= 0; i--)
+           if (layers[i].HandleInput(...)) break;
+   ```
+3. Update all `IMapTool` methods to return `bool` (consumed)
+4. Update all `IMapLayer.HandleInput` to return `bool`
+5. Document priority order in XML comments
+6. Add debug logging (optional) to trace which handler consumed input
+
+**Success Conditions**:
+- Dragging unit with Tool active → Camera does NOT pan
+- Zooming with wheel → Camera zooms (tool ignores wheel by returning false)
+- Clicking layer when tool is null → Layer handles click
+- ImGui window focused → Map pipeline skipped entirely
+
+**Unit Tests**:
+- `MapCanvas_InputPipeline_ToolBlocksCamera()` - Priority test
+- `MapCanvas_InputPipeline_CameraBlocksLayers()` - Priority test
+- `MapCanvas_InputPipeline_UIBlocksAll()` - ImGui capture test
+
+---
+
+### MAP-P7-007: Tool Event Pattern
+
+**Description**:
+Refactor tools to fire events instead of directly modifying world state, decoupling interaction from game logic.
+
+**Dependencies**: MAP-P5-002, MAP-P5-003, MAP-P5-004
+
+**Implementation Steps**:
+1. Create `FDP.Toolkit.Vis2D/Tools/InteractionEvents.cs` with delegate definitions:
+   - `EntitySelectHandler(Entity entity, bool isAdditive)`
+   - `EntityMoveHandler(Entity entity, Vector2 newPosition)`
+   - `RegionSelectHandler(List<Entity> entities)`
+   - `WaypointMoveHandler(int trajectoryId, int pointIndex, Vector2 newPos)`
+2. Update `StandardInteractionTool`:
+   - Add `event Action<Entity, bool>? OnEntitySelectRequest`
+   - Change `HandleClick` to fire event instead of setting `_selectionState.SelectedEntity`
+   - Read `IsKeyDown(Shift)` to determine additive parameter
+3. Update `EntityDragTool`:
+   - Add `event Action<Entity, Vector2>? OnEntityMoved`
+   - Fire event on drag instead of direct component write
+4. Update `BoxSelectionTool`:
+   - Add `event Action<List<Entity>>? OnRegionSelected`
+   - Fire event with list instead of direct selection write
+5. Document event pattern in MAP-DESIGN.md
+6. Update CarKinem integration to wire events to actual world modifications
+
+**Success Conditions**:
+- Tools have zero direct EntityRepository dependencies
+- App can intercept events to add undo/redo logic
+- Tool behavior testable without real ECS
+- Events include all necessary context (modifiers, positions, etc.)
+
+**Unit Tests**:
+- `StandardInteractionTool_Click_FiresEvent()` - Verify event raised
+- `EntityDragTool_Drag_FiresEventWithCorrectPosition()` - Verify data
+- `BoxSelectionTool_Release_FiresEventWithAllHitEntities()` - Verify multi-select
+
+---
+
+### MAP-P7-008: Multi-Selection Support
+
+**Description**:
+Extend selection system to support multiple simultaneously selected entities (RTS-style box select, shift-click).
+
+**Dependencies**: MAP-P7-001, MAP-P7-007, MAP-P5-005
+
+**Implementation Steps**:
+1. Update `ISelectionState.SelectedEntities` to return `IReadOnlyCollection<Entity>` (already in P7-001)
+2. Create `SelectionManager` class in CarKinem with:
+   - `HashSet<Entity> _selected` backing storage
+   - `void Set(Entity)` - Clear and select one
+   - `void Add(Entity)` - Add to selection
+   - `void Remove(Entity)` - Remove from selection
+   - `void SetMultiple(IEnumerable<Entity>)` - Replace with multiple
+   - `void Clear()` - Deselect all
+   - `Entity? PrimaryId` - Last selected entity for inspector
+3. Wire StandardInteractionTool events:
+   - `OnEntitySelectRequest` → Call `Set()` or `Add()` based on isAdditive flag
+4. Wire BoxSelectionTool events:
+   - `OnRegionSelected` → Call `SetMultiple()`
+5. Update `EntityRenderLayer` to use `IsSelected()` method (O(1) HashSet check)
+6. Update `EntityInspectorPanel` to show "Multiple Selection (N entities)" when count > 1
+7. (Optional) Show shared components when multiple selected
+
+**Success Conditions**:
+- Shift+Click adds to selection
+- Box select selects all entities in rectangle
+- Inspector shows primary entity details
+- Rendering highlights all selected entities
+- O(1) performance for IsSelected check during rendering
+
+**Unit Tests**:
+- `SelectionManager_Add_DoesNotClearExisting()` - Multi-select logic
+- `SelectionManager_Set_ClearsExisting()` - Single-select logic
+- `BoxSelectionTool_SelectsAllInRect()` - Integration test
+- `EntityRenderLayer_HighlightsAllSelected()` - Rendering test
+
+---
+
+### MAP-P7-009: Input Action Mapping
+
+**Description**:
+Add configurable input bindings to support different interaction styles (RTS vs Editor mode).
+
+**Dependencies**: MAP-P3-002, MAP-P5-002
+
+**Implementation Steps**:
+1. Create `FDP.Toolkit.Vis2D/Input/Vis2DInputMap.cs` configuration class:
+   ```csharp
+   public class Vis2DInputMap
+   {
+       public MouseButton SelectButton = MouseButton.Left;
+       public MouseButton PanButton = MouseButton.Right;
+       public MouseButton ContextButton = MouseButton.Right;
+       public KeyboardKey MultiSelectModifier = KeyboardKey.LeftShift;
+       public KeyboardKey RangeSelectModifier = KeyboardKey.LeftControl;
+       public static Vis2DInputMap Default => new();
+   }
+   ```
+2. Update `MapCamera` constructor to accept optional `Vis2DInputMap`
+3. Replace hardcoded `MouseButton.Right` with `_inputMap.PanButton` in HandleInput
+4. Update `StandardInteractionTool` constructor to accept optional `Vis2DInputMap`
+5. Replace hardcoded `MouseButton.Left` with `_inputMap.SelectButton`
+6. Replace hardcoded `KeyboardKey.LeftShift` with `_inputMap.MultiSelectModifier`
+7. Add XML documentation for common presets (RTS Mode, Editor Mode)
+8. Add example configurations to MAP-DESIGN.md
+
+**Success Conditions**:
+- Default behavior unchanged (Left=Select, Right=Pan)
+- Custom config works: Set `SelectButton = MouseButton.Right`, verify clicking right mouse selects
+- Multi-select modifier rebindable
+- No hardcoded input enums remain in Camera or Tools
+
+**Unit Tests**:
+- `MapCamera_PanButton_Configurable()` - Verify custom pan button
+- `StandardInteractionTool_SelectButton_Configurable()` - Verify custom select button
+- `StandardInteractionTool_MultiSelectModifier_Configurable()` - Verify rebinding
+
+---
+
+### MAP-P7-010: Visual Picking for Hierarchical Layers
+
+**Description**:
+Add `PickEntity(Vector2 worldPos)` method to IMapLayer to enable correct hit testing when hierarchical aggregation is active.
+
+**Dependencies**: MAP-P3-003, MAP-P6-005, MAP-P7-001
+
+**Implementation Steps**:
+1. Update `IMapLayer` interface:
+   - Add `Entity? PickEntity(Vector2 worldPos)` method
+2. Add method to `MapCanvas`:
+   ```csharp
+   public Entity PickTopmostEntity(Vector2 worldPos)
+   {
+       for (int i = layers.Count - 1; i >= 0; i--)
+           if (IsLayerVisible(layers[i]))
+               if (Entity? hit = layers[i].PickEntity(worldPos))
+                   return hit.Value;
+       return Entity.Null;
+   }
+   ```
+3. Update `EntityRenderLayer.PickEntity()`:
+   - Iterate query, hit test each entity
+   - Return closest entity within hit radius
+4. Update `HierarchicalRenderLayer.PickEntity()`:
+   - Implement recursive traversal (same expansion logic as Draw!)
+   - If expanded: recurse children
+   - If collapsed: hit test aggregate symbol
+   - Return the entity that is *visually rendered* at that position
+5. Update `StandardInteractionTool.HandleClick()`:
+   - Replace `FindEntityAt(worldPos)` with `_canvas.PickTopmostEntity(worldPos)`
+6. Remove direct hit testing from Tool (delegate to layers)
+
+**Success Conditions**:
+- Clicking zoomed-out Platoon symbol selects Platoon entity (not hidden Tank)
+- Clicking zoomed-in Tank selects Tank (even though parent Platoon exists)
+- Selection matches visual representation perfectly
+- Multiple layers with overlapping entities: topmost layer wins
+
+**Unit Tests**:
+- `EntityRenderLayer_PickEntity_ReturnsClosest()` - Flat layer test
+- `HierarchicalRenderLayer_PickEntity_ReturnsAggregate_WhenCollapsed()` - Zoom out test
+- `HierarchicalRenderLayer_PickEntity_ReturnsLeaf_WhenExpanded()` - Zoom in test
+- `MapCanvas_PickTopmostEntity_RespectsLayerOrder()` - Multi-layer test
 
 ---
 

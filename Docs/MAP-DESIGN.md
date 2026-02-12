@@ -3,8 +3,9 @@
 
 **Project**: FDP Framework Enhancement  
 **Purpose**: Extract reusable UI and visualization toolkits from Fdp.Examples.CarKinem  
-**Version**: 1.0  
-**Date**: 2026-02-11
+**Version**: 2.0  
+**Date**: 2026-02-12  
+**Status**: Phase 1-5 Implemented, Phase 6-7 Pending
 
 ---
 
@@ -587,6 +588,835 @@ function DrawRecursive(entity):
 **Data Layout**: Flat array of entities in bottom-up order.
 
 **Benefit**: Sequential memory access → CPU cache prefetching → Fast.
+
+---
+
+## 7. Phase 7: Architectural Refinements (Decoupling & Testability)
+
+### 7.1 Purpose
+Address architectural issues identified during initial implementation to improve:
+- Decoupling between toolkits (Vis2D ↔ ImGui)
+- Testability (input abstraction, mock-friendly)
+- Input routing clarity (strict Chain of Responsibility)
+- Multi-selection support for RTS-style interaction
+- Flexibility (resource injection, adapters for different data sources)
+
+### 7.2 Motivation: Identified Coupling Violations
+
+**Issue 1**: `EntityRenderLayer` depends on `IInspectorContext` from `FDP.Toolkit.ImGui`.  
+**Problem**: Visualization toolkit has hard dependency on UI toolkit. Cannot use Vis2D without ImGui.  
+**Solution**: Introduce `ISelectionState` in Vis2D. Application creates adapter that implements both interfaces.
+
+**Issue 2**: `VehicleVisualizer` constructor requires `TrajectoryPoolManager`.  
+**Problem**: Visualizers permanently coupled to simulation managers. Cannot reuse in different contexts (replay, network client).  
+**Solution**: Inject resources via `RenderContext` using `IResourceProvider` pattern.
+
+**Issue 3**: `MapCanvas` calls static `Raylib.*` methods directly.  
+**Problem**: Impossible to unit test input routing without real window. Cannot implement replay/synthetic input.  
+**Solution**: Abstract input via `IInputProvider` interface with default `RaylibInputProvider` implementation.
+
+**Issue 4**: `EntityInspectorPanel` requires concrete `EntityRepository`.  
+**Problem**: Cannot inspect snapshots, network proxies, or read-only views.  
+**Solution**: Introduce `IInspectableSession` adapter for flexible data access.
+
+### 7.3 Decoupling Pattern 1: Selection State
+
+#### 7.3.1 ISelectionState (Vis2D)
+**Purpose**: Define what the map needs without knowing about UI specifics.
+
+```csharp
+namespace FDP.Toolkit.Vis2D.Abstractions
+{
+    public interface ISelectionState
+    {
+        /// <summary>Hot path: O(1) check for rendering</summary>
+        bool IsSelected(Entity entity);
+        
+        /// <summary>Data path: Full selection set</summary>
+        IReadOnlyCollection<Entity> SelectedEntities { get; }
+        
+        /// <summary>Focus path: Primary entity for inspector details</summary>
+        Entity? PrimarySelected { get; set; }
+        
+        /// <summary>Transient hover state</summary>
+        Entity? HoveredEntity { get; set; }
+    }
+}
+```
+
+#### 7.3.2 Application Bridge Pattern
+**In CarKinemApp**:
+```csharp
+public class SelectionAdapter : ISelectionState, IInspectorContext
+{
+    private readonly SelectionManager _manager; // App's actual state
+    
+    // ISelectionState methods (for Map)
+    public bool IsSelected(Entity e) => _manager.Contains(e);
+    public IReadOnlyCollection<Entity> SelectedEntities => _manager.GetAll();
+    
+    // IInspectorContext methods (for Inspector) - same backing field
+    public Entity? SelectedEntity 
+    { 
+        get => _manager.PrimaryId.HasValue ? new Entity(_manager.PrimaryId.Value, ...) : null;
+        set => _manager.SetPrimary(value?.Index ?? -1);
+    }
+    
+    public Entity? HoveredEntity { get; set; } // Shared transient state
+}
+```
+
+**Wiring**:
+```csharp
+var adapter = new SelectionAdapter(_selectionManager);
+_map.AddLayer(new EntityRenderLayer(..., adapter)); // ISelectionState interface
+_inspector.Draw(World, adapter); // IInspectorContext interface
+```
+
+**Result**: Vis2D and ImGui no longer reference each other. Both depend on abstractions owned by their own toolkit.
+
+### 7.4 Decoupling Pattern 2: Resource Injection
+
+#### 7.4.1 IResourceProvider
+**Purpose**: Pass global rendering resources without constructor coupling.
+
+```csharp
+namespace FDP.Toolkit.Vis2D.Abstractions
+{
+    public interface IResourceProvider
+    {
+        T? Get<T>() where T : class;
+        bool Has<T>() where T : class;
+    }
+}
+```
+
+#### 7.4.2 Updated RenderContext
+```csharp
+public struct RenderContext
+{
+    public Camera2D Camera;
+    public Vector2 MouseWorldPos;
+    public float DeltaTime;
+    public uint VisibleLayersMask;
+    
+    // NEW: Access to shared resources
+    public IResourceProvider Resources;
+}
+```
+
+#### 7.4.3 MapCanvas as Resource Container
+**File**: `MapCanvas.cs` additions
+
+```csharp
+public class MapCanvas : IResourceProvider
+{
+    private readonly Dictionary<Type, object> _resources = new();
+    
+    public void AddResource<T>(T resource) where T : class
+    {
+        _resources[typeof(T)] = resource;
+    }
+    
+    public T? Get<T>() where T : class
+    {
+        return _resources.TryGetValue(typeof(T), out var obj) ? (T)obj : null;
+    }
+    
+    public bool Has<T>() where T : class => _resources.ContainsKey(typeof(T));
+    
+    public void Draw()
+    {
+        // ...
+        var ctx = new RenderContext
+        {
+            // ...
+            Resources = this // Inject canvas itself as provider
+        };
+        // ...
+    }
+}
+```
+
+#### 7.4.4 Usage in Visualizer
+**Before** (Coupled):
+```csharp
+public VehicleVisualizer(TrajectoryPoolManager pool) { _pool = pool; }
+```
+
+**After** (Decoupled):
+```csharp
+public VehicleVisualizer() { } // No constructor dependency
+
+public void Render(..., RenderContext ctx, ...)
+{
+    var pool = ctx.Resources.Get<TrajectoryPoolManager>();
+    if (pool != null && trajId > 0 && pool.TryGetTrajectory(trajId, out var traj))
+    {
+        // Draw trajectory
+    }
+    // Graceful degradation: if pool missing, just skip trajectory rendering
+}
+```
+
+**App Registration**:
+```csharp
+_map.AddResource(_trajectoryPoolManager); // Register once
+_map.AddResource(_formationManager);
+_map.AddResource(_terrainData);
+```
+
+**Benefit**: Visualizer can be reused in contexts without trajectory pools. Unit tests don't need to mock managers they don't care about.
+
+### 7.5 Decoupling Pattern 3: Input Abstraction
+
+#### 7.5.1 IInputProvider
+**Purpose**: Abstract input polling for testability and replay.
+
+```csharp
+namespace FDP.Toolkit.Vis2D.Abstractions
+{
+    public interface IInputProvider
+    {
+        Vector2 MousePosition { get; }
+        Vector2 MouseDelta { get; }
+        float MouseWheelMove { get; }
+        
+        bool IsMouseButtonPressed(MouseButton button);
+        bool IsMouseButtonDown(MouseButton button);
+        bool IsMouseButtonReleased(MouseButton button);
+        
+        bool IsKeyDown(KeyboardKey key);
+        bool IsKeyPressed(KeyboardKey key);
+        
+        int ScreenWidth { get; }
+        int ScreenHeight { get; }
+    }
+}
+```
+
+#### 7.5.2 Default Implementation
+```csharp
+namespace FDP.Toolkit.Vis2D.Defaults
+{
+    public class RaylibInputProvider : IInputProvider
+    {
+        public Vector2 MousePosition => Raylib.GetMousePosition();
+        public float MouseWheelMove => Raylib.GetMouseWheelMove();
+        public bool IsMouseButtonPressed(MouseButton b) => Raylib.IsMouseButtonPressed(b);
+        // ... (wrap all Raylib static calls)
+    }
+}
+```
+
+#### 7.5.3 Updated MapCamera
+**Before**:
+```csharp
+public void Update(float dt)
+{
+    float wheel = Raylib.GetMouseWheelMove(); // Direct coupling
+    // ...
+}
+```
+
+**After**:
+```csharp
+public bool HandleInput(IInputProvider input) // Now takes provider
+{
+    float wheel = input.MouseWheelMove;
+    if (wheel != 0)
+    {
+        // ... zoom logic ...
+        return true; // Consumed
+    }
+    return false; // Not consumed
+}
+
+public void Update(float dt)
+{
+    // Separate: smooth interpolation, constraints
+    // No input polling here
+}
+```
+
+#### 7.5.4 Updated MapCanvas
+```csharp
+public class MapCanvas
+{
+    private readonly IInputProvider _input;
+    
+    public MapCanvas(IInputProvider? input = null)
+    {
+        _input = input ?? new RaylibInputProvider(); // Default to live input
+    }
+    
+    public void Update(float dt)
+    {
+        Camera.Update(dt); // Physics/smoothing always runs
+        
+        ProcessInputPipeline(); // Separate method for input
+    }
+    
+    private void ProcessInputPipeline()
+    {
+        if (InputFilter.IsMouseCaptured) return;
+        
+        bool consumed = false;
+        Vector2 mouseWorld = Camera.ScreenToWorld(_input.MousePosition);
+        
+        // 1. Tool gets first priority
+        if (ActiveTool != null && _input.IsMouseButtonPressed(MouseButton.Left))
+            consumed = ActiveTool.HandleClick(mouseWorld, MouseButton.Left);
+        
+        // 2. Camera gets second priority
+        if (!consumed)
+            consumed = Camera.HandleInput(_input);
+        
+        // 3. Layers get last priority
+        if (!consumed)
+        {
+            for (int i = _layers.Count - 1; i >= 0; i--)
+            {
+                if (_layers[i].HandleInput(mouseWorld, ...))
+                    break;
+            }
+        }
+    }
+}
+```
+
+**Benefits**:
+- **Testability**: Write unit tests with `MockInputProvider`
+- **Replay**: Implement `RecordedInputProvider` that reads from file
+- **Determinism**: Synthetic input for debugging
+- **Portability**: Easily adapt to different rendering backends (GLFW, SDL, Silk.NET)
+
+### 7.6 Decoupling Pattern 4: Inspector Session Abstraction
+
+#### 7.6.1 IInspectableSession
+**Purpose**: Abstract data access for inspector to support different data sources.
+
+```csharp
+namespace FDP.Toolkit.ImGui.Abstractions
+{
+    public interface IInspectableSession
+    {
+        int EntityCount { get; }
+        bool IsReadOnly { get; }
+        
+        IEnumerable<Entity> GetEntities(string filter, int maxCount);
+        bool IsAlive(Entity entity);
+        
+        bool HasComponent(Entity entity, Type type);
+        object? GetComponent(Entity entity, Type type);
+        void SetComponent(Entity entity, Type type, object value);
+    }
+}
+```
+
+#### 7.6.2 Repository Adapter
+**File**: `FDP.Toolkit.ImGui/Adapters/RepositoryAdapter.cs`
+
+```csharp
+public class RepositoryAdapter : IInspectableSession
+{
+    private readonly EntityRepository _repo;
+    
+    public int EntityCount => _repo.EntityCount;
+    public bool IsReadOnly => false; // Live world is mutable
+    
+    public object? GetComponent(Entity e, Type t) => RepoReflector.GetComponent(_repo, e, t);
+    public void SetComponent(Entity e, Type t, object val) => RepoReflector.SetComponent(_repo, e, t, val);
+    // ... other methods ...
+}
+```
+
+#### 7.6.3 Snapshot Adapter (Example)
+```csharp
+public class SnapshotAdapter : IInspectableSession
+{
+    private readonly ISimulationView _snapshot;
+    
+    public bool IsReadOnly => true; // Snapshots are immutable
+    
+    public void SetComponent(...) => throw new InvalidOperationException("Snapshot is read-only");
+    // ... other methods using ISimulationView instead of EntityRepository ...
+}
+```
+
+#### 7.6.4 Updated Inspector Usage
+**Before**:
+```csharp
+_inspector.Draw(World, context); // Hardcoded EntityRepository
+```
+
+**After**:
+```csharp
+var session = new RepositoryAdapter(World);
+_inspector.Draw(session, context); // Works with any data source
+```
+
+**Read-Only Behavior**:
+- When `session.IsReadOnly == true`, inspector automatically disables all input widgets
+- Shows red "[READ-ONLY]" indicator
+- Prevents accidental modification of historical/snapshot data
+
+### 7.7 Input Routing: Strict Chain of Responsibility
+
+#### 7.7.1 The Problem
+**Before**: Tools, Camera, and Layers all handle input, but priority is unclear. Camera updates unconditionally, causing conflicts.
+
+**Example Issue**: Dragging a unit with Right Mouse Button while Camera also tries to pan with RMB → Jittery fight.
+
+#### 7.7.2 The Solution: Explicit Priority Pipeline
+**Order**: `UI (ImGui) → Active Tool → Camera → Layers`
+
+**Rule**: If a higher-priority handler returns `true` (consumed), lower handlers are skipped.
+
+#### 7.7.3 Updated MapCamera Logic Split
+**Before**: Single `Update(dt)` method handles both input and physics.
+
+**After**: Two methods with clear responsibilities:
+- `HandleInput(IInputProvider)` - **Command**: Interpret raw input into "intent" (target zoom, target position). Returns `true` if user is actively controlling camera.
+- `Update(float dt)` - **Animation**: Smooth interpolation toward targets. Always runs.
+
+**Code**:
+```csharp
+public class MapCamera
+{
+    // Target state (the "intent")
+    private Vector2 _targetOffset;
+    private Vector2 _targetTarget;
+    private float _targetZoom;
+    
+    // Actual state (current rendering values)
+    public Camera2D InnerCamera;
+    
+    public bool HandleInput(IInputProvider input)
+    {
+        bool consumed = false;
+        
+        // Zoom
+        float wheel = input.MouseWheelMove;
+        if (wheel != 0)
+        {
+            Vector2 mouseWorld = /* calculate using _targetZoom */;
+            _targetZoom = Math.Clamp(_targetZoom * scaleFactor, MinZoom, MaxZoom);
+            _targetTarget = /* adjust to keep mouse fixed */;
+            consumed = true;
+        }
+        
+        // Pan
+        if (input.IsMouseButtonDown(PanButton))
+        {
+            Vector2 delta = /* calculate */;
+            _targetTarget += delta / _targetZoom;
+            consumed = true;
+        }
+        
+        return consumed;
+    }
+    
+    public void Update(float dt)
+    {
+        // Lerp current state toward target
+        float t = Math.Clamp(dt * SmoothTime, 0f, 1f);
+        InnerCamera.Offset = Vector2.Lerp(InnerCamera.Offset, _targetOffset, t);
+        InnerCamera.Target = Vector2.Lerp(InnerCamera.Target, _targetTarget, t);
+        InnerCamera.Zoom = Lerp(InnerCamera.Zoom, _targetZoom, t);
+    }
+}
+```
+
+**Benefit**: Programmatic camera control (`FocusOn(Vector2)` sets `_targetTarget`) and user input both use same smoothing pipeline automatically.
+
+#### 7.7.4 MapCanvas Pipeline Implementation
+```csharp
+private void ProcessInputPipeline()
+{
+    if (InputFilter.IsMouseCaptured) return; // UI has priority
+    
+    bool consumed = false;
+    Vector2 mouseWorld = Camera.ScreenToWorld(_input.MousePosition);
+    
+    // Priority 1: Tool
+    if (ActiveTool != null)
+    {
+        if (_input.IsMouseButtonPressed(MouseButton.Left))
+            consumed = ActiveTool.HandleClick(mouseWorld, MouseButton.Left);
+        
+        if (!consumed && _input.IsMouseButtonDown(MouseButton.Left))
+            consumed = ActiveTool.HandleDrag(mouseWorld, _input.MouseDelta / Camera.Zoom);
+        
+        ActiveTool.HandleHover(mouseWorld); // Hover doesn't consume (visual only)
+    }
+    
+    // Priority 2: Camera
+    if (!consumed)
+        consumed = Camera.HandleInput(_input);
+    
+    // Priority 3: Layers (Reverse order = topmost first)
+    if (!consumed)
+    {
+        for (int i = _layers.Count - 1; i >= 0; i--)
+        {
+            if (!IsLayerVisible(_layers[i])) continue;
+            if (_layers[i].HandleInput(mouseWorld, ...))
+                break; // Consumed
+        }
+    }
+}
+```
+
+### 7.8 Multi-Selection Support
+
+#### 7.8.1 Updated ISelectionState
+**Before**: `Entity? SelectedEntity` (singular)
+
+**After**: `IReadOnlyCollection<Entity> SelectedEntities` (plural) + `Entity? PrimarySelected` for inspector focus.
+
+#### 7.8.2 Updated EntityRenderLayer
+**Before**:
+```csharp
+bool isSelected = _inspector.SelectedEntity == entity;
+```
+
+**After**:
+```csharp
+bool isSelected = _selectionState.IsSelected(entity); // O(1) HashSet check
+```
+
+#### 7.8.3 Tool Event Pattern
+**StandardInteractionTool** fires events instead of setting state directly:
+
+```csharp
+public event Action<Entity, bool>? OnEntitySelectRequest; // entity, isAdditive
+
+public bool HandleClick(Vector2 worldPos, MouseButton button)
+{
+    Entity hit = FindEntityAt(worldPos);
+    bool isShift = _input.IsKeyDown(KeyboardKey.LeftShift);
+    
+    OnEntitySelectRequest?.Invoke(hit, isShift);
+    return true;
+}
+```
+
+**App handles logic**:
+```csharp
+_interactionTool.OnEntitySelectRequest += (entity, additive) =>
+{
+    if (additive)
+        _selectionManager.Add(entity);
+    else
+        _selectionManager.Set(entity); // Clear others and select this one
+};
+```
+
+#### 7.8.4 BoxSelectionTool Integration
+**Tool fires event with list**:
+```csharp
+public event Action<List<Entity>>? OnRegionSelected;
+
+// On mouse release:
+_results.Clear();
+foreach (var entity in _query)
+{
+    if (IsInRect(pos, _boxMin, _boxMax))
+        _results.Add(entity);
+}
+OnRegionSelected?.Invoke(_results);
+```
+
+**App updates selection manager**:
+```csharp
+_boxSelectTool.OnRegionSelected += (entities) =>
+{
+    _selectionManager.SetMultiple(entities);
+};
+```
+
+### 7.9 Input Action Mapping (Rebindable Controls)
+
+#### 7.9.1 Configuration Object
+```csharp
+namespace FDP.Toolkit.Vis2D.Input
+{
+    public class Vis2DInputMap
+    {
+        public MouseButton SelectButton { get; set; } = MouseButton.Left;
+        public MouseButton PanButton { get; set; } = MouseButton.Right;
+        public MouseButton ContextButton { get; set; } = MouseButton.Right;
+        
+        public KeyboardKey MultiSelectModifier { get; set; } = KeyboardKey.LeftShift;
+        public KeyboardKey RangeSelectModifier { get; set; } = KeyboardKey.LeftControl;
+        
+        public static Vis2DInputMap Default => new();
+    }
+}
+```
+
+#### 7.9.2 Tool and Camera Injection
+**MapCamera Constructor**:
+```csharp
+public MapCamera(Vis2DInputMap? inputMap = null)
+{
+    _inputMap = inputMap ?? Vis2DInputMap.Default;
+}
+```
+
+**Usage in HandleInput**:
+```csharp
+if (input.IsMouseButtonDown(_inputMap.PanButton)) // Configurable
+{
+    // ... pan logic ...
+}
+```
+
+**StandardInteractionTool**:
+```csharp
+if (input.IsMouseButtonPressed(_inputMap.SelectButton))
+{
+    // ... selection logic ...
+}
+```
+
+**Benefit**: Users can configure "RTS Mode" (Left=Select, Right=Context/Pan) vs "Editor Mode" (Right=Select, Middle=Pan) without code changes.
+
+### 7.10 Visual Picking for Hierarchical Rendering
+
+#### 7.10.1 The Problem
+With Aggregation/Decluttering, the "visible" entity changes based on zoom.  
+**Issue**: If `StandardInteractionTool` iterates a flat `VehicleQuery`, it might select a Tank that's visually hidden inside a Platoon symbol.
+
+#### 7.10.2 The Solution: PickEntity Method
+**Updated IMapLayer**:
+```csharp
+public interface IMapLayer
+{
+    // ... existing methods ...
+    
+    /// <summary>
+    /// Ask layer what entity (if any) exists at this world position.
+    /// Used by tools to select what is currently visible.
+    /// </summary>
+    Entity? PickEntity(Vector2 worldPos);
+}
+```
+
+**MapCanvas Method**:
+```csharp
+public Entity PickTopmostEntity(Vector2 worldPos)
+{
+    for (int i = _layers.Count - 1; i >= 0; i--) // Top to bottom
+    {
+        if (!IsLayerVisible(_layers[i])) continue;
+        
+        Entity? hit = _layers[i].PickEntity(worldPos);
+        if (hit.HasValue) return hit.Value;
+    }
+    return Entity.Null;
+}
+```
+
+**StandardInteractionTool Updated**:
+```csharp
+public bool HandleClick(Vector2 worldPos, MouseButton button)
+{
+    // BEFORE: var hit = FindEntityAt(worldPos); // Flat iteration
+    // AFTER:
+    Entity hit = _canvas.PickTopmostEntity(worldPos); // Delegates to layers
+    
+    OnEntitySelectRequest?.Invoke(hit, _isShiftHeld);
+    return true;
+}
+```
+
+**HierarchicalRenderLayer Implementation**:
+```csharp
+public Entity? PickEntity(Vector2 worldPos)
+{
+    foreach (var root in _rootQuery)
+    {
+        Entity? result = PickRecursive(root, worldPos, _lastFrameContext.Zoom);
+        if (result.HasValue) return result;
+    }
+    return null;
+}
+
+private Entity? PickRecursive(Entity entity, Vector2 mousePos, float zoom)
+{
+    Vector2 pos = /* get position */;
+    Vector2 bMin = /* get bounds */;
+    Vector2 bMax = /* get bounds */;
+    
+    if (ShouldExpand(entity, bMin, bMax, zoom)) // Same logic as Draw!
+    {
+        // Currently expanded -> check children
+        foreach (var child in _hierarchy.GetChildren(_view, entity))
+        {
+            Entity? hit = PickRecursive(child, mousePos, zoom);
+            if (hit.HasValue) return hit;
+        }
+    }
+    else
+    {
+        // Currently collapsed -> hit test this aggregate
+        float radius = _visualizer.GetHitRadius(_view, entity);
+        if (Vector2.DistanceSquared(pos, mousePos) < radius * radius)
+            return entity; // Return the Platoon, not the Tank
+    }
+    return null;
+}
+```
+
+**Result**: Selection perfectly matches what user sees. If zoomed out showing Platoon, clicking selects Platoon. If zoomed in showing Tanks, clicking selects Tank.
+
+### 7.11 Migration from Phase 1-6 to Phase 7
+
+#### 7.11.1 EntityRenderLayer Changes
+**Before**:
+```csharp
+public EntityRenderLayer(..., IInspectorContext inspector)
+{
+    _inspector = inspector;
+}
+
+// In Draw():
+bool isSelected = _inspector.SelectedEntity == entity;
+```
+
+**After**:
+```csharp
+public EntityRenderLayer(..., ISelectionState selectionState)
+{
+    _selectionState = selectionState;
+}
+
+// In Draw():
+bool isSelected = _selectionState.IsSelected(entity);
+```
+
+**In App**:
+```csharp
+var adapter = new SelectionAdapter(_selectionManager);
+var layer = new EntityRenderLayer(..., adapter); // Pass ISelectionState interface
+_inspector.Draw(_worldSession, adapter); // Pass IInspectorContext interface
+```
+
+#### 7.11.2 VehicleVisualizer Changes
+**Before**:
+```csharp
+public VehicleVisualizer(TrajectoryPoolManager pool) { _pool = pool; }
+```
+
+**After**:
+```csharp
+public VehicleVisualizer() { }
+
+public void Render(..., RenderContext ctx, ...)
+{
+    var pool = ctx.Resources.Get<TrajectoryPoolManager>();
+    if (pool != null) { /* use pool */ }
+}
+```
+
+**In App**:
+```csharp
+_map.AddResource(_trajectoryPoolManager); // Register resource
+```
+
+#### 7.11.3 MapCanvas Changes
+**Before**:
+```csharp
+_map = new MapCanvas();
+_map.Camera.Update(dt); // Inside app update loop
+```
+
+**After**:
+```csharp
+_map = new MapCanvas(); // Or: new MapCanvas(new MockInputProvider()) for tests
+// Camera Update is now internal to MapCanvas.Update()
+_map.Update(dt); // Handles input pipeline automatically
+```
+
+#### 7.11.4 EntityInspectorPanel Changes
+**Before**:
+```csharp
+_inspector.Draw(World, _inspectorContext);
+```
+
+**After**:
+```csharp
+var session = new RepositoryAdapter(World);
+_inspector.Draw(session, _inspectorContext);
+```
+
+### 7.12 Testing Benefits
+
+#### 7.12.1 Input Routing Unit Test (Example)
+```csharp
+[Test]
+public void Camera_DoesNotPan_WhenToolConsumesInput()
+{
+    var input = new MockInputProvider
+    {
+        MousePosition = new Vector2(100, 100),
+        IsButtonDown = { [MouseButton.Right] = true }
+    };
+    
+    var canvas = new MapCanvas(input);
+    var tool = new MockTool { ShouldConsumeClick = true };
+    canvas.SwitchTool(tool);
+    
+    Vector2 initialTarget = canvas.Camera.InnerCamera.Target;
+    
+    canvas.Update(0.016f); // One frame
+    
+    Assert.AreEqual(initialTarget, canvas.Camera.InnerCamera.Target); // Camera did NOT move
+    Assert.IsTrue(tool.WasHandleClickCalled); // Tool got the input
+}
+```
+
+#### 7.12.2 Replay Input Test
+```csharp
+[Test]
+public void Map_CanBeDrivenFromRecordedInput()
+{
+    var recording = InputRecording.Load("test_session.input");
+    var playback = new PlaybackInputProvider(recording);
+    
+    var canvas = new MapCanvas(playback);
+    
+    for (int frame = 0; frame < recording.FrameCount; frame++)
+    {
+        playback.AdvanceFrame();
+        canvas.Update(0.016f);
+        
+        // Assert expected state for this frame
+    }
+}
+```
+
+### 7.13 Summary of Phase 7 Changes
+
+**Abstractions Introduced**:
+1. `ISelectionState` - Decouple Vis2D from ImGui
+2. `IResourceProvider` - Inject rendering resources dynamically
+3. `IInputProvider` - Abstract input for testing/replay
+4. `IInspectableSession` - Support multiple data sources for inspector
+5. `Vis2DInputMap` - Rebindable input controls
+
+**Architecture Patterns**:
+1. **Adapter Bridges** - Single class implements multiple toolkit interfaces
+2. **Resource Injection** - Via RenderContext instead of constructors
+3. **Chain of Responsibility** - Explicit input priority pipeline
+4. **Command/Event Pattern** - Tools fire events, app handles logic
+5. **Visual Picking** - Layers delegate hit testing for semantic correctness
+
+**Performance Impact**: Zero. All abstractions compile to virtual calls or interface lookups (single indirection). Resource lookup is `Dictionary<Type, object>` which is O(1).
+
+**Testing Impact**: Massive improvement. Input routing, selection logic, camera math all testable in isolation without GPU/window.
 
 ---
 

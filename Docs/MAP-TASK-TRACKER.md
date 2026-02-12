@@ -3,8 +3,8 @@
 
 **Reference**: See [MAP-TASK-DETAIL.md](./MAP-TASK-DETAIL.md) for detailed task descriptions  
 **Design Document**: [MAP-DESIGN.md](./MAP-DESIGN.md)  
-**Version**: 1.0  
-**Date**: 2026-02-11
+**Version**: 2.0  
+**Date**: 2026-02-12
 
 ---
 
@@ -56,16 +56,18 @@
 
 ---
 
-## Phase 5: Map Interaction Tools
+## Phase 5: Map Interaction Tools (POSTPONED)
 
 **Goal**: Implement tool system for different interaction modes (selection, drag, path editing).
 
-- [ ] **MAP-P5-001** IMapTool Interface [details](./MAP-TASK-DETAIL.md#map-p5-001-imaptool-interface)
-- [ ] **MAP-P5-002** DefaultSelectionTool Implementation [details](./MAP-TASK-DETAIL.md#map-p5-002-defaultselectiontool-implementation)
-- [ ] **MAP-P5-003** EntityDragTool Implementation [details](./MAP-TASK-DETAIL.md#map-p5-003-entitydragtool-implementation)
-- [ ] **MAP-P5-004** PointSequenceTool Implementation [details](./MAP-TASK-DETAIL.md#map-p5-004-pointsequencetool-implementation)
-- [ ] **MAP-P5-005** Integrate Tools in CarKinem [details](./MAP-TASK-DETAIL.md#map-p5-005-integrate-tools-in-carkinem)
+- [~] **MAP-P5-001** IMapTool Interface (Partial) [details](./MAP-TASK-DETAIL.md#map-p5-001-imaptool-interface)
+- [~] **MAP-P5-002** DefaultSelectionTool Implementation (Partial) [details](./MAP-TASK-DETAIL.md#map-p5-002-defaultselectiontool-implementation)
+- [~] **MAP-P5-003** EntityDragTool Implementation (Partial) [details](./MAP-TASK-DETAIL.md#map-p5-003-entitydragtool-implementation)
+- [~] **MAP-P5-004** PointSequenceTool Implementation (Partial) [details](./MAP-TASK-DETAIL.md#map-p5-004-pointsequencetool-implementation)
+- [~] **MAP-P5-005** Integrate Tools in CarKinem (Partial) [details](./MAP-TASK-DETAIL.md#map-p5-005-integrate-tools-in-carkinem)
 - [ ] **MAP-P5-006** TrajectoryEditTool Implementation [details](./MAP-TASK-DETAIL.md#map-p5-006-trajectoryedittool-implementation)
+
+*Note: Phase 5 was partially implemented in Batch 06 but stopped to focus on Phase 7 architecture.*
 
 ---
 
@@ -79,6 +81,23 @@
 - [ ] **MAP-P6-004** AggregateUpdateSystem Implementation [details](./MAP-TASK-DETAIL.md#map-p6-004-aggregateupdatesystem-implementation)
 - [ ] **MAP-P6-005** HierarchicalRenderLayer Implementation [details](./MAP-TASK-DETAIL.md#map-p6-005-hierarchicalrenderlayer-implementation)
 - [ ] **MAP-P6-006** Integrate Hierarchy in CarKinem [details](./MAP-TASK-DETAIL.md#map-p6-006-integrate-hierarchy-in-carkinem)
+
+---
+
+## Phase 7: Architectural Refinements (ACTIVE)
+
+**Goal**: Decouple toolkits, improve testability, and formalize input/resource patterns.
+
+- [ ] **MAP-P7-001** ISelectionState Abstraction [details](./MAP-TASK-DETAIL.md#map-p7-001-iselectionstate-abstraction)
+- [ ] **MAP-P7-002** IResourceProvider Pattern [details](./MAP-TASK-DETAIL.md#map-p7-002-iresourceprovider-pattern)
+- [ ] **MAP-P7-003** IInputProvider Abstraction [details](./MAP-TASK-DETAIL.md#map-p7-003-iinputprovider-abstraction)
+- [ ] **MAP-P7-004** IInspectableSession Adapter [details](./MAP-TASK-DETAIL.md#map-p7-004-iinspectablesession-adapter)
+- [ ] **MAP-P7-005** MapCamera Logic Split [details](./MAP-TASK-DETAIL.md#map-p7-005-mapcamera-logic-split)
+- [ ] **MAP-P7-006** MapCanvas Input Pipeline Formalization [details](./MAP-TASK-DETAIL.md#map-p7-006-mapcanvas-input-pipeline-formalization)
+- [ ] **MAP-P7-007** Tool Event Pattern [details](./MAP-TASK-DETAIL.md#map-p7-007-tool-event-pattern)
+- [ ] **MAP-P7-008** Multi-Selection Support [details](./MAP-TASK-DETAIL.md#map-p7-008-multi-selection-support)
+- [ ] **MAP-P7-009** Input Action Mapping [details](./MAP-TASK-DETAIL.md#map-p7-009-input-action-mapping)
+- [ ] **MAP-P7-010** Visual Picking for Hierarchical Layers [details](./MAP-TASK-DETAIL.md#map-p7-010-visual-picking-for-hierarchical-layers)
 
 ---
 
@@ -102,18 +121,19 @@
 
 ## Progress Summary
 
-**Total Tasks**: 36  
-**Completed**: 16  
-**In Progress**: 0  
-**Not Started**: 20  
+**Total Tasks**: 46
+**Completed**: 16
+**Partial/Postponed**: 6
+**Not Started**: 24
 
 **Phase Status**:
 - Phase 1 (ImGui): 5/5 tasks completed ✅
 - Phase 2 (Raylib): 3/3 tasks completed ✅
 - Phase 3 (Vis2D): 7/7 tasks completed ✅
 - Phase 4 (Integration): 5/5 tasks completed ✅
-- Phase 5 (Tools): 0/6 tasks completed
+- Phase 5 (Tools): 0/6 tasks completed (Postponed)
 - Phase 6 (Aggregation): 0/6 tasks completed
+- Phase 7 (Architecture): 0/10 tasks completed (Active)
 - Performance: 0/2 tasks completed
 - Documentation: 0/2 tasks completed
 
@@ -121,48 +141,18 @@
 
 ## Current Sprint
 
-**Focus**: Skeleton Implementation Complete ✅
+**Focus**: Architectural Refinements (Phase 7)
 
 **Completed**:
 - ✅ All 3 framework project structures created
 - ✅ Core abstractions implemented (IInspectorContext, IVisualizerAdapter, IMapLayer, IMapTool, IHierarchyAdapter)
-- ✅ Critical safety features implemented (cycle detection in HierarchyOrderSystem)
-- ✅ Editable component inspector implemented (ComponentReflector with write-back)
-- ✅ Zero-allocation hierarchy iterator (ChildEnumerator ref struct)
 
 **Active Tasks**:
-**Active Tasks**:
-- MAP-P5-001 through MAP-P5-006 assigned to **BATCH-06**
+- MAP-P7-001 through MAP-P7-004 assigned to **BATCH-07**
 
 **Blockers**: None
 
-**Next Up**: MAP-P1-002 (Complete ComponentReflector.RepoReflector cache implementation)
-
----
-
-## Skeleton Status
-
-**Framework Structure**: ✅ Complete
-- `/Framework/FDP.Toolkit.ImGui/` - Project created, core abstractions done
-- `/Framework/FDP.Framework.Raylib/` - Project created, application host complete
-- `/Framework/FDP.Toolkit.Vis2D/` - Project created, hierarchy system with cycle detection complete
-
-**Critical Fixes Applied**: ✅ All 3 Gaps Addressed
-1. ✅ **MAP-P5-006 added** - TrajectoryEditTool task specification (Gap #1)
-2. ✅ **ComponentReflector editable** - Supports in-place component editing with ECS versioning (Gap #2)
-3. ✅ **Cycle detection** - HierarchyOrderSystem includes safety checks to prevent infinite loops (Gap #3)
-
-See [Framework/README-SKELETON.md](../Framework/README-SKELETON.md) for implementation details.
-
----
-
-## Notes
-
-- Each phase should be completed in order as later phases depend on earlier ones
-- Phase 4 requires Phases 1, 2, and 3 to be complete
-- Phase 5 can proceed in parallel with Phase 6 if needed
-- Performance validation should occur after Phase 6
-- Documentation should be ongoing but finalized after all implementation tasks
+**Next Up**: MAP-P7-001 (Decouple Selection State)
 
 ---
 
@@ -170,7 +160,8 @@ See [Framework/README-SKELETON.md](../Framework/README-SKELETON.md) for implemen
 
 | Date | Version | Changes |
 |------|---------|---------|
-| 2026-02-11 | 1.1 | Skeleton implementation complete. Added MAP-P5-006 (TrajectoryEditTool). Fixed 3 critical gaps: editable inspector, cycle detection, missing edit tool task. Created framework project structure. |
+| 2026-02-12 | 2.0 | Added Phase 7 (Refinements). Postponed Phase 5. Updated status for Phase 4 completion. |
+| 2026-02-11 | 1.1 | Skeleton implementation complete. Added MAP-P5-006 (TrajectoryEditTool). Fixed 3 critical gaps. |
 | 2026-02-11 | 1.0 | Initial task tracker created |
 
 ---
