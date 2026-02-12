@@ -130,5 +130,52 @@ namespace FDP.Toolkit.Vis2D.Layers
 
             return false;
         }
+
+        public Entity? PickEntity(Vector2 worldPos)
+        {
+            float bestDistSq = float.MaxValue;
+            Entity bestEntity = Entity.Null;
+            bool found = false;
+
+            uint maskBit = 1u << LayerBitIndex;
+            // Note: We don't check ctx.VisibleLayersMask here because PickEntity is called 
+            // by MapCanvas which assumes the caller (or MapCanvas) verified layer visibility.
+            // MapCanvas checks IsLayerVisible(layer) before calling PickEntity.
+            
+            foreach (var entity in _query)
+            {
+                uint entityMask = 1; 
+                if (_view.HasComponent<MapDisplayComponent>(entity))
+                {
+                    entityMask = _view.GetComponentRO<MapDisplayComponent>(entity).LayerMask;
+                }
+                
+                if ((entityMask & maskBit) == 0 && LayerBitIndex >= 0)
+                    continue;
+
+                Vector2? pos = _adapter.GetPosition(_view, entity);
+                if (!pos.HasValue) continue;
+
+                float radius = _adapter.GetHitRadius(_view, entity);
+                float distSq = Vector2.DistanceSquared(pos.Value, worldPos);
+
+                if (distSq <= radius * radius)
+                {
+                    // Found a hit. Check if closer.
+                    if (distSq < bestDistSq)
+                    {
+                        bestDistSq = distSq;
+                        bestEntity = entity;
+                        found = true;
+                        // For overlapping entities, we want the "top" one. 
+                        // But query order is arbitrary. 
+                        // Standard allows returning any, or closest to center.
+                        // Closest to center (lowest distSq) is best.
+                    }
+                }
+            }
+            
+            return found ? bestEntity : null;
+        }
     }
 }

@@ -146,6 +146,16 @@ namespace Fdp.Examples.CarKinem.Visualization
         }
         
         public bool OnMouseClick(Vector2 worldPos, RenderContext ctx) => false;
-        public bool HandleInput(Vector2 worldPos, MouseButton button, bool pressed) => false;
+        public bool HandleInput(Vector2 worldPos, MouseButton button, bool isPressed)
+        {
+            return false;
+        }
+
+        public Entity? PickEntity(Vector2 worldPos)
+        {
+            // Trajectories are currently visual overlays for valid objects 
+            // and don't support direct picking themselves.
+            return null;
+        }
     }
 }

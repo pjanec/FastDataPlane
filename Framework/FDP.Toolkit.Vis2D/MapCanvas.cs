@@ -2,15 +2,18 @@ using System.Collections.Generic;
 using System.Numerics;
 using System;
 using Raylib_cs;
+using Fdp.Kernel;
 using FDP.Toolkit.Vis2D.Abstractions;
 using FDP.Toolkit.Vis2D.Components;
 using FDP.Framework.Raylib.Input;
+using FDP.Toolkit.Vis2D.Input;
 
 namespace FDP.Toolkit.Vis2D
 {
     public class MapCanvas : IResourceProvider
     {
         public MapCamera Camera { get; set; } = new MapCamera();
+        public Vis2DInputMap InputMap { get; set; } = Vis2DInputMap.Default;
         public uint ActiveLayerMask { get; set; } = 0xFFFFFFFF;
         public IInputProvider Input => _input;
         
@@ -66,6 +69,21 @@ namespace FDP.Toolkit.Vis2D
         public void RemoveLayer(IMapLayer layer)
         {
             _layers.Remove(layer);
+        }
+
+        public Entity? PickTopmostEntity(Vector2 worldPos)
+        {
+            // Iterate reverse (Top -> Bottom)
+            for (int i = _layers.Count - 1; i >= 0; i--)
+            {
+                var layer = _layers[i];
+                if (IsLayerVisible(layer))
+                {
+                    var entity = layer.PickEntity(worldPos);
+                    if (entity.HasValue) return entity;
+                }
+            }
+            return null;
         }
 
         /// <summary>

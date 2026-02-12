@@ -84,6 +84,12 @@ public interface IMapLayer
     /// Return true if the input was consumed (blocking layers below).
     /// </summary>
     bool HandleInput(Vector2 worldPos, MouseButton button, bool isPressed);
+
+    /// <summary>
+    /// Pick the top-most entity at the given world position.
+    /// Used for visual aggregation and selection.
+    /// </summary>
+    Entity? PickEntity(Vector2 worldPos);
 }
 
 

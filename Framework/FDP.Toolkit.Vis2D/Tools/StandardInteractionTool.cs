@@ -4,6 +4,7 @@ using System.Numerics;
 using Raylib_cs;
 using Fdp.Kernel;
 using FDP.Toolkit.Vis2D.Abstractions;
+using FDP.Toolkit.Vis2D.Input;
 using ModuleHost.Core.Abstractions;
 
 namespace FDP.Toolkit.Vis2D.Tools
@@ -36,11 +37,13 @@ namespace FDP.Toolkit.Vis2D.Tools
         public event Action<Entity, Vector2>? OnEntityMoved;     // Result of Drag Operation
 
         // State
-        private bool _isLeftMouseDown;
+        private bool _isActionMouseDown; // Was 'Left', now generic based on map
         private Vector2 _mouseDownPos;
         private Entity _potentialTarget = Entity.Null;
-        private bool _shiftHeld => _canvas?.Input.IsKeyDown(KeyboardKey.LeftShift) == true || _canvas?.Input.IsKeyDown(KeyboardKey.RightShift) == true;
-        private bool _ctrlHeld => _canvas?.Input.IsKeyDown(KeyboardKey.LeftControl) == true || _canvas?.Input.IsKeyDown(KeyboardKey.RightControl) == true;
+        
+        private bool _shiftHeld => _canvas?.Input.IsKeyDown(_canvas.InputMap.MultiSelectMod) == true;
+        private bool _ctrlHeld => _canvas?.Input.IsKeyDown(_canvas.InputMap.BoxSelectMod) == true;
+        
         private MapCanvas _canvas;
 
         public StandardInteractionTool(
@@ -66,13 +69,13 @@ namespace FDP.Toolkit.Vis2D.Tools
 
         private void ResetState()
         {
-            _isLeftMouseDown = false;
+            _isActionMouseDown = false;
             _potentialTarget = Entity.Null;
         }
 
         public void Update(float dt)
         {
-            if (_isLeftMouseDown && _canvas?.Input.IsMouseButtonDown(MouseButton.Left) == false)
+            if (_isActionMouseDown && _canvas?.Input.IsMouseButtonDown(_canvas.InputMap.SelectButton) == false)
             {
                 ResetState();
             }
@@ -86,26 +89,38 @@ namespace FDP.Toolkit.Vis2D.Tools
 
         public bool HandleClick(Vector2 worldPos, MouseButton button)
         {
-            // Detect hit
-            var hit = FindEntityAt(worldPos);
+            var selectBtn = _canvas?.InputMap.SelectButton ?? MouseButton.Left;
+            Entity hit = Entity.Null;
 
-            // Notify Selection Request
-            bool augment = _ctrlHeld || _shiftHeld;
-            
-            // If we hit something, request select.
-            // If we hit nothing, request deselect all (unless augment?).
-            if (_view.IsAlive(hit))
+            // 1. Selection Logic (Only if Select Button)
+            if (button == selectBtn)
             {
-                OnEntitySelectRequest?.Invoke(hit, augment);
+                // Detect hit via Visual Picking (Topmost Layer)
+                hit = FindEntityAt(worldPos);
+
+                // Notify Selection Request
+                bool augment = _ctrlHeld || _shiftHeld;
+                
+                // If we hit something, request select.
+                // If we hit nothing, request deselect all (unless augment?).
+                if (_view.IsAlive(hit))
+                {
+                    OnEntitySelectRequest?.Invoke(hit, augment);
+                }
+                else
+                {
+                   // If valid click on empty space with no modifiers, usually implies deselect.
+                   if (!augment)
+                       OnEntitySelectRequest?.Invoke(Entity.Null, false);
+                }
             }
             else
             {
-               // If valid click on empty space with no modifiers, usually implies deselect.
-               if (!augment)
-                   OnEntitySelectRequest?.Invoke(Entity.Null, false);
+                // For other buttons (e.g. Right Click), we still want to know what was under cursor
+                hit = FindEntityAt(worldPos);
             }
             
-            // Notify Generic Click
+            // Notify Generic Click (Used for Right-Click Context, Move commands etc)
             OnWorldClick?.Invoke(worldPos, button, _shiftHeld, _ctrlHeld, hit);
             
             return true; // Consumed
@@ -113,7 +128,7 @@ namespace FDP.Toolkit.Vis2D.Tools
 
         public bool HandleDrag(Vector2 worldPos, Vector2 delta)
         {
-            if (_isLeftMouseDown)
+            if (_isActionMouseDown)
             {
                 float dist = Vector2.Distance(worldPos, _mouseDownPos);
                 if (dist > DRAG_THRESHOLD)
@@ -159,9 +174,9 @@ namespace FDP.Toolkit.Vis2D.Tools
         public bool HandleHover(Vector2 worldPos)
         {
             // Track Mouse Down for Drag Initiation
-            if (_canvas?.Input.IsMouseButtonPressed(MouseButton.Left) == true)
+            if (_canvas?.Input.IsMouseButtonPressed(_canvas.InputMap.SelectButton) == true)
             {
-                _isLeftMouseDown = true;
+                _isActionMouseDown = true;
                 _mouseDownPos = worldPos;
                 _potentialTarget = FindEntityAt(worldPos);
             }
@@ -170,27 +185,7 @@ namespace FDP.Toolkit.Vis2D.Tools
 
         private Entity FindEntityAt(Vector2 pos)
         {
-            float bestDistSq = float.MaxValue;
-            Entity bestEntity = Entity.Null;
-
-            foreach (var entity in _query)
-            {
-                var p = _adapter.GetPosition(_view, entity);
-                if (!p.HasValue) continue;
-
-                float r = _adapter.GetHitRadius(_view, entity);
-                // Hit Area logic could be improved (screen space vs world space), 
-                // but using Radius for now.
-                
-                float dSq = Vector2.DistanceSquared(p.Value, pos);
-
-                if (dSq <= r * r && dSq < bestDistSq)
-                {
-                    bestDistSq = dSq;
-                    bestEntity = entity;
-                }
-            }
-            return bestEntity;
+            return _canvas?.PickTopmostEntity(pos) ?? Entity.Null;
         }
     }
 }

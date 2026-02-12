@@ -43,5 +43,7 @@ namespace Fdp.Examples.CarKinem.Visualization
         }
 
         public bool HandleInput(Vector2 worldPos, MouseButton button, bool pressed) => false;
+        
+        public Fdp.Kernel.Entity? PickEntity(Vector2 worldPos) => null;
     }
 }

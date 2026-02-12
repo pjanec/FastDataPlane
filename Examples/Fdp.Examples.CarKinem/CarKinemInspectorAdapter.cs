@@ -20,24 +20,30 @@ namespace Fdp.Examples.CarKinem
         // ISelectionState Implementation
         public bool IsSelected(Entity entity) 
         {
-             return _selectionManager.IsSelected(entity);
+             return _selectionManager.Contains(entity);
         }
 
         public IReadOnlyCollection<Entity> SelectedEntities => _selectionManager.SelectedEntities;
 
         public Entity? PrimarySelected 
         {
-            get => SelectedEntity;
-            set => SelectedEntity = value;
+            get => _selectionManager.PrimarySelected;
+            set 
+            {
+                if (value.HasValue)
+                    _selectionManager.Set(value.Value);
+                else
+                    _selectionManager.Clear();
+            }
         }
 
         public Entity? SelectedEntity 
         { 
-            get => _selectionManager.SelectedEntity;
+            get => _selectionManager.PrimarySelected;
             set 
             {
                 if (value.HasValue)
-                    _selectionManager.Select(value.Value, false);
+                    _selectionManager.Set(value.Value);
                 else
                     _selectionManager.Clear();
             }

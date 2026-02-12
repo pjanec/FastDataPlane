@@ -1,4 +1,5 @@
 using System.Numerics;
+using Fdp.Kernel;
 using FDP.Toolkit.Vis2D.Abstractions;
 using FDP.Toolkit.Vis2D.Debug;
 using Raylib_cs;
@@ -34,6 +35,11 @@ namespace FDP.Toolkit.Vis2D.Layers
         public bool HandleInput(Vector2 worldPos, MouseButton button, bool isPressed)
         {
             return false; // Debug layer is pass-through
+        }
+
+        public Entity? PickEntity(Vector2 worldPos)
+        {
+            return null;
         }
     }
 }

@@ -103,7 +103,7 @@ namespace FDP.Toolkit.Vis2D.Tests.Components
             var camera = new TestableMapCamera();
             camera.Zoom = 1.0f;
             camera.Target = Vector2.Zero;
-            camera.PanButton = MouseButton.Right;
+            camera.InputMap.PanButton = MouseButton.Right;
             
             var input = new MockInputProvider();
 

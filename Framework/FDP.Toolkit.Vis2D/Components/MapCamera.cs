@@ -1,6 +1,7 @@
 using System.Numerics;
 using Raylib_cs;
 using FDP.Toolkit.Vis2D.Abstractions;
+using FDP.Toolkit.Vis2D.Input;
 
 namespace FDP.Toolkit.Vis2D.Components
 {
@@ -34,11 +35,13 @@ namespace FDP.Toolkit.Vis2D.Components
         public float ZoomSpeed { get; set; } = 0.1f;
         public float MinZoom { get; set; } = 0.1f;
         public float MaxZoom { get; set; } = 10.0f;
-        public MouseButton PanButton { get; set; } = MouseButton.Right;
+        
+        public Vis2DInputMap InputMap { get; set; } = Vis2DInputMap.Default;
 
         // State for dragging
         private Vector2 _lastMousePos;
         private bool _isDragging;
+
 
         private Vector2 _targetTarget;
         private float _targetZoom;
@@ -82,7 +85,7 @@ namespace FDP.Toolkit.Vis2D.Components
             // Gather inputs
             float wheel = input.MouseWheelMove;
             Vector2 mousePos = input.MousePosition;
-            bool isPanDown = input.IsMouseButtonDown(PanButton);
+            bool isPanDown = input.IsMouseButtonDown(InputMap.PanButton);
             bool isCaptured = input.IsMouseCaptured;
 
             return ProcessInput(wheel, mousePos, isPanDown, isCaptured);

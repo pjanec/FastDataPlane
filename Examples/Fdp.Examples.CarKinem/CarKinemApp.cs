@@ -185,9 +185,16 @@ public class CarKinemApp : FdpApplication
         _interactionTool.OnEntitySelectRequest += (entity, augment) =>
         {
             if (_repository.IsAlive(entity))
-                _selectionManager.Select(entity, additive: augment);
+            {
+                if (augment)
+                    _selectionManager.Add(entity);
+                else
+                    _selectionManager.Set(entity);
+            }
             else if (!augment)
+            {
                 _selectionManager.Clear();
+            }
         };
 
         // 2. Drag Interaction
@@ -245,7 +252,7 @@ public class CarKinemApp : FdpApplication
         _interactionTool.OnRegionSelected += (entities) =>
         {
              // Assumes Replace logic for now
-             _selectionManager.SetSelection(entities);
+             _selectionManager.SetMultiple(entities);
         };
         
         // 3. Drag
